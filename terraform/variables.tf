@@ -7,7 +7,7 @@ variable "aws_region" {
 variable "project_name" {
   description = "Project name for resource naming"
   type        = string
-  default     = "policyengine-api-v2"
+  default     = "policyengine-api-v2-alpha"
 }
 
 variable "supabase_url" {

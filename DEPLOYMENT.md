@@ -6,7 +6,7 @@
 2. Terraform installed locally
 3. Supabase project set up
 4. Redis instance (recommend Upstash for serverless Redis)
-5. GitHub repository with the clean branch
+5. GitHub repository with the main branch
 
 ## Step 1: Set up AWS credentials for Terraform
 
@@ -24,7 +24,7 @@ Follow the prompts to authenticate via your browser.
 
 ```hcl
 aws_region         = "us-east-1"
-project_name       = "policyengine-api-v2"
+project_name       = "policyengine-api-v2-alpha"
 supabase_url       = "https://your-project.supabase.co"
 supabase_key       = "your-anon-key"
 supabase_db_url    = "postgresql://postgres:[password]@db.[project].supabase.co:5432/postgres"
@@ -81,8 +81,8 @@ aws sts get-caller-identity --query Account --output text
    - Identity provider: `token.actions.githubusercontent.com`
    - Audience: `sts.amazonaws.com`
    - GitHub organization: your-username-or-org
-   - GitHub repository: `policyengine-api-v2`
-   - GitHub branch: `clean`
+   - GitHub repository: `policyengine-api-v2-alpha`
+   - GitHub branch: `main`
    - Click Next
 
 4. Attach these policies:
@@ -102,35 +102,19 @@ Add these secrets:
 ```
 AWS_REGION=us-east-1
 AWS_ROLE_ARN=arn:aws:iam::YOUR_ACCOUNT_ID:role/GitHubActionsDeployRole
-ECR_REPOSITORY_NAME=policyengine-api-v2
+ECR_REPOSITORY_NAME=policyengine-api-v2-alpha
 ECS_CLUSTER_NAME=policyengine-api-v2-cluster
 ECS_API_SERVICE_NAME=policyengine-api-v2-api
 ECS_WORKER_SERVICE_NAME=policyengine-api-v2-worker
 ```
 
-## Step 5: Initial Docker image push
+## Step 5: Deploy from GitHub
 
-Before GitHub Actions can deploy, you need to push an initial image:
-
-```bash
-# Login to ECR
-aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin <ecr_repository_url>
-
-# Build and push
-docker build -t policyengine-api-v2 .
-docker tag policyengine-api-v2:latest <ecr_repository_url>:latest
-docker push <ecr_repository_url>:latest
-```
-
-Replace `<ecr_repository_url>` with the output from Terraform.
-
-## Step 6: Deploy from GitHub
-
-Push to the clean branch:
+Push to the main branch:
 
 ```bash
-git checkout clean
-git push origin clean
+git checkout main
+git push origin main
 ```
 
 GitHub Actions will automatically:
@@ -138,6 +122,8 @@ GitHub Actions will automatically:
 2. Push to ECR
 3. Update ECS services
 4. Wait for deployment to stabilise
+
+**Note**: After running Terraform, the ECS services will initially fail to start (no Docker image exists yet). Once you push to `main` and GitHub Actions completes, the services will automatically recover and start successfully.
 
 ## Monitoring
 
@@ -147,7 +133,7 @@ GitHub Actions will automatically:
 
 ## Updating the deployment
 
-Any push to the `clean` branch will trigger a new deployment automatically.
+Any push to the `main` branch will trigger a new deployment automatically.
 
 ## Cost estimates (us-east-1)
 
@@ -178,7 +164,7 @@ Check the trust policy on your IAM role includes:
       "Condition": {
         "StringEquals": {
           "token.actions.githubusercontent.com:aud": "sts.amazonaws.com",
-          "token.actions.githubusercontent.com:sub": "repo:YOUR_ORG/policyengine-api-v2:ref:refs/heads/clean"
+          "token.actions.githubusercontent.com:sub": "repo:YOUR_ORG/policyengine-api-v2-alpha:ref:refs/heads/main"
         }
       }
     }
