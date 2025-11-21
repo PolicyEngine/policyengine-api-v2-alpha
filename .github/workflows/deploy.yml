@@ -84,6 +84,7 @@ jobs:
 
       - name: Wait for API service stability
         run: |
+          echo "Waiting for API service to stabilise..."
           aws ecs wait services-stable \
             --cluster ${{ vars.ECS_CLUSTER_NAME }} \
             --services ${{ vars.ECS_API_SERVICE_NAME }} \
@@ -91,7 +92,74 @@ jobs:
 
       - name: Wait for worker service stability
         run: |
+          echo "Waiting for worker service to stabilise..."
           aws ecs wait services-stable \
             --cluster ${{ vars.ECS_CLUSTER_NAME }} \
             --services ${{ vars.ECS_WORKER_SERVICE_NAME }} \
             --region ${{ vars.AWS_REGION }}
+
+      - name: Get API service deployment status
+        run: |
+          echo "=== API Service Status ==="
+          aws ecs describe-services \
+            --cluster ${{ vars.ECS_CLUSTER_NAME }} \
+            --services ${{ vars.ECS_API_SERVICE_NAME }} \
+            --region ${{ vars.AWS_REGION }} \
+            --query 'services[0].{Status:status,Running:runningCount,Desired:desiredCount,Deployments:deployments[*].{Status:rolloutState,TaskDef:taskDefinition,Running:runningCount}}' \
+            --output table
+
+      - name: Get worker service deployment status
+        run: |
+          echo "=== Worker Service Status ==="
+          aws ecs describe-services \
+            --cluster ${{ vars.ECS_CLUSTER_NAME }} \
+            --services ${{ vars.ECS_WORKER_SERVICE_NAME }} \
+            --region ${{ vars.AWS_REGION }} \
+            --query 'services[0].{Status:status,Running:runningCount,Desired:desiredCount,Deployments:deployments[*].{Status:rolloutState,TaskDef:taskDefinition,Running:runningCount}}' \
+            --output table
+
+      - name: Get recent API task logs
+        run: |
+          echo "=== Recent API Task Logs ==="
+          TASK_ARN=$(aws ecs list-tasks \
+            --cluster ${{ vars.ECS_CLUSTER_NAME }} \
+            --service-name ${{ vars.ECS_API_SERVICE_NAME }} \
+            --region ${{ vars.AWS_REGION }} \
+            --query 'taskArns[0]' \
+            --output text)
+
+          if [ -n "$TASK_ARN" ] && [ "$TASK_ARN" != "None" ]; then
+            TASK_ID=$(echo $TASK_ARN | cut -d'/' -f3)
+            LOG_STREAM="ecs/api/$TASK_ID"
+
+            aws logs tail /ecs/${{ vars.ECS_CLUSTER_NAME }} \
+              --log-stream-name-prefix "ecs/api" \
+              --since 5m \
+              --format short \
+              --region ${{ vars.AWS_REGION }} || echo "No recent logs found"
+          else
+            echo "No running tasks found"
+          fi
+
+      - name: Get recent worker task logs
+        run: |
+          echo "=== Recent Worker Task Logs ==="
+          TASK_ARN=$(aws ecs list-tasks \
+            --cluster ${{ vars.ECS_CLUSTER_NAME }} \
+            --service-name ${{ vars.ECS_WORKER_SERVICE_NAME }} \
+            --region ${{ vars.AWS_REGION }} \
+            --query 'taskArns[0]' \
+            --output text)
+
+          if [ -n "$TASK_ARN" ] && [ "$TASK_ARN" != "None" ]; then
+            TASK_ID=$(echo $TASK_ARN | cut -d'/' -f3)
+            LOG_STREAM="ecs/worker/$TASK_ID"
+
+            aws logs tail /ecs/${{ vars.ECS_CLUSTER_NAME }} \
+              --log-stream-name-prefix "ecs/worker" \
+              --since 5m \
+              --format short \
+              --region ${{ vars.AWS_REGION }} || echo "No recent logs found"
+          else
+            echo "No running tasks found"
+          fi
