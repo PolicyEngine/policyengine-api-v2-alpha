@@ -2,7 +2,7 @@ terraform {
   required_version = ">= 1.0"
 
   backend "s3" {
-    bucket = "policyengine-api-v2-terraform-state"
+    bucket = "policyengine-api-v2-terraform-state-us-east-1"
     key    = "terraform.tfstate"
     region = "us-east-1"
   }
