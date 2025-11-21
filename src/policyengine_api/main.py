@@ -1,6 +1,9 @@
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from fastapi_cache import FastAPICache
+from fastapi_cache.backends.redis import RedisBackend
+from redis import asyncio as aioredis
 from rich.console import Console
 import logfire
 
@@ -16,10 +19,16 @@ logfire.configure()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Initialize database on startup."""
+    """Initialize database and cache on startup."""
     console.print("[bold green]Initializing database...[/bold green]")
     init_db()
     console.print("[bold green]Database initialized[/bold green]")
+
+    console.print("[bold green]Initializing cache...[/bold green]")
+    redis = aioredis.from_url(settings.redis_url, encoding="utf8", decode_responses=True)
+    FastAPICache.init(RedisBackend(redis), prefix="fastapi-cache")
+    console.print("[bold green]Cache initialized[/bold green]")
+
     yield
 
 

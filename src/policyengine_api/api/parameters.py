@@ -2,6 +2,7 @@ from typing import List
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi_cache.decorator import cache
 from sqlmodel import Session, select
 
 from policyengine_api.models import Parameter, ParameterCreate, ParameterRead
@@ -23,9 +24,14 @@ def create_parameter(
 
 
 @router.get("/", response_model=List[ParameterRead])
-def list_parameters(session: Session = Depends(get_session)):
-    """List all parameters."""
-    parameters = session.exec(select(Parameter)).all()
+@cache(expire=3600)  # Cache for 1 hour
+def list_parameters(
+    skip: int = 0, limit: int = 100, session: Session = Depends(get_session)
+):
+    """List all parameters with pagination, sorted by name."""
+    parameters = session.exec(
+        select(Parameter).order_by(Parameter.name).offset(skip).limit(limit)
+    ).all()
     return parameters
 
 

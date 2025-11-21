@@ -132,14 +132,14 @@ for f in files:
 
 ## Database schema
 
-Schema is managed via Alembic migrations. The SQLModel models automatically generate the schema:
+Schema is managed through Supabase SQL migrations. The SQLModel models define the schema, which you can export:
 
 ```bash
-# Create migration
-alembic revision --autogenerate -m "add new table"
+# Create a new migration file
+supabase migration new migration_name
 
-# Apply migrations
-alembic upgrade head
+# Edit the SQL file in supabase/migrations/ to define schema changes
+# Migrations are applied automatically on 'supabase start'
 ```
 
 ## Useful commands

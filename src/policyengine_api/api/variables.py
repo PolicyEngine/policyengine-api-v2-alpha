@@ -2,6 +2,7 @@ from typing import List
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi_cache.decorator import cache
 from sqlmodel import Session, select
 
 from policyengine_api.models import Variable, VariableCreate, VariableRead
@@ -21,9 +22,14 @@ def create_variable(variable: VariableCreate, session: Session = Depends(get_ses
 
 
 @router.get("/", response_model=List[VariableRead])
-def list_variables(session: Session = Depends(get_session)):
-    """List all variables."""
-    variables = session.exec(select(Variable)).all()
+@cache(expire=3600)  # Cache for 1 hour
+def list_variables(
+    skip: int = 0, limit: int = 100, session: Session = Depends(get_session)
+):
+    """List all variables with pagination, sorted by name."""
+    variables = session.exec(
+        select(Variable).order_by(Variable.name).offset(skip).limit(limit)
+    ).all()
     return variables
 
 

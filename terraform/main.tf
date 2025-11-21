@@ -138,84 +138,84 @@ resource "aws_ecs_cluster" "main" {
   }
 }
 
-# Application Load Balancer
-resource "aws_security_group" "alb" {
-  name        = "${var.project_name}-alb-sg"
-  description = "Security group for Application Load Balancer"
-  vpc_id      = aws_vpc.main.id
-
-  ingress {
-    from_port   = 80
-    to_port     = 80
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  ingress {
-    from_port   = 443
-    to_port     = 443
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  tags = {
-    Name = "${var.project_name}-alb-sg"
-  }
-}
-
-resource "aws_lb" "main" {
-  name               = "${var.project_name}-alb"
-  internal           = false
-  load_balancer_type = "application"
-  security_groups    = [aws_security_group.alb.id]
-  subnets            = aws_subnet.public[*].id
-
-  tags = {
-    Name = "${var.project_name}-alb"
-  }
-}
-
-resource "aws_lb_target_group" "api" {
-  name        = "${var.project_name}-api-tg"
-  port        = 8000
-  protocol    = "HTTP"
-  vpc_id      = aws_vpc.main.id
-  target_type = "ip"
-
-  health_check {
-    enabled             = true
-    healthy_threshold   = 2
-    interval            = 30
-    matcher             = "200"
-    path                = "/health"
-    port                = "traffic-port"
-    protocol            = "HTTP"
-    timeout             = 5
-    unhealthy_threshold = 2
-  }
-
-  tags = {
-    Name = "${var.project_name}-api-tg"
-  }
-}
-
-resource "aws_lb_listener" "api" {
-  load_balancer_arn = aws_lb.main.arn
-  port              = "80"
-  protocol          = "HTTP"
-
-  default_action {
-    type             = "forward"
-    target_group_arn = aws_lb_target_group.api.arn
-  }
-}
+# Application Load Balancer (COMMENTED OUT - Re-enable when AWS Support approves ALB access)
+# resource "aws_security_group" "alb" {
+#   name        = "${var.project_name}-alb-sg"
+#   description = "Security group for Application Load Balancer"
+#   vpc_id      = aws_vpc.main.id
+#
+#   ingress {
+#     from_port   = 80
+#     to_port     = 80
+#     protocol    = "tcp"
+#     cidr_blocks = ["0.0.0.0/0"]
+#   }
+#
+#   ingress {
+#     from_port   = 443
+#     to_port     = 443
+#     protocol    = "tcp"
+#     cidr_blocks = ["0.0.0.0/0"]
+#   }
+#
+#   egress {
+#     from_port   = 0
+#     to_port     = 0
+#     protocol    = "-1"
+#     cidr_blocks = ["0.0.0.0/0"]
+#   }
+#
+#   tags = {
+#     Name = "${var.project_name}-alb-sg"
+#   }
+# }
+#
+# resource "aws_lb" "main" {
+#   name               = "${var.project_name}-alb"
+#   internal           = false
+#   load_balancer_type = "application"
+#   security_groups    = [aws_security_group.alb.id]
+#   subnets            = aws_subnet.public[*].id
+#
+#   tags = {
+#     Name = "${var.project_name}-alb"
+#   }
+# }
+#
+# resource "aws_lb_target_group" "api" {
+#   name        = "${var.project_name}-api-tg"
+#   port        = 8000
+#   protocol    = "HTTP"
+#   vpc_id      = aws_vpc.main.id
+#   target_type = "ip"
+#
+#   health_check {
+#     enabled             = true
+#     healthy_threshold   = 2
+#     interval            = 30
+#     matcher             = "200"
+#     path                = "/health"
+#     port                = "traffic-port"
+#     protocol            = "HTTP"
+#     timeout             = 5
+#     unhealthy_threshold = 2
+#   }
+#
+#   tags = {
+#     Name = "${var.project_name}-api-tg"
+#   }
+# }
+#
+# resource "aws_lb_listener" "api" {
+#   load_balancer_arn = aws_lb.main.arn
+#   port              = "80"
+#   protocol          = "HTTP"
+#
+#   default_action {
+#     type             = "forward"
+#     target_group_arn = aws_lb_target_group.api.arn
+#   }
+# }
 
 # Security group for ECS tasks
 resource "aws_security_group" "ecs" {
@@ -224,10 +224,10 @@ resource "aws_security_group" "ecs" {
   vpc_id      = aws_vpc.main.id
 
   ingress {
-    from_port       = 8000
-    to_port         = 8000
-    protocol        = "tcp"
-    security_groups = [aws_security_group.alb.id]
+    from_port   = 8000
+    to_port     = 8000
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]  # Allow direct access from internet (temporary until ALB is enabled)
   }
 
   egress {
@@ -456,13 +456,14 @@ resource "aws_ecs_service" "api" {
     assign_public_ip = true
   }
 
-  load_balancer {
-    target_group_arn = aws_lb_target_group.api.arn
-    container_name   = "api"
-    container_port   = 8000
-  }
-
-  depends_on = [aws_lb_listener.api]
+  # Load balancer configuration commented out until ALB access is enabled
+  # load_balancer {
+  #   target_group_arn = aws_lb_target_group.api.arn
+  #   container_name   = "api"
+  #   container_port   = 8000
+  # }
+  #
+  # depends_on = [aws_lb_listener.api]
 
   tags = {
     Name = "${var.project_name}-api-service"

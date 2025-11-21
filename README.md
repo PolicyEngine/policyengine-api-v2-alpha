@@ -6,7 +6,7 @@ A FastAPI service for running PolicyEngine microsimulations with Supabase backen
 
 - RESTful API for creating and managing simulations
 - Supabase for database and storage
-- Redis + Celery for background task processing
+- Redis caching and Celery for background task processing
 - SQLModel for type-safe database models
 - Terraform deployment to AWS
 
@@ -184,16 +184,15 @@ ruff check --fix .
 
 ### Database migrations
 
-Create a new migration:
+Schema migrations are managed through Supabase SQL migrations:
 
 ```bash
-alembic revision --autogenerate -m "description"
-```
+# Create a new migration
+supabase migration new migration_name
 
-Apply migrations:
-
-```bash
-alembic upgrade head
+# Migrations are applied automatically on supabase start
+# Or manually push to production
+supabase db push
 ```
 
 ### Supabase management
@@ -227,8 +226,7 @@ policyengine-api-v2/
 │       ├── services/         # Database, storage, initialization
 │       ├── tasks/            # Celery tasks
 │       └── main.py           # FastAPI application
-├── supabase/                 # Supabase configuration
-├── migrations/               # Alembic migrations
+├── supabase/                 # Supabase configuration and migrations
 ├── tests/                    # Test suite
 ├── docker-compose.yml        # Docker services (API, worker, Redis)
 └── pyproject.toml            # Dependencies
