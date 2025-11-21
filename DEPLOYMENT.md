@@ -36,22 +36,64 @@ aws iam create-open-id-connect-provider \
   --client-id-list sts.amazonaws.com
 ```
 
-3. Create/update the IAM role via Terraform:
+3. Create IAM role with required permissions:
+   - AWS Console → IAM → Roles → Create role
+   - Trusted entity type: Web identity
+   - Identity provider: `token.actions.githubusercontent.com`
+   - Audience: `sts.amazonaws.com`
+   - GitHub organization: `PolicyEngine`
+   - GitHub repository: `policyengine-api-v2-alpha`
+   - Name: `GitHubActionsDeployRole`
 
-```bash
-cd terraform
-terraform init
-terraform import aws_iam_role.github_actions GitHubActionsDeployRole 2>/dev/null || echo "Role doesn't exist yet, will be created"
-terraform apply -target=aws_iam_role.github_actions -target=aws_iam_role_policy.github_actions_deploy
+4. Attach these managed policies:
+   - `AmazonECS_FullAccess`
+   - `AmazonElastiCacheFullAccess`
+   - `ElasticLoadBalancingFullAccess`
+   - `AmazonEC2FullAccess`
+   - `CloudWatchLogsFullAccess`
+
+5. Add inline policy `GitHubActionsTerraform`:
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": ["ecr:*"],
+      "Resource": "*"
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "iam:GetRole",
+        "iam:GetRolePolicy",
+        "iam:CreateRole",
+        "iam:DeleteRole",
+        "iam:AttachRolePolicy",
+        "iam:DetachRolePolicy",
+        "iam:PutRolePolicy",
+        "iam:DeleteRolePolicy",
+        "iam:TagRole",
+        "iam:PassRole",
+        "iam:ListAttachedRolePolicies",
+        "iam:ListRolePolicies"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Effect": "Allow",
+      "Action": ["s3:*"],
+      "Resource": [
+        "arn:aws:s3:::policyengine-api-v2-terraform-state",
+        "arn:aws:s3:::policyengine-api-v2-terraform-state/*"
+      ]
+    }
+  ]
+}
 ```
 
-This creates the `GitHubActionsDeployRole` with all required permissions for ECS, ECR, ElastiCache, Load Balancers, VPC, CloudWatch, IAM, and S3.
-
-4. Copy the role ARN from Terraform output:
-
-```bash
-terraform output github_actions_role_arn
-```
+6. Copy the role ARN: `arn:aws:iam::YOUR_ACCOUNT_ID:role/GitHubActionsDeployRole`
 
 ## Step 3: Configure GitHub secrets and variables
 
