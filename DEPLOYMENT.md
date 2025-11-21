@@ -3,65 +3,24 @@
 ## Prerequisites
 
 1. AWS account with appropriate permissions
-2. Terraform installed locally
+2. AWS CLI installed and configured
 3. Supabase project set up
 4. Redis instance (recommend Upstash for serverless Redis)
-5. GitHub repository with the main branch
+5. GitHub repository (PolicyEngine/policyengine-api-v2-alpha)
 
-## Step 1: Set up AWS credentials for Terraform
+## Step 1: Create Terraform state bucket
 
-Install and configure AWS CLI with SSO (no long-term keys):
-
-```bash
-aws configure sso
-```
-
-Follow the prompts to authenticate via your browser.
-
-## Step 2: Deploy infrastructure with Terraform
-
-1. Create `terraform/terraform.tfvars`:
-
-```hcl
-aws_region         = "us-east-1"
-project_name       = "policyengine-api-v2-alpha"
-supabase_url       = "https://your-project.supabase.co"
-supabase_key       = "your-anon-key"
-supabase_db_url    = "postgresql://postgres:[password]@db.[project].supabase.co:5432/postgres"
-redis_url          = "redis://default:[password]@your-redis.upstash.io:6379"
-logfire_token      = "pylf_v1_us_..."
-storage_bucket     = "datasets"
-api_cpu            = "512"
-api_memory         = "1024"
-api_desired_count  = 1
-worker_cpu         = "1024"
-worker_memory      = "2048"
-worker_desired_count = 1
-```
-
-2. Deploy:
+The S3 bucket stores Terraform state and enables automated deployments:
 
 ```bash
-cd terraform
-terraform init
-terraform plan
-terraform apply
+make create-state-bucket
 ```
 
-3. Save the outputs:
+This creates `policyengine-api-v2-terraform-state` with versioning enabled.
 
-```bash
-terraform output
-```
+**Note**: Only needs to be done once.
 
-You'll get:
-- `ecr_repository_url` - where to push Docker images
-- `load_balancer_url` - your API endpoint
-- `ecs_cluster_name` - cluster name for GitHub Actions
-- `api_service_name` - API service name
-- `worker_service_name` - worker service name
-
-## Step 3: Set up GitHub OIDC (no access keys needed)
+## Step 2: Set up GitHub OIDC
 
 1. Get your AWS account ID:
 
@@ -69,18 +28,20 @@ You'll get:
 aws sts get-caller-identity --query Account --output text
 ```
 
-2. In AWS Console, go to IAM → Identity providers → Add provider:
-   - Provider type: OpenID Connect
-   - Provider URL: `https://token.actions.githubusercontent.com`
-   - Audience: `sts.amazonaws.com`
-   - Click "Add provider"
+2. Create OIDC provider (if not already done):
+
+```bash
+aws iam create-open-id-connect-provider \
+  --url https://token.actions.githubusercontent.com \
+  --client-id-list sts.amazonaws.com
+```
 
 3. Create IAM role for GitHub Actions:
-   - IAM → Roles → Create role
+   - AWS Console → IAM → Roles → Create role
    - Trusted entity type: Web identity
    - Identity provider: `token.actions.githubusercontent.com`
    - Audience: `sts.amazonaws.com`
-   - GitHub organization: your-username-or-org
+   - GitHub organization: `PolicyEngine`
    - GitHub repository: `policyengine-api-v2-alpha`
    - GitHub branch: `main`
    - Click Next
@@ -88,32 +49,41 @@ aws sts get-caller-identity --query Account --output text
 4. Attach these policies:
    - `AmazonECS_FullAccess`
    - `AmazonEC2ContainerRegistryPowerUser`
+   - `IAMFullAccess`
+   - `AmazonVPCFullAccess`
+   - `CloudWatchLogsFullAccess`
+   - `TerraformStateAccess` (custom policy created earlier)
 
 5. Name the role: `GitHubActionsDeployRole`
 
-6. After creation, copy the role ARN (looks like `arn:aws:iam::123456789012:role/GitHubActionsDeployRole`)
+6. Copy the role ARN: `arn:aws:iam::YOUR_ACCOUNT_ID:role/GitHubActionsDeployRole`
 
-## Step 4: Configure GitHub secrets and variables
+## Step 3: Configure GitHub secrets and variables
 
-Go to your GitHub repository → Settings → Secrets and variables → Actions
+Go to repo Settings → Secrets and variables → Actions
 
-**Add this secret** (Secrets tab):
+**Add these secrets** (Secrets tab):
 
 ```
 AWS_ROLE_ARN=arn:aws:iam::YOUR_ACCOUNT_ID:role/GitHubActionsDeployRole
+SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_KEY=your-anon-key
+SUPABASE_DB_URL=postgresql://postgres:[password]@db.[project].supabase.co:5432/postgres
+REDIS_URL=redis://default:[password]@your-redis.upstash.io:6379
+LOGFIRE_TOKEN=pylf_v1_us_...
 ```
 
 **Add these variables** (Variables tab):
 
 ```
-AWS_REGION=us-east-1
+AWS_REGION=eu-north-1
 ECR_REPOSITORY_NAME=policyengine-api-v2-alpha
 ECS_CLUSTER_NAME=policyengine-api-v2-cluster
 ECS_API_SERVICE_NAME=policyengine-api-v2-api
 ECS_WORKER_SERVICE_NAME=policyengine-api-v2-worker
 ```
 
-## Step 5: Deploy from GitHub
+## Step 4: Deploy
 
 Push to the main branch:
 
@@ -123,39 +93,81 @@ git push origin main
 ```
 
 GitHub Actions will automatically:
-1. Build the Docker image
-2. Push to ECR
-3. Update ECS services
-4. Wait for deployment to stabilise
+1. Set up Terraform
+2. Run `terraform init`
+3. Run `terraform plan`
+4. Run `terraform apply` (creates all infrastructure)
+5. Build Docker image
+6. Push to ECR
+7. Update ECS services
+8. Wait for deployment to stabilise
 
-**Note**: After running Terraform, the ECS services will initially fail to start (no Docker image exists yet). Once you push to `main` and GitHub Actions completes, the services will automatically recover and start successfully.
+**First deployment**: Takes ~10 minutes as it creates VPC, load balancer, ECS cluster, etc.
+
+**Subsequent deployments**: ~3-5 minutes (only updates Docker images and ECS tasks)
+
+## Step 5: Verify deployment
+
+After deployment completes:
+
+1. **Get API endpoint**:
+   ```bash
+   cd terraform
+   terraform output load_balancer_url
+   ```
+
+2. **Check health**:
+   ```bash
+   curl http://YOUR-ALB-URL/health
+   ```
+
+3. **View logs**:
+   - AWS Console → CloudWatch → Log groups → `/ecs/policyengine-api-v2`
+
+4. **Monitor services**:
+   - AWS Console → ECS → Clusters → policyengine-api-v2-cluster
+
+## Local deployment (optional)
+
+Deploy infrastructure manually from your machine:
+
+```bash
+make deploy-local
+```
+
+This runs Terraform with variables from your `.env` file and prompts for confirmation before applying.
 
 ## Monitoring
 
-- View logs: AWS Console → CloudWatch → Log groups → `/ecs/policyengine-api-v2`
-- View services: AWS Console → ECS → Clusters → policyengine-api-v2-cluster
-- API endpoint: Check Terraform output for `load_balancer_url`
+- **Logs**: CloudWatch → `/ecs/policyengine-api-v2`
+- **Services**: ECS → policyengine-api-v2-cluster
+- **Metrics**: CloudWatch → ECS metrics
+- **Logfire**: https://logfire-us.pydantic.dev/nikhilwoodruff/api-v2
 
 ## Updating the deployment
 
-Any push to the `main` branch will trigger a new deployment automatically.
+Any push to `main` automatically:
+1. Updates infrastructure if Terraform files changed
+2. Builds new Docker image
+3. Deploys to ECS
 
-## Cost estimates (us-east-1)
+## Cost estimates (eu-north-1)
 
-- VPC/networking: Free (within free tier)
-- Application Load Balancer: ~$16/month
-- ECS Fargate API (0.5 vCPU, 1GB): ~$15/month
-- ECS Fargate Worker (1 vCPU, 2GB): ~$30/month
-- CloudWatch Logs: ~$1/month
+- VPC/networking: Free
+- Application Load Balancer: ~€14/month
+- ECS Fargate API (0.5 vCPU, 1GB): ~€13/month
+- ECS Fargate Worker (1 vCPU, 2GB): ~€26/month
+- CloudWatch Logs: ~€1/month
+- S3 (Terraform state): ~€0.10/month
 - Data transfer: Variable
 
-**Total: ~$62/month** (plus data transfer and Redis costs)
+**Total: ~€54/month** (plus data transfer and Redis costs)
 
 ## Troubleshooting
 
 ### GitHub Actions can't assume role
 
-Check the trust policy on your IAM role includes:
+Trust policy must match your repo exactly:
 ```json
 {
   "Version": "2012-10-17",
@@ -168,8 +180,10 @@ Check the trust policy on your IAM role includes:
       "Action": "sts:AssumeRoleWithWebIdentity",
       "Condition": {
         "StringEquals": {
-          "token.actions.githubusercontent.com:aud": "sts.amazonaws.com",
-          "token.actions.githubusercontent.com:sub": "repo:YOUR_ORG/policyengine-api-v2-alpha:ref:refs/heads/main"
+          "token.actions.githubusercontent.com:aud": "sts.amazonaws.com"
+        },
+        "StringLike": {
+          "token.actions.githubusercontent.com:sub": "repo:PolicyEngine/policyengine-api-v2-alpha:*"
         }
       }
     }
@@ -177,19 +191,42 @@ Check the trust policy on your IAM role includes:
 }
 ```
 
+**Note**: `PolicyEngine` is case-sensitive (capital P and E)
+
+### Terraform state locking errors
+
+If deployment fails midway, you might see "state is locked". Wait 2 minutes for the lock to expire, or manually unlock:
+
+```bash
+# DON'T run this unless you're sure no other process is running Terraform
+aws s3 rm s3://policyengine-api-v2-terraform-state/.terraform.tflock
+```
+
 ### ECS tasks not starting
 
 Check CloudWatch logs for errors. Common issues:
-- Environment variables not set correctly
+- Environment variables not set in GitHub secrets
 - Supabase/Redis connection issues
 - Image build failures
 
-### Deployment timeout
-
-Increase health check grace period in task definition if app takes long to start.
-
 ### High costs
 
-- Reduce task CPU/memory in `terraform.tfvars`
-- Set `api_desired_count = 0` and `worker_desired_count = 0` when not in use
-- Use AWS Cost Explorer to identify expensive resources
+Reduce task resources in `terraform/variables.tf`:
+```hcl
+api_cpu            = "256"   # Lower from 512
+api_memory         = "512"   # Lower from 1024
+worker_desired_count = 0      # Disable worker when not needed
+```
+
+Then push to trigger redeployment.
+
+## Destroying infrastructure
+
+To tear everything down:
+
+```bash
+cd terraform
+./deploy.sh destroy
+```
+
+**Warning**: This deletes all resources and data. The Terraform state bucket is preserved for recovery.

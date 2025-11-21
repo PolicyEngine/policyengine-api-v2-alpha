@@ -23,6 +23,33 @@ jobs:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ vars.AWS_REGION }}
 
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.6.0
+
+      - name: Terraform init
+        working-directory: ./terraform
+        run: terraform init
+
+      - name: Terraform plan
+        working-directory: ./terraform
+        env:
+          TF_VAR_supabase_url: ${{ secrets.SUPABASE_URL }}
+          TF_VAR_supabase_key: ${{ secrets.SUPABASE_KEY }}
+          TF_VAR_supabase_db_url: ${{ secrets.SUPABASE_DB_URL }}
+          TF_VAR_logfire_token: ${{ secrets.LOGFIRE_TOKEN }}
+        run: terraform plan
+
+      - name: Terraform apply
+        working-directory: ./terraform
+        env:
+          TF_VAR_supabase_url: ${{ secrets.SUPABASE_URL }}
+          TF_VAR_supabase_key: ${{ secrets.SUPABASE_KEY }}
+          TF_VAR_supabase_db_url: ${{ secrets.SUPABASE_DB_URL }}
+          TF_VAR_logfire_token: ${{ secrets.LOGFIRE_TOKEN }}
+        run: terraform apply -auto-approve
+
       - name: Login to Amazon ECR
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2

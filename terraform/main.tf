@@ -1,5 +1,12 @@
 terraform {
   required_version = ">= 1.0"
+
+  backend "s3" {
+    bucket = "policyengine-api-v2-terraform-state"
+    key    = "terraform.tfstate"
+    region = "eu-north-1"
+  }
+
   required_providers {
     aws = {
       source  = "hashicorp/aws"
@@ -60,6 +67,52 @@ resource "aws_route_table_association" "public" {
   count          = 2
   subnet_id      = aws_subnet.public[count.index].id
   route_table_id = aws_route_table.public.id
+}
+
+# ElastiCache Redis
+resource "aws_security_group" "redis" {
+  name        = "${var.project_name}-redis-sg"
+  description = "Security group for Redis"
+  vpc_id      = aws_vpc.main.id
+
+  ingress {
+    from_port   = 6379
+    to_port     = 6379
+    protocol    = "tcp"
+    cidr_blocks = ["10.0.0.0/16"]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = {
+    Name = "${var.project_name}-redis-sg"
+  }
+}
+
+resource "aws_elasticache_subnet_group" "main" {
+  name       = "${var.project_name}-redis-subnet"
+  subnet_ids = aws_subnet.public[*].id
+}
+
+resource "aws_elasticache_cluster" "redis" {
+  cluster_id           = "${var.project_name}-redis"
+  engine               = "redis"
+  node_type            = "cache.t4g.micro"
+  num_cache_nodes      = 1
+  parameter_group_name = "default.redis7"
+  engine_version       = "7.0"
+  port                 = 6379
+  subnet_group_name    = aws_elasticache_subnet_group.main.name
+  security_group_ids   = [aws_security_group.redis.id]
+
+  tags = {
+    Name = "${var.project_name}-redis"
+  }
 }
 
 # ECR repository for Docker images
@@ -284,15 +337,15 @@ resource "aws_ecs_task_definition" "api" {
         },
         {
           name  = "REDIS_URL"
-          value = var.redis_url
+          value = "redis://${aws_elasticache_cluster.redis.cache_nodes[0].address}:6379/0"
         },
         {
           name  = "CELERY_BROKER_URL"
-          value = var.redis_url
+          value = "redis://${aws_elasticache_cluster.redis.cache_nodes[0].address}:6379/0"
         },
         {
           name  = "CELERY_RESULT_BACKEND"
-          value = var.redis_url
+          value = "redis://${aws_elasticache_cluster.redis.cache_nodes[0].address}:6379/1"
         },
         {
           name  = "LOGFIRE_TOKEN"
@@ -354,15 +407,15 @@ resource "aws_ecs_task_definition" "worker" {
         },
         {
           name  = "REDIS_URL"
-          value = var.redis_url
+          value = "redis://${aws_elasticache_cluster.redis.cache_nodes[0].address}:6379/0"
         },
         {
           name  = "CELERY_BROKER_URL"
-          value = var.redis_url
+          value = "redis://${aws_elasticache_cluster.redis.cache_nodes[0].address}:6379/0"
         },
         {
           name  = "CELERY_RESULT_BACKEND"
-          value = var.redis_url
+          value = "redis://${aws_elasticache_cluster.redis.cache_nodes[0].address}:6379/1"
         },
         {
           name  = "LOGFIRE_TOKEN"

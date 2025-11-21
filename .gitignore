@@ -49,3 +49,4 @@ htmlcov/
 data/
 *.h5
 *.db
+.env.prod

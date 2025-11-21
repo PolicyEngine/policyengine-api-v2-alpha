@@ -1,4 +1,8 @@
-.PHONY: install dev format lint test clean seed up down logs start-supabase stop-supabase reset rebuild
+.PHONY: install dev format lint test clean seed up down logs start-supabase stop-supabase reset rebuild create-state-bucket deploy-local
+
+# AWS Configuration
+AWS_REGION ?= eu-north-1
+STATE_BUCKET = policyengine-api-v2-terraform-state
 
 install:
 	uv pip install -e .
@@ -51,3 +55,25 @@ down:
 
 logs:
 	docker compose logs -f
+
+create-state-bucket:
+	@echo "Creating Terraform state bucket..."
+	@aws s3api head-bucket --bucket $(STATE_BUCKET) --region $(AWS_REGION) 2>/dev/null || \
+		(aws s3api create-bucket \
+			--bucket $(STATE_BUCKET) \
+			--region $(AWS_REGION) \
+			--create-bucket-configuration LocationConstraint=$(AWS_REGION) && \
+		aws s3api put-bucket-versioning \
+			--bucket $(STATE_BUCKET) \
+			--versioning-configuration Status=Enabled \
+			--region $(AWS_REGION) && \
+		echo "✓ Terraform state bucket created with versioning enabled")
+
+deploy-local:
+	@echo "Deploying infrastructure locally..."
+	cd terraform && ./deploy.sh plan
+	@read -p "Apply changes? [y/N] " -n 1 -r; \
+	echo; \
+	if [[ $$REPLY =~ ^[Yy]$$ ]]; then \
+		cd terraform && ./deploy.sh apply -auto-approve; \
+	fi

@@ -28,12 +28,6 @@ variable "supabase_db_url" {
   sensitive   = true
 }
 
-variable "redis_url" {
-  description = "Redis connection URL (e.g., Upstash)"
-  type        = string
-  sensitive   = true
-}
-
 variable "logfire_token" {
   description = "Logfire observability token"
   type        = string

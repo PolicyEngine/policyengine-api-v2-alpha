@@ -3,6 +3,11 @@ output "ecr_repository_url" {
   value       = aws_ecr_repository.api.repository_url
 }
 
+output "redis_endpoint" {
+  description = "ElastiCache Redis endpoint"
+  value       = aws_elasticache_cluster.redis.cache_nodes[0].address
+}
+
 output "load_balancer_url" {
   description = "Load balancer URL for API"
   value       = "http://${aws_lb.main.dns_name}"
