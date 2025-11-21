@@ -1,4 +1,18 @@
 services:
+  postgres:
+    image: postgres:15
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: postgres
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "postgres"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
   redis:
     image: redis:7
     ports:
@@ -15,9 +29,9 @@ services:
     ports:
       - "8000:8000"
     environment:
-      SUPABASE_URL: ${SUPABASE_URL:-http://host.docker.internal:54321}
-      SUPABASE_KEY: ${SUPABASE_KEY}
-      SUPABASE_DB_URL: postgresql://postgres:postgres@host.docker.internal:54322/postgres
+      SUPABASE_URL: ${SUPABASE_URL:-http://postgres:5432}
+      SUPABASE_KEY: ${SUPABASE_KEY:-test-key}
+      SUPABASE_DB_URL: ${SUPABASE_DB_URL:-postgresql://postgres:postgres@postgres:5432/postgres}
       REDIS_URL: redis://redis:6379/0
       CELERY_BROKER_URL: redis://redis:6379/0
       CELERY_RESULT_BACKEND: redis://redis:6379/1
@@ -26,6 +40,8 @@ services:
     volumes:
       - ./src:/app/src
     depends_on:
+      postgres:
+        condition: service_healthy
       redis:
         condition: service_healthy
     healthcheck:
@@ -39,9 +55,9 @@ services:
     build: .
     command: celery -A policyengine_api.tasks.celery_app worker --loglevel=info
     environment:
-      SUPABASE_URL: ${SUPABASE_URL:-http://host.docker.internal:54321}
-      SUPABASE_KEY: ${SUPABASE_KEY}
-      SUPABASE_DB_URL: postgresql://postgres:postgres@host.docker.internal:54322/postgres
+      SUPABASE_URL: ${SUPABASE_URL:-http://postgres:5432}
+      SUPABASE_KEY: ${SUPABASE_KEY:-test-key}
+      SUPABASE_DB_URL: ${SUPABASE_DB_URL:-postgresql://postgres:postgres@postgres:5432/postgres}
       REDIS_URL: redis://redis:6379/0
       CELERY_BROKER_URL: redis://redis:6379/0
       CELERY_RESULT_BACKEND: redis://redis:6379/1
@@ -49,15 +65,18 @@ services:
     volumes:
       - ./src:/app/src
     depends_on:
-      - redis
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
 
   test:
     build: .
     command: pytest tests/ -v
     environment:
-      SUPABASE_URL: ${SUPABASE_URL:-http://host.docker.internal:54321}
-      SUPABASE_KEY: ${SUPABASE_KEY}
-      SUPABASE_DB_URL: postgresql://postgres:postgres@host.docker.internal:54322/postgres
+      SUPABASE_URL: ${SUPABASE_URL:-http://postgres:5432}
+      SUPABASE_KEY: ${SUPABASE_KEY:-test-key}
+      SUPABASE_DB_URL: ${SUPABASE_DB_URL:-postgresql://postgres:postgres@postgres:5432/postgres}
       REDIS_URL: redis://redis:6379/0
       CELERY_BROKER_URL: redis://redis:6379/0
       CELERY_RESULT_BACKEND: redis://redis:6379/1
@@ -66,6 +85,8 @@ services:
       - ./src:/app/src
       - ./tests:/app/tests
     depends_on:
+      postgres:
+        condition: service_healthy
       redis:
         condition: service_healthy
       api:
