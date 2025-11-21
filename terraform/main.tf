@@ -232,8 +232,8 @@ resource "aws_security_group" "ecs" {
   vpc_id      = aws_vpc.main.id
 
   ingress {
-    from_port   = 8000
-    to_port     = 8000
+    from_port   = 80
+    to_port     = 80
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]  # Allow direct access from internet (temporary until ALB is enabled)
   }
@@ -333,7 +333,7 @@ resource "aws_ecs_task_definition" "api" {
       essential = true
       portMappings = [
         {
-          containerPort = 8000
+          containerPort = 80
           protocol      = "tcp"
         }
       ]

@@ -25,9 +25,9 @@ services:
 
   api:
     build: .
-    command: uvicorn policyengine_api.main:app --host 0.0.0.0 --port 8000 --reload
+    command: uvicorn policyengine_api.main:app --host 0.0.0.0 --port 80 --reload
     ports:
-      - "8000:8000"
+      - "80:80"
     environment:
       SUPABASE_URL: ${SUPABASE_URL:-http://postgres:5432}
       SUPABASE_KEY: ${SUPABASE_KEY:-test-key}
@@ -45,7 +45,7 @@ services:
       redis:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "python", "-c", "import httpx; exit(0 if httpx.get('http://localhost:8000/health', timeout=2).status_code == 200 else 1)"]
+      test: ["CMD", "python", "-c", "import httpx; exit(0 if httpx.get('http://localhost:80/health', timeout=2).status_code == 200 else 1)"]
       interval: 5s
       timeout: 3s
       retries: 10

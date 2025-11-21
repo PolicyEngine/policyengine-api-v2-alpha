@@ -142,7 +142,7 @@ def seed_model(model_version, session) -> TaxBenefitModelVersion:
 
 def main():
     """Main seed function."""
-    console.print("[bold green]PolicyEngine Database Seeding[/bold green]\n")
+    console.print("[bold green]PolicyEngine database seeding[/bold green]\n")
 
     with next(get_quiet_session()) as session:
         # Seed UK model

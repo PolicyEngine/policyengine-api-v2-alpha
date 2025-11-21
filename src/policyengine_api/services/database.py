@@ -4,6 +4,8 @@ import logfire
 from policyengine_api.config.settings import settings
 
 engine = create_engine(settings.database_url, echo=settings.debug)
+# SQLAlchemy introspects the database schema on startup by querying pg_catalog
+# These queries are normal and only happen once per startup
 logfire.instrument_sqlalchemy(engine=engine)
 
 
