@@ -20,7 +20,7 @@ This creates `policyengine-api-v2-terraform-state` with versioning enabled.
 
 **Note**: Only needs to be done once.
 
-## Step 2: Set up GitHub OIDC
+## Step 2: Set up GitHub OIDC and IAM role
 
 1. Get your AWS account ID:
 
@@ -36,27 +36,22 @@ aws iam create-open-id-connect-provider \
   --client-id-list sts.amazonaws.com
 ```
 
-3. Create IAM role for GitHub Actions:
-   - AWS Console → IAM → Roles → Create role
-   - Trusted entity type: Web identity
-   - Identity provider: `token.actions.githubusercontent.com`
-   - Audience: `sts.amazonaws.com`
-   - GitHub organization: `PolicyEngine`
-   - GitHub repository: `policyengine-api-v2-alpha`
-   - GitHub branch: `main`
-   - Click Next
+3. Create/update the IAM role via Terraform:
 
-4. Attach these policies:
-   - `AmazonECS_FullAccess`
-   - `AmazonEC2ContainerRegistryPowerUser`
-   - `IAMFullAccess`
-   - `AmazonVPCFullAccess`
-   - `CloudWatchLogsFullAccess`
-   - `TerraformStateAccess` (custom policy created earlier)
+```bash
+cd terraform
+terraform init
+terraform import aws_iam_role.github_actions GitHubActionsDeployRole 2>/dev/null || echo "Role doesn't exist yet, will be created"
+terraform apply -target=aws_iam_role.github_actions -target=aws_iam_role_policy.github_actions_deploy
+```
 
-5. Name the role: `GitHubActionsDeployRole`
+This creates the `GitHubActionsDeployRole` with all required permissions for ECS, ECR, ElastiCache, Load Balancers, VPC, CloudWatch, IAM, and S3.
 
-6. Copy the role ARN: `arn:aws:iam::YOUR_ACCOUNT_ID:role/GitHubActionsDeployRole`
+4. Copy the role ARN from Terraform output:
+
+```bash
+terraform output github_actions_role_arn
+```
 
 ## Step 3: Configure GitHub secrets and variables
 
@@ -164,6 +159,18 @@ Any push to `main` automatically:
 **Total: ~€54/month** (plus data transfer and Redis costs)
 
 ## Troubleshooting
+
+### Account doesn't support creating load balancers
+
+If you see "This AWS account currently does not support creating load balancers":
+
+1. Open AWS Support Center
+2. Create case: Service limit increase
+3. Select: Elastic Load Balancing
+4. Request: Enable Application Load Balancer creation
+5. Explain: Need ALB for ECS deployment
+
+This typically takes 24-48 hours for new AWS accounts. Alternatively, check your account has valid payment method and is in good standing.
 
 ### GitHub Actions can't assume role
 
