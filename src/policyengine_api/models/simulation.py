@@ -17,8 +17,8 @@ class SimulationStatus(str, Enum):
 class SimulationBase(SQLModel):
     """Base simulation fields."""
 
-    dataset_id: UUID
-    policy_id: UUID | None = None
+    dataset_id: UUID = Field(foreign_key="datasets.id")
+    policy_id: UUID | None = Field(default=None, foreign_key="policies.id")
     tax_benefit_model: str  # e.g., "uk_latest", "us_latest"
     status: SimulationStatus = SimulationStatus.PENDING
     error_message: str | None = None

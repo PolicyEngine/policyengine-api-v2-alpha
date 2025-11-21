@@ -16,7 +16,7 @@ class AggregateType(str, Enum):
 class AggregateOutputBase(SQLModel):
     """Base aggregate output fields."""
 
-    simulation_id: UUID
+    simulation_id: UUID = Field(foreign_key="simulations.id")
     variable: str
     aggregate_type: AggregateType
     entity: str | None = None

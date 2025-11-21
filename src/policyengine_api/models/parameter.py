@@ -11,7 +11,7 @@ class ParameterBase(SQLModel):
     description: str | None = None
     data_type: str | None = None
     unit: str | None = None
-    tax_benefit_model_version_id: UUID
+    tax_benefit_model_version_id: UUID = Field(foreign_key="tax_benefit_model_versions.id")
 
 
 class Parameter(ParameterBase, table=True):

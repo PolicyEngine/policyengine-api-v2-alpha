@@ -11,7 +11,7 @@ class VariableBase(SQLModel):
     entity: str
     description: str | None = None
     data_type: str | None = None  # Store as string representation
-    tax_benefit_model_version_id: UUID
+    tax_benefit_model_version_id: UUID = Field(foreign_key="tax_benefit_model_versions.id")
 
 
 class Variable(VariableBase, table=True):

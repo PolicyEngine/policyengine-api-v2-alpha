@@ -7,7 +7,7 @@ from sqlmodel import Field, SQLModel
 class TaxBenefitModelVersionBase(SQLModel):
     """Base tax-benefit model version fields."""
 
-    model_id: UUID
+    model_id: UUID = Field(foreign_key="tax_benefit_models.id")
     version: str  # e.g., "1.0.0", "latest"
     description: str | None = None
 

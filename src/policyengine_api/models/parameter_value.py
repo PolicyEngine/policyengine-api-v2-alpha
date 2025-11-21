@@ -7,7 +7,7 @@ from sqlmodel import JSON, Column, Field, SQLModel
 class ParameterValueBase(SQLModel):
     """Base parameter value fields."""
 
-    parameter_id: UUID
+    parameter_id: UUID = Field(foreign_key="parameters.id")
     value: dict = Field(default_factory=dict, sa_column=Column(JSON))  # Store as JSON
     start_date: datetime
     end_date: datetime | None = None
