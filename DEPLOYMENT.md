@@ -93,15 +93,20 @@ aws sts get-caller-identity --query Account --output text
 
 6. After creation, copy the role ARN (looks like `arn:aws:iam::123456789012:role/GitHubActionsDeployRole`)
 
-## Step 4: Configure GitHub secrets
+## Step 4: Configure GitHub secrets and variables
 
 Go to your GitHub repository → Settings → Secrets and variables → Actions
 
-Add these secrets:
+**Add this secret** (Secrets tab):
+
+```
+AWS_ROLE_ARN=arn:aws:iam::YOUR_ACCOUNT_ID:role/GitHubActionsDeployRole
+```
+
+**Add these variables** (Variables tab):
 
 ```
 AWS_REGION=us-east-1
-AWS_ROLE_ARN=arn:aws:iam::YOUR_ACCOUNT_ID:role/GitHubActionsDeployRole
 ECR_REPOSITORY_NAME=policyengine-api-v2-alpha
 ECS_CLUSTER_NAME=policyengine-api-v2-cluster
 ECS_API_SERVICE_NAME=policyengine-api-v2-api
