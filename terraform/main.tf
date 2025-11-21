@@ -21,9 +21,10 @@ provider "aws" {
 
 # VPC and networking
 resource "aws_vpc" "main" {
-  cidr_block           = "10.0.0.0/16"
-  enable_dns_hostnames = true
-  enable_dns_support   = true
+  cidr_block                       = "10.0.0.0/16"
+  assign_generated_ipv6_cidr_block = true
+  enable_dns_hostnames             = true
+  enable_dns_support               = true
 
   tags = {
     Name = "${var.project_name}-vpc"
@@ -31,11 +32,13 @@ resource "aws_vpc" "main" {
 }
 
 resource "aws_subnet" "public" {
-  count                   = 2
-  vpc_id                  = aws_vpc.main.id
-  cidr_block              = "10.0.${count.index + 1}.0/24"
-  availability_zone       = data.aws_availability_zones.available.names[count.index]
-  map_public_ip_on_launch = true
+  count                           = 2
+  vpc_id                          = aws_vpc.main.id
+  cidr_block                      = "10.0.${count.index + 1}.0/24"
+  ipv6_cidr_block                 = cidrsubnet(aws_vpc.main.ipv6_cidr_block, 8, count.index + 1)
+  availability_zone               = data.aws_availability_zones.available.names[count.index]
+  map_public_ip_on_launch         = true
+  assign_ipv6_address_on_creation = true
 
   tags = {
     Name = "${var.project_name}-public-${count.index + 1}"
@@ -56,6 +59,11 @@ resource "aws_route_table" "public" {
   route {
     cidr_block = "0.0.0.0/0"
     gateway_id = aws_internet_gateway.main.id
+  }
+
+  route {
+    ipv6_cidr_block = "::/0"
+    gateway_id      = aws_internet_gateway.main.id
   }
 
   tags = {
