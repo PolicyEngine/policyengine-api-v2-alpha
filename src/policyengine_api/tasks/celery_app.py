@@ -7,6 +7,7 @@ from policyengine_api.config.settings import settings
 logfire.configure(
     service_name="policyengine-worker",
     token=settings.logfire_token if settings.logfire_token else None,
+    environment=settings.logfire_environment,
 )
 logfire.instrument_httpx()
 

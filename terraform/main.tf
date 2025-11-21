@@ -367,6 +367,10 @@ resource "aws_ecs_task_definition" "api" {
           value = var.logfire_token
         },
         {
+          name  = "LOGFIRE_ENVIRONMENT"
+          value = var.logfire_environment
+        },
+        {
           name  = "STORAGE_BUCKET"
           value = var.storage_bucket
         },

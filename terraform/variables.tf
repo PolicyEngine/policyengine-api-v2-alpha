@@ -34,6 +34,12 @@ variable "logfire_token" {
   sensitive   = true
 }
 
+variable "logfire_environment" {
+  description = "Logfire environment (local, staging, prod)"
+  type        = string
+  default     = "prod"
+}
+
 variable "storage_bucket" {
   description = "S3 bucket name for datasets"
   type        = string

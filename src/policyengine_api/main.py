@@ -19,6 +19,7 @@ from policyengine_api.config.settings import settings as app_settings
 logfire.configure(
     service_name="policyengine-api",
     token=app_settings.logfire_token if app_settings.logfire_token else None,
+    environment=app_settings.logfire_environment,
 )
 logfire.instrument_httpx()
 

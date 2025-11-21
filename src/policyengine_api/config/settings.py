@@ -23,6 +23,7 @@ class Settings(BaseSettings):
 
     # Logfire
     logfire_token: str = ""
+    logfire_environment: str = "local"
 
     # API
     api_title: str = "PolicyEngine API v2"
