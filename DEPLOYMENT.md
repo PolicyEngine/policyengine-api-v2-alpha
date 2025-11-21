@@ -73,7 +73,7 @@ LOGFIRE_TOKEN=pylf_v1_us_...
 **Add these variables** (Variables tab):
 
 ```
-AWS_REGION=eu-north-1
+AWS_REGION=us-east-1
 ECR_REPOSITORY_NAME=policyengine-api-v2-alpha
 ECS_CLUSTER_NAME=policyengine-api-v2-cluster
 ECS_API_SERVICE_NAME=policyengine-api-v2-api
@@ -148,7 +148,7 @@ Any push to `main` automatically:
 2. Builds new Docker image
 3. Deploys to ECS
 
-## Cost estimates (eu-north-1)
+## Cost estimates (us-east-1)
 
 - VPC/networking: Free
 - Application Load Balancer: ~€14/month

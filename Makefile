@@ -1,7 +1,7 @@
 .PHONY: install dev format lint test clean seed up down logs start-supabase stop-supabase reset rebuild create-state-bucket deploy-local
 
 # AWS Configuration
-AWS_REGION ?= eu-north-1
+AWS_REGION ?= us-east-1
 STATE_BUCKET = policyengine-api-v2-terraform-state
 
 install:
