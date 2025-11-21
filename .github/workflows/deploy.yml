@@ -104,11 +104,13 @@ jobs:
               --output text)
 
             if [ -n "$TASK_ARN" ] && [ "$TASK_ARN" != "None" ]; then
+              echo "--- Recent logs ---"
               aws logs tail /ecs/${{ vars.ECS_CLUSTER_NAME }} \
                 --log-stream-name-prefix "ecs/api" \
                 --since 30s \
                 --format short \
-                --region ${{ vars.AWS_REGION }} 2>/dev/null | head -10 || true
+                --region ${{ vars.AWS_REGION }} 2>/dev/null || true
+              echo "---"
             fi
 
             # Check if stable
@@ -147,11 +149,13 @@ jobs:
               --output text)
 
             if [ -n "$TASK_ARN" ] && [ "$TASK_ARN" != "None" ]; then
+              echo "--- Recent logs ---"
               aws logs tail /ecs/${{ vars.ECS_CLUSTER_NAME }} \
                 --log-stream-name-prefix "ecs/worker" \
                 --since 30s \
                 --format short \
-                --region ${{ vars.AWS_REGION }} 2>/dev/null | head -10 || true
+                --region ${{ vars.AWS_REGION }} 2>/dev/null || true
+              echo "---"
             fi
 
             # Check if stable
@@ -187,3 +191,34 @@ jobs:
             --region ${{ vars.AWS_REGION }} \
             --query 'services[0].{Status:status,Running:runningCount,Desired:desiredCount}' \
             --output table
+
+      - name: Get API endpoint
+        run: |
+          echo "=== API Endpoint ==="
+          TASK_ARN=$(aws ecs list-tasks \
+            --cluster ${{ vars.ECS_CLUSTER_NAME }} \
+            --service-name ${{ vars.ECS_API_SERVICE_NAME }} \
+            --region ${{ vars.AWS_REGION }} \
+            --desired-status RUNNING \
+            --query 'taskArns[0]' \
+            --output text)
+
+          if [ -n "$TASK_ARN" ] && [ "$TASK_ARN" != "None" ]; then
+            TASK_DETAILS=$(aws ecs describe-tasks \
+              --cluster ${{ vars.ECS_CLUSTER_NAME }} \
+              --tasks $TASK_ARN \
+              --region ${{ vars.AWS_REGION }} \
+              --query 'tasks[0].attachments[0].details')
+
+            PUBLIC_IP=$(echo $TASK_DETAILS | jq -r '.[] | select(.name=="networkInterfaceId") | .value' | xargs -I {} aws ec2 describe-network-interfaces --network-interface-ids {} --region ${{ vars.AWS_REGION }} --query 'NetworkInterfaces[0].Association.PublicIp' --output text)
+
+            if [ -n "$PUBLIC_IP" ] && [ "$PUBLIC_IP" != "None" ]; then
+              echo "API is available at: http://$PUBLIC_IP"
+              echo "Health check: http://$PUBLIC_IP/health"
+              echo "Documentation: http://$PUBLIC_IP/docs"
+            else
+              echo "Could not retrieve public IP"
+            fi
+          else
+            echo "No running API tasks found"
+          fi

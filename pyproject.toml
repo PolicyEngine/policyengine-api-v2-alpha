@@ -20,7 +20,7 @@ dependencies = [
     "pydantic-settings>=2.6.0",
     "rich>=13.9.4",
     "tables>=3.10.2",
-    "logfire[fastapi,httpx]>=0.60.0",
+    "logfire[fastapi,httpx,sqlalchemy]>=0.60.0",
     "fastapi-cache2>=0.2.1",
 ]
 
