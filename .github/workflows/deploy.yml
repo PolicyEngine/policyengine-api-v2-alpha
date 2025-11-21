@@ -10,9 +10,21 @@ permissions:
   contents: read
 
 jobs:
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run tests
+        run: make test
+
   deploy:
     name: Deploy
     runs-on: ubuntu-latest
+    needs: test
 
     steps:
       - name: Checkout code
@@ -104,12 +116,13 @@ jobs:
               --output text)
 
             if [ -n "$TASK_ARN" ] && [ "$TASK_ARN" != "None" ]; then
-              echo "--- Recent logs ---"
-              aws logs tail /ecs/${{ vars.ECS_CLUSTER_NAME }} \
-                --log-stream-name-prefix "ecs/api" \
+              TASK_ID=$(echo $TASK_ARN | rev | cut -d'/' -f1 | rev)
+              echo "--- Recent logs from task $TASK_ID ---"
+              aws logs tail /ecs/policyengine-api-v2-alpha \
+                --log-stream-name-prefix "api/$TASK_ID" \
                 --since 30s \
                 --format short \
-                --region ${{ vars.AWS_REGION }} 2>/dev/null || true
+                --region ${{ vars.AWS_REGION }} 2>&1 || echo "No logs available yet"
               echo "---"
             fi
 
@@ -149,12 +162,13 @@ jobs:
               --output text)
 
             if [ -n "$TASK_ARN" ] && [ "$TASK_ARN" != "None" ]; then
-              echo "--- Recent logs ---"
-              aws logs tail /ecs/${{ vars.ECS_CLUSTER_NAME }} \
-                --log-stream-name-prefix "ecs/worker" \
+              TASK_ID=$(echo $TASK_ARN | rev | cut -d'/' -f1 | rev)
+              echo "--- Recent logs from task $TASK_ID ---"
+              aws logs tail /ecs/policyengine-api-v2-alpha \
+                --log-stream-name-prefix "worker/$TASK_ID" \
                 --since 30s \
                 --format short \
-                --region ${{ vars.AWS_REGION }} 2>/dev/null || true
+                --region ${{ vars.AWS_REGION }} 2>&1 || echo "No logs available yet"
               echo "---"
             fi
 

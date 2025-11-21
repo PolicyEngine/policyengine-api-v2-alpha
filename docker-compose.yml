@@ -29,7 +29,7 @@ services:
       redis:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      test: ["CMD", "python", "-c", "import httpx; exit(0 if httpx.get('http://localhost:8000/health', timeout=2).status_code == 200 else 1)"]
       interval: 5s
       timeout: 3s
       retries: 10
