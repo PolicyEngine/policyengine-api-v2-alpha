@@ -17,7 +17,7 @@ lint:
 	ruff check --fix .
 
 test:
-	docker compose --profile test up --build --exit-code-from test test
+	docker compose --profile test up --build --exit-code-from test test || (docker compose logs api && docker compose logs worker && exit 1)
 
 clean:
 	find . -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true

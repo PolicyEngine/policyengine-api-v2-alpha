@@ -21,6 +21,18 @@ jobs:
       - name: Run tests
         run: make test
 
+      - name: Show container logs on failure
+        if: failure()
+        run: |
+          echo "=== API Logs ==="
+          docker compose logs api
+          echo ""
+          echo "=== Worker Logs ==="
+          docker compose logs worker
+          echo ""
+          echo "=== Redis Logs ==="
+          docker compose logs redis
+
   deploy:
     name: Deploy
     runs-on: ubuntu-latest

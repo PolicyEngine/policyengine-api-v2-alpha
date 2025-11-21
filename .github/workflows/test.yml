@@ -18,12 +18,14 @@ jobs:
       - name: Run tests
         run: make test
 
-      - name: Report test results
-        if: always()
+      - name: Show container logs on failure
+        if: failure()
         run: |
-          if [ $? -eq 0 ]; then
-            echo "✅ All tests passed"
-          else
-            echo "❌ Tests failed"
-            exit 1
-          fi
+          echo "=== API Logs ==="
+          docker compose logs api
+          echo ""
+          echo "=== Worker Logs ==="
+          docker compose logs worker
+          echo ""
+          echo "=== Redis Logs ==="
+          docker compose logs redis
