@@ -20,22 +20,22 @@ def upload_dataset(file_path: str, object_name: str | None = None) -> str:
         object_name: Name to store in bucket (defaults to filename)
 
     Returns:
-        Public URL of uploaded file
+        Object name (key) in storage
     """
     supabase = get_supabase_client()
 
     if object_name is None:
         object_name = Path(file_path).name
 
-    # Upload file
+    # Upload file using Supabase storage client
     with open(file_path, "rb") as f:
         supabase.storage.from_(settings.storage_bucket).upload(
-            object_name, f, {"content-type": "application/octet-stream"}
+            object_name,
+            f,
+            {"content-type": "application/octet-stream", "upsert": "true"}
         )
 
-    # Get public URL
-    url = supabase.storage.from_(settings.storage_bucket).get_public_url(object_name)
-    return url
+    return object_name
 
 
 def download_dataset(object_name: str, local_path: str) -> str:
@@ -50,7 +50,10 @@ def download_dataset(object_name: str, local_path: str) -> str:
     """
     supabase = get_supabase_client()
 
-    # Download file
+    # Ensure parent directory exists
+    Path(local_path).parent.mkdir(parents=True, exist_ok=True)
+
+    # Download file using Supabase storage client
     data = supabase.storage.from_(settings.storage_bucket).download(object_name)
 
     # Save locally

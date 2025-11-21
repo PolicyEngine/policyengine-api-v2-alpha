@@ -1,4 +1,5 @@
 from celery import Celery
+from celery.schedules import crontab
 import logfire
 
 from policyengine_api.config.settings import settings
@@ -23,4 +24,10 @@ celery_app.conf.update(
     result_serializer="json",
     timezone="UTC",
     enable_utc=True,
+    beat_schedule={
+        "scan-pending-simulations": {
+            "task": "scan_pending_simulations",
+            "schedule": 60.0,  # Run every 60 seconds
+        },
+    },
 )

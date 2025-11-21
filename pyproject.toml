@@ -3,7 +3,7 @@ name = "policyengine-api-v2"
 version = "0.1.0"
 description = "FastAPI service for PolicyEngine microsimulations"
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.13"
 dependencies = [
     "fastapi>=0.115.0",
     "uvicorn[standard]>=0.32.0",
@@ -13,7 +13,7 @@ dependencies = [
     "storage3>=0.8.1",
     "celery[redis]>=5.4.0",
     "redis>=5.1.1",
-    "policyengine>=0.1.0",
+    "policyengine>=3.1.5",
     "policyengine-uk>=2.0.0",
     "policyengine-us>=1.0.0",
     "pydantic>=2.9.2",
@@ -22,6 +22,7 @@ dependencies = [
     "tables>=3.10.2",
     "logfire[fastapi,httpx,sqlalchemy]>=0.60.0",
     "fastapi-cache2>=0.2.1",
+    "boto3>=1.41.1",
 ]
 
 [project.optional-dependencies]

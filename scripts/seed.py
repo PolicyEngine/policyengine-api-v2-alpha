@@ -14,14 +14,18 @@ warnings.filterwarnings('ignore')
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 from policyengine.tax_benefit_models.uk import uk_latest
+from policyengine.tax_benefit_models.uk.datasets import ensure_datasets as ensure_uk_datasets
 from policyengine.tax_benefit_models.us import us_latest
+from policyengine.tax_benefit_models.us.datasets import ensure_datasets as ensure_us_datasets
 from policyengine_api.models import (
     TaxBenefitModel,
     TaxBenefitModelVersion,
     Variable,
     Parameter,
     ParameterValue,
+    Dataset,
 )
+from policyengine_api.services.storage import upload_dataset
 from sqlmodel import Session, create_engine, select
 from policyengine_api.config.settings import settings
 from rich.console import Console
@@ -140,6 +144,73 @@ def seed_model(model_version, session) -> TaxBenefitModelVersion:
     return db_version
 
 
+def seed_datasets(session):
+    """Seed datasets and upload to S3."""
+    console.print("[bold blue]Seeding datasets...")
+
+    # UK datasets
+    console.print("  Creating UK datasets...")
+    uk_datasets = ensure_uk_datasets()
+
+    for _, pe_dataset in track(list(uk_datasets.items()), description="UK datasets"):
+        # Check if dataset already exists
+        existing = session.exec(
+            select(Dataset).where(Dataset.name == pe_dataset.name)
+        ).first()
+
+        if existing:
+            console.print(f"  Dataset {pe_dataset.name} already exists, skipping")
+            continue
+
+        # Upload to S3
+        object_name = upload_dataset(pe_dataset.filepath)
+        console.print(f"  Uploaded {pe_dataset.filepath} to S3 as {object_name}")
+
+        # Create database record
+        db_dataset = Dataset(
+            name=pe_dataset.name,
+            description=pe_dataset.description,
+            filepath=object_name,  # Store S3 key, not local path
+            year=pe_dataset.year,
+            tax_benefit_model="uk_latest",
+        )
+        session.add(db_dataset)
+        session.commit()
+        console.print(f"  [green]✓[/green] Created dataset: {db_dataset.name}")
+
+    # US datasets
+    console.print("  Creating US datasets...")
+    us_datasets = ensure_us_datasets()
+
+    for _, pe_dataset in track(list(us_datasets.items()), description="US datasets"):
+        # Check if dataset already exists
+        existing = session.exec(
+            select(Dataset).where(Dataset.name == pe_dataset.name)
+        ).first()
+
+        if existing:
+            console.print(f"  Dataset {pe_dataset.name} already exists, skipping")
+            continue
+
+        # Upload to S3
+        object_name = upload_dataset(pe_dataset.filepath)
+        console.print(f"  Uploaded {pe_dataset.filepath} to S3 as {object_name}")
+
+        # Create database record
+        db_dataset = Dataset(
+            name=pe_dataset.name,
+            description=pe_dataset.description,
+            filepath=object_name,  # Store S3 key, not local path
+            year=pe_dataset.year,
+            tax_benefit_model="us_latest",
+        )
+        session.add(db_dataset)
+        session.commit()
+        console.print(f"  [green]✓[/green] Created dataset: {db_dataset.name}")
+
+    console.print(f"[green]✓[/green] Seeded {len(uk_datasets) + len(us_datasets)} datasets\n")
+
+
 def main():
     """Main seed function."""
     console.print("[bold green]PolicyEngine database seeding[/bold green]\n")
@@ -153,8 +224,10 @@ def main():
         us_version = seed_model(us_latest, session)
         console.print(f"[green]✓[/green] US model seeded: {us_version.id}\n")
 
+        # Seed datasets
+        seed_datasets(session)
+
     console.print("\n[bold green]✓ Database seeding complete![/bold green]")
-    console.print("\n[yellow]Note:[/yellow] Dataset creation skipped. To add datasets, upload H5 files via the API.")
 
 
 if __name__ == "__main__":
