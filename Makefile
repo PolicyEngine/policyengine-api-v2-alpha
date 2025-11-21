@@ -17,7 +17,7 @@ lint:
 	ruff check --fix .
 
 test:
-	pytest
+	docker compose --profile test up --build --exit-code-from test test
 
 clean:
 	find . -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true

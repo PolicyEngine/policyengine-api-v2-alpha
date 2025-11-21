@@ -21,6 +21,9 @@ class Settings(BaseSettings):
     # Storage
     storage_bucket: str = "datasets"
 
+    # Logfire
+    logfire_token: str = ""
+
     # API
     api_title: str = "PolicyEngine API v2"
     api_version: str = "0.1.0"
