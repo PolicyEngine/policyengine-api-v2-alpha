@@ -14,7 +14,8 @@ from policyengine_api.services.database import init_db
 console = Console()
 
 # Configure Logfire
-logfire.configure()
+logfire.configure(service_name="policyengine-api")
+logfire.instrument_httpx()
 
 
 @asynccontextmanager

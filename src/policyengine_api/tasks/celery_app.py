@@ -1,6 +1,11 @@
 from celery import Celery
+import logfire
 
 from policyengine_api.config.settings import settings
+
+# Configure Logfire for worker
+logfire.configure(service_name="policyengine-worker")
+logfire.instrument_httpx()
 
 celery_app = Celery(
     "policyengine",
