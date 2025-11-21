@@ -4,7 +4,10 @@ import logfire
 from policyengine_api.config.settings import settings
 
 # Configure Logfire for worker
-logfire.configure(service_name="policyengine-worker")
+logfire.configure(
+    service_name="policyengine-worker",
+    token=settings.logfire_token if settings.logfire_token else None,
+)
 logfire.instrument_httpx()
 
 celery_app = Celery(

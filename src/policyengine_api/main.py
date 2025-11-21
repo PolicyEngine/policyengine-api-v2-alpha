@@ -14,7 +14,12 @@ from policyengine_api.services.database import init_db
 console = Console()
 
 # Configure Logfire
-logfire.configure(service_name="policyengine-api")
+from policyengine_api.config.settings import settings as app_settings
+
+logfire.configure(
+    service_name="policyengine-api",
+    token=app_settings.logfire_token if app_settings.logfire_token else None,
+)
 logfire.instrument_httpx()
 
 
