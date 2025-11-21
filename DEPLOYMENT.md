@@ -37,6 +37,8 @@ aws iam create-open-id-connect-provider \
 ```
 
 3. Create IAM role with required permissions:
+
+**Option A: AWS Console**
    - AWS Console → IAM → Roles → Create role
    - Trusted entity type: Web identity
    - Identity provider: `token.actions.githubusercontent.com`
@@ -44,56 +46,14 @@ aws iam create-open-id-connect-provider \
    - GitHub organization: `PolicyEngine`
    - GitHub repository: `policyengine-api-v2-alpha`
    - Name: `GitHubActionsDeployRole`
+   - Attach policies: `AmazonECS_FullAccess`, `AmazonElastiCacheFullAccess`, `ElasticLoadBalancingFullAccess`, `AmazonEC2FullAccess`, `CloudWatchLogsFullAccess`
 
-4. Attach these managed policies:
-   - `AmazonECS_FullAccess`
-   - `AmazonElastiCacheFullAccess`
-   - `ElasticLoadBalancingFullAccess`
-   - `AmazonEC2FullAccess`
-   - `CloudWatchLogsFullAccess`
-
-5. Add inline policy `GitHubActionsTerraform`:
-
-```json
-{
-  "Version": "2012-10-17",
-  "Statement": [
-    {
-      "Effect": "Allow",
-      "Action": ["ecr:*"],
-      "Resource": "*"
-    },
-    {
-      "Effect": "Allow",
-      "Action": [
-        "iam:GetRole",
-        "iam:GetRolePolicy",
-        "iam:CreateRole",
-        "iam:DeleteRole",
-        "iam:AttachRolePolicy",
-        "iam:DetachRolePolicy",
-        "iam:PutRolePolicy",
-        "iam:DeleteRolePolicy",
-        "iam:TagRole",
-        "iam:PassRole",
-        "iam:ListAttachedRolePolicies",
-        "iam:ListRolePolicies"
-      ],
-      "Resource": "*"
-    },
-    {
-      "Effect": "Allow",
-      "Action": ["s3:*"],
-      "Resource": [
-        "arn:aws:s3:::policyengine-api-v2-terraform-state",
-        "arn:aws:s3:::policyengine-api-v2-terraform-state/*"
-      ]
-    }
-  ]
-}
+**Option B: AWS CLI (if updating existing role)**
+```bash
+./scripts/fix-iam-permissions.sh
 ```
 
-6. Copy the role ARN: `arn:aws:iam::YOUR_ACCOUNT_ID:role/GitHubActionsDeployRole`
+4. Copy the role ARN: `arn:aws:iam::YOUR_ACCOUNT_ID:role/GitHubActionsDeployRole`
 
 ## Step 3: Configure GitHub secrets and variables
 
