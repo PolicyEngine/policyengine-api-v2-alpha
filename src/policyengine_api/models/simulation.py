@@ -1,8 +1,15 @@
 from datetime import datetime, timezone
 from enum import Enum
+from typing import TYPE_CHECKING
 from uuid import UUID, uuid4
 
-from sqlmodel import Field, SQLModel
+from sqlmodel import Field, Relationship, SQLModel
+
+if TYPE_CHECKING:
+    from .dataset import Dataset
+    from .policy import Policy
+    from .dynamic import Dynamic
+    from .tax_benefit_model_version import TaxBenefitModelVersion
 
 
 class SimulationStatus(str, Enum):
@@ -19,7 +26,11 @@ class SimulationBase(SQLModel):
 
     dataset_id: UUID = Field(foreign_key="datasets.id")
     policy_id: UUID | None = Field(default=None, foreign_key="policies.id")
-    tax_benefit_model: str  # e.g., "uk_latest", "us_latest"
+    dynamic_id: UUID | None = Field(default=None, foreign_key="dynamics.id")
+    tax_benefit_model_version_id: UUID = Field(
+        foreign_key="tax_benefit_model_versions.id"
+    )
+    output_dataset_id: UUID | None = Field(default=None, foreign_key="datasets.id")
     status: SimulationStatus = SimulationStatus.PENDING
     error_message: str | None = None
 
@@ -34,6 +45,23 @@ class Simulation(SimulationBase, table=True):
     updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     started_at: datetime | None = None
     completed_at: datetime | None = None
+
+    # Relationships
+    dataset: "Dataset" = Relationship(
+        sa_relationship_kwargs={
+            "foreign_keys": "[Simulation.dataset_id]",
+            "primaryjoin": "Simulation.dataset_id==Dataset.id",
+        }
+    )
+    policy: "Policy" = Relationship()
+    dynamic: "Dynamic" = Relationship()
+    tax_benefit_model_version: "TaxBenefitModelVersion" = Relationship()
+    output_dataset: "Dataset" = Relationship(
+        sa_relationship_kwargs={
+            "foreign_keys": "[Simulation.output_dataset_id]",
+            "primaryjoin": "Simulation.output_dataset_id==Dataset.id",
+        }
+    )
 
 
 class SimulationCreate(SimulationBase):

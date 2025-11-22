@@ -114,9 +114,9 @@ Response includes status field:
 
 `GET /simulations/{simulation_id}`
 
-## Aggregate outputs
+## Aggregates
 
-### Create aggregate output
+### Create aggregate
 
 `POST /outputs/aggregate`
 
@@ -141,10 +141,10 @@ Aggregate types:
 - `mean` - Weighted average
 - `count` - Number of entities
 
-### List aggregate outputs
+### List aggregates
 
 `GET /outputs/aggregate`
 
-### Get aggregate output
+### Get aggregate
 
 `GET /outputs/aggregate/{output_id}`

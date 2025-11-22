@@ -18,7 +18,7 @@ router = APIRouter(prefix="/change-aggregates", tags=["change-aggregates"])
 def create_change_aggregate(
     output: ChangeAggregateCreate, session: Session = Depends(get_session)
 ):
-    """Create a new change aggregate output."""
+    """Create a new change aggregate."""
     db_output = ChangeAggregate.model_validate(output)
     session.add(db_output)
     session.commit()
@@ -28,26 +28,26 @@ def create_change_aggregate(
 
 @router.get("/", response_model=List[ChangeAggregateRead])
 def list_change_aggregates(session: Session = Depends(get_session)):
-    """List all change aggregate outputs."""
+    """List all change aggregates."""
     outputs = session.exec(select(ChangeAggregate)).all()
     return outputs
 
 
 @router.get("/{output_id}", response_model=ChangeAggregateRead)
 def get_change_aggregate(output_id: UUID, session: Session = Depends(get_session)):
-    """Get a specific change aggregate output."""
+    """Get a specific change aggregate."""
     output = session.get(ChangeAggregate, output_id)
     if not output:
-        raise HTTPException(status_code=404, detail="Change aggregate output not found")
+        raise HTTPException(status_code=404, detail="Change aggregate not found")
     return output
 
 
 @router.delete("/{output_id}")
 def delete_change_aggregate(output_id: UUID, session: Session = Depends(get_session)):
-    """Delete a change aggregate output."""
+    """Delete a change aggregate."""
     output = session.get(ChangeAggregate, output_id)
     if not output:
-        raise HTTPException(status_code=404, detail="Change aggregate output not found")
+        raise HTTPException(status_code=404, detail="Change aggregate not found")
     session.delete(output)
     session.commit()
-    return {"message": "Change aggregate output deleted"}
+    return {"message": "Change aggregate deleted"}

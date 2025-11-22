@@ -11,7 +11,7 @@ FastAPI application exposing RESTful endpoints for:
 - Creating and managing datasets
 - Defining policy reforms
 - Queueing simulations
-- Computing aggregate outputs
+- Computing aggregates
 
 The server validates requests, persists to PostgreSQL, and queues background tasks.
 
@@ -22,7 +22,7 @@ PostgreSQL stores:
 - **datasets** - Metadata about microdata files
 - **policies** - Serialized parameter reforms
 - **simulations** - Execution state and results
-- **aggregate_outputs** - Computed statistics
+- **aggregates** - Computed statistics
 
 Uses SQLModel for type-safe ORM with pydantic integration.
 
@@ -46,7 +46,7 @@ Tasks are queued in Redis and processed asynchronously.
 5. Worker loads dataset and runs PolicyEngine simulation
 6. Worker updates simulation status to `completed`
 7. Client polls `GET /api/v2/simulations/{id}` to check status
-8. Client requests aggregate outputs
+8. Client requests aggregates
 9. Worker computes statistics from simulation results
 
 ## Data models

@@ -1,4 +1,4 @@
-.PHONY: install dev format lint test clean seed up down logs start-supabase stop-supabase reset rebuild create-state-bucket deploy-local
+.PHONY: install dev format lint test integration-test clean seed up down logs start-supabase stop-supabase reset rebuild create-state-bucket deploy-local
 
 # AWS Configuration
 AWS_REGION ?= us-east-1
@@ -18,6 +18,18 @@ lint:
 
 test:
 	pytest tests/test_models.py -v
+
+integration-test:
+	@echo "Starting integration tests..."
+	@echo "1. Starting Supabase..."
+	@supabase start || true
+	@echo "2. Setting up database (SQLModel tables + SQL migrations)..."
+	@uv run python scripts/create_tables.py
+	@echo "3. Running seed script..."
+	@uv run python scripts/seed.py
+	@echo "4. Running integration tests..."
+	@pytest tests/test_integration.py -v --tb=short
+	@echo "✓ Integration tests complete!"
 
 clean:
 	find . -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
@@ -76,4 +88,24 @@ deploy-local:
 	echo; \
 	if [[ $$REPLY =~ ^[Yy]$$ ]]; then \
 		cd terraform && ./deploy.sh apply -auto-approve; \
+	fi
+
+db-reset-prod:
+	@echo "⚠️  WARNING: This will reset the PRODUCTION database ⚠️"
+	@echo "This will:"
+	@echo "  1. Drop all tables in production"
+	@echo "  2. Recreate tables from SQLModel definitions"
+	@echo "  3. Apply all SQL migrations"
+	@echo "  4. Seed all data (UK and US models, parameters, datasets)"
+	@echo ""
+	@read -p "Are you sure you want to continue? Type 'yes' to confirm: " -r CONFIRM; \
+	echo; \
+	if [ "$$CONFIRM" = "yes" ]; then \
+		echo "Resetting production database..."; \
+		set -a && . .env.prod && set +a && \
+		LIMIT_SEED_PARAMETERS=false uv run python scripts/create_tables.py && \
+		LIMIT_SEED_PARAMETERS=false uv run python scripts/seed.py; \
+	else \
+		echo "Aborted."; \
+		exit 1; \
 	fi

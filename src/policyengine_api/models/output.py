@@ -14,7 +14,7 @@ class AggregateType(str, Enum):
 
 
 class AggregateOutputBase(SQLModel):
-    """Base aggregate output fields."""
+    """Base aggregate fields."""
 
     simulation_id: UUID = Field(foreign_key="simulations.id")
     variable: str
@@ -27,22 +27,22 @@ class AggregateOutputBase(SQLModel):
 
 
 class AggregateOutput(AggregateOutputBase, table=True):
-    """Aggregate output database model."""
+    """Aggregate database model."""
 
-    __tablename__ = "aggregate_outputs"
+    __tablename__ = "aggregates"
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
 class AggregateOutputCreate(AggregateOutputBase):
-    """Schema for creating aggregate outputs."""
+    """Schema for creating aggregates."""
 
     pass
 
 
 class AggregateOutputRead(AggregateOutputBase):
-    """Schema for reading aggregate outputs."""
+    """Schema for reading aggregates."""
 
     id: UUID
     created_at: datetime

@@ -90,7 +90,7 @@ Poll until status is `completed`:
 }
 ```
 
-## Create aggregate outputs
+## Create aggregates
 
 Calculate total universal credit spending:
 
@@ -182,7 +182,7 @@ while True:
         raise Exception(f"Simulation failed: {sim['error_message']}")
     time.sleep(5)
 
-# Create aggregate output
+# Create aggregate
 output = httpx.post(
     f"{BASE_URL}/outputs/aggregate",
     json={

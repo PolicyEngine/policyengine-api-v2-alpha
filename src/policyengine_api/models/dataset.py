@@ -1,7 +1,12 @@
 from datetime import datetime, timezone
+from typing import TYPE_CHECKING
 from uuid import UUID, uuid4
 
-from sqlmodel import Field, SQLModel
+from sqlmodel import Field, Relationship, SQLModel
+
+if TYPE_CHECKING:
+    from .tax_benefit_model import TaxBenefitModel
+    from .dataset_version import DatasetVersion
 
 
 class DatasetBase(SQLModel):
@@ -9,19 +14,29 @@ class DatasetBase(SQLModel):
 
     name: str
     description: str | None = None
-    filepath: str
+    filepath: str  # S3 path in Supabase storage for h5 file
     year: int
-    tax_benefit_model: str  # e.g., "uk_latest", "us_latest"
+    is_output_dataset: bool = False
+    tax_benefit_model_id: UUID = Field(foreign_key="tax_benefit_models.id")
 
 
 class Dataset(DatasetBase, table=True):
-    """Dataset database model."""
+    """Dataset database model.
+
+    Datasets are stored as h5 files in Supabase S3 storage.
+    The policyengine package has save() and load() functionality
+    that needs to be integrated with S3 upload/download.
+    """
 
     __tablename__ = "datasets"
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+    # Relationships
+    tax_benefit_model: "TaxBenefitModel" = Relationship()
+    versions: list["DatasetVersion"] = Relationship(back_populates="dataset")
 
 
 class DatasetCreate(DatasetBase):

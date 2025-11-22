@@ -1,13 +1,19 @@
 from datetime import datetime, timezone
+from typing import TYPE_CHECKING
 from uuid import UUID, uuid4
 
-from sqlmodel import Field, SQLModel
+from sqlmodel import Field, Relationship, SQLModel
+
+if TYPE_CHECKING:
+    from .tax_benefit_model_version import TaxBenefitModelVersion
+    from .parameter_value import ParameterValue
 
 
 class ParameterBase(SQLModel):
     """Base parameter fields."""
 
     name: str
+    label: str | None = None
     description: str | None = None
     data_type: str | None = None
     unit: str | None = None
@@ -21,6 +27,12 @@ class Parameter(ParameterBase, table=True):
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+    # Relationships
+    tax_benefit_model_version: "TaxBenefitModelVersion" = Relationship(
+        back_populates="parameters"
+    )
+    parameter_values: list["ParameterValue"] = Relationship(back_populates="parameter")
 
 
 class ParameterCreate(ParameterBase):

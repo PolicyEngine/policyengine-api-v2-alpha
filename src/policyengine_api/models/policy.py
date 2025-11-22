@@ -1,7 +1,11 @@
 from datetime import datetime, timezone
+from typing import TYPE_CHECKING
 from uuid import UUID, uuid4
 
-from sqlmodel import JSON, Column, Field, SQLModel
+from sqlmodel import Field, Relationship, SQLModel
+
+if TYPE_CHECKING:
+    from .parameter_value import ParameterValue
 
 
 class PolicyBase(SQLModel):
@@ -9,9 +13,6 @@ class PolicyBase(SQLModel):
 
     name: str
     description: str | None = None
-    parameter_values: dict = Field(
-        default_factory=dict, sa_column=Column(JSON)
-    )  # Serialized parameter values
 
 
 class Policy(PolicyBase, table=True):
@@ -22,6 +23,9 @@ class Policy(PolicyBase, table=True):
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+    # Relationships
+    parameter_values: list["ParameterValue"] = Relationship(back_populates="policy")
 
 
 class PolicyCreate(PolicyBase):

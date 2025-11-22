@@ -1,8 +1,11 @@
 -- Enable RLS on all application tables
 ALTER TABLE datasets ENABLE ROW LEVEL SECURITY;
+ALTER TABLE dataset_versions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE simulations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE policies ENABLE ROW LEVEL SECURITY;
-ALTER TABLE aggregate_outputs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE dynamics ENABLE ROW LEVEL SECURITY;
+ALTER TABLE aggregates ENABLE ROW LEVEL SECURITY;
+ALTER TABLE change_aggregates ENABLE ROW LEVEL SECURITY;
 ALTER TABLE tax_benefit_models ENABLE ROW LEVEL SECURITY;
 ALTER TABLE tax_benefit_model_versions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE variables ENABLE ROW LEVEL SECURITY;
@@ -17,6 +20,11 @@ BEGIN
         CREATE POLICY "Service role full access" ON datasets FOR ALL TO service_role USING (true) WITH CHECK (true);
     END IF;
 
+    -- Dataset versions
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'dataset_versions' AND policyname = 'Service role full access') THEN
+        CREATE POLICY "Service role full access" ON dataset_versions FOR ALL TO service_role USING (true) WITH CHECK (true);
+    END IF;
+
     -- Simulations
     IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'simulations' AND policyname = 'Service role full access') THEN
         CREATE POLICY "Service role full access" ON simulations FOR ALL TO service_role USING (true) WITH CHECK (true);
@@ -27,9 +35,19 @@ BEGIN
         CREATE POLICY "Service role full access" ON policies FOR ALL TO service_role USING (true) WITH CHECK (true);
     END IF;
 
-    -- Aggregate outputs
-    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'aggregate_outputs' AND policyname = 'Service role full access') THEN
-        CREATE POLICY "Service role full access" ON aggregate_outputs FOR ALL TO service_role USING (true) WITH CHECK (true);
+    -- Dynamics
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'dynamics' AND policyname = 'Service role full access') THEN
+        CREATE POLICY "Service role full access" ON dynamics FOR ALL TO service_role USING (true) WITH CHECK (true);
+    END IF;
+
+    -- Aggregates
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'aggregates' AND policyname = 'Service role full access') THEN
+        CREATE POLICY "Service role full access" ON aggregates FOR ALL TO service_role USING (true) WITH CHECK (true);
+    END IF;
+
+    -- Change aggregates
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'change_aggregates' AND policyname = 'Service role full access') THEN
+        CREATE POLICY "Service role full access" ON change_aggregates FOR ALL TO service_role USING (true) WITH CHECK (true);
     END IF;
 
     -- Tax benefit models
@@ -90,6 +108,11 @@ BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'datasets' AND policyname = 'Public read access') THEN
         CREATE POLICY "Public read access" ON datasets FOR SELECT TO anon, authenticated USING (true);
     END IF;
+
+    -- Dataset versions (read-only for public)
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'dataset_versions' AND policyname = 'Public read access') THEN
+        CREATE POLICY "Public read access" ON dataset_versions FOR SELECT TO anon, authenticated USING (true);
+    END IF;
 END $$;
 
 -- User-created content policies
@@ -113,8 +136,22 @@ BEGIN
         CREATE POLICY "Users can read policies" ON policies FOR SELECT TO anon, authenticated USING (true);
     END IF;
 
-    -- Aggregate outputs (read access for all)
-    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'aggregate_outputs' AND policyname = 'Users can read aggregate outputs') THEN
-        CREATE POLICY "Users can read aggregate outputs" ON aggregate_outputs FOR SELECT TO anon, authenticated USING (true);
+    -- Dynamics (users can create and read their own)
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'dynamics' AND policyname = 'Users can create dynamics') THEN
+        CREATE POLICY "Users can create dynamics" ON dynamics FOR INSERT TO anon, authenticated WITH CHECK (true);
+    END IF;
+
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'dynamics' AND policyname = 'Users can read dynamics') THEN
+        CREATE POLICY "Users can read dynamics" ON dynamics FOR SELECT TO anon, authenticated USING (true);
+    END IF;
+
+    -- Aggregates (read access for all)
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'aggregates' AND policyname = 'Users can read aggregates') THEN
+        CREATE POLICY "Users can read aggregates" ON aggregates FOR SELECT TO anon, authenticated USING (true);
+    END IF;
+
+    -- Change aggregates (read access for all)
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'change_aggregates' AND policyname = 'Users can read change aggregates') THEN
+        CREATE POLICY "Users can read change aggregates" ON change_aggregates FOR SELECT TO anon, authenticated USING (true);
     END IF;
 END $$;

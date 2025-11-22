@@ -9,6 +9,7 @@ class Settings(BaseSettings):
     # Supabase
     supabase_url: str = "http://localhost:54321"
     supabase_key: str = ""
+    supabase_service_key: str = ""
     supabase_db_url: str = ""
 
     # Redis
@@ -29,6 +30,9 @@ class Settings(BaseSettings):
     api_title: str = "PolicyEngine API v2"
     api_version: str = "0.1.0"
     debug: bool = False
+
+    # Seeding
+    limit_seed_parameters: bool = False
 
     @property
     def database_url(self) -> str:

@@ -14,7 +14,7 @@ class ChangeAggregateType(str, Enum):
 
 
 class ChangeAggregateBase(SQLModel):
-    """Base change aggregate output fields."""
+    """Base change aggregate fields."""
 
     baseline_simulation_id: UUID
     reform_simulation_id: UUID
@@ -28,7 +28,7 @@ class ChangeAggregateBase(SQLModel):
 
 
 class ChangeAggregate(ChangeAggregateBase, table=True):
-    """Change aggregate output database model."""
+    """Change aggregate database model."""
 
     __tablename__ = "change_aggregates"
 

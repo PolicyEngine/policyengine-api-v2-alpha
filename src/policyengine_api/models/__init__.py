@@ -7,6 +7,7 @@ from .change_aggregate import (
     ChangeAggregateType,
 )
 from .dataset import Dataset, DatasetCreate, DatasetRead
+from .dataset_version import DatasetVersion, DatasetVersionCreate, DatasetVersionRead
 from .dynamic import Dynamic, DynamicCreate, DynamicRead
 from .output import (
     AggregateOutput,
@@ -34,6 +35,9 @@ __all__ = [
     "Dataset",
     "DatasetCreate",
     "DatasetRead",
+    "DatasetVersion",
+    "DatasetVersionCreate",
+    "DatasetVersionRead",
     "Policy",
     "PolicyCreate",
     "PolicyRead",

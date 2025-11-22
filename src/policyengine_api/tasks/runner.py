@@ -175,16 +175,16 @@ def scan_pending_simulations():
 
 @celery_app.task(name="compute_aggregate")
 def compute_aggregate_task(output_id: str):
-    """Compute an aggregate output."""
+    """Compute an aggregate."""
     with logfire.span("compute_aggregate", output_id=output_id):
-        console.print(f"[bold blue]Computing aggregate output {output_id}[/bold blue]")
+        console.print(f"[bold blue]Computing aggregate {output_id}[/bold blue]")
 
         session = get_db_session()
         try:
             with logfire.span("load_output_record"):
                 output = session.get(AggregateOutput, UUID(output_id))
                 if not output:
-                    raise ValueError(f"Aggregate output {output_id} not found")
+                    raise ValueError(f"Aggregate {output_id} not found")
 
             with logfire.span("load_simulation_record"):
                 simulation = session.get(Simulation, output.simulation_id)
@@ -202,7 +202,7 @@ def compute_aggregate_task(output_id: str):
             # TODO: Load actual simulation output from storage
             # For now, we'll need to re-run or load cached results
 
-            console.print(f"[bold green]Aggregate output {output_id} computed[/bold green]")
+            console.print(f"[bold green]Aggregate {output_id} computed[/bold green]")
 
             # Update result
             # output.result = aggregate.result
@@ -210,7 +210,7 @@ def compute_aggregate_task(output_id: str):
             # session.commit()
 
         except Exception as e:
-            console.print(f"[bold red]Aggregate output {output_id} failed: {e}[/bold red]")
+            console.print(f"[bold red]Aggregate {output_id} failed: {e}[/bold red]")
             raise
         finally:
             session.close()

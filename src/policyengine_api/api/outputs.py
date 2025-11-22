@@ -19,7 +19,7 @@ router = APIRouter(prefix="/outputs", tags=["outputs"])
 def create_aggregate_output(
     output: AggregateOutputCreate, session: Session = Depends(get_session)
 ):
-    """Create and compute an aggregate output."""
+    """Create and compute an aggregate."""
     db_output = AggregateOutput.model_validate(output)
     session.add(db_output)
     session.commit()
@@ -33,15 +33,15 @@ def create_aggregate_output(
 
 @router.get("/aggregate", response_model=List[AggregateOutputRead])
 def list_aggregate_outputs(session: Session = Depends(get_session)):
-    """List all aggregate outputs."""
+    """List all aggregates."""
     outputs = session.exec(select(AggregateOutput)).all()
     return outputs
 
 
 @router.get("/aggregate/{output_id}", response_model=AggregateOutputRead)
 def get_aggregate_output(output_id: UUID, session: Session = Depends(get_session)):
-    """Get a specific aggregate output."""
+    """Get a specific aggregate."""
     output = session.get(AggregateOutput, output_id)
     if not output:
-        raise HTTPException(status_code=404, detail="Aggregate output not found")
+        raise HTTPException(status_code=404, detail="Aggregate not found")
     return output

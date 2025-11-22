@@ -20,41 +20,60 @@ A FastAPI service for running PolicyEngine microsimulations with Supabase backen
 
 ### Local development with Supabase
 
-1. Start Supabase locally:
+1. **Set up environment**
 
-```bash
-supabase start
-```
-
-This creates a local Supabase instance at `http://localhost:54321` with:
-- PostgreSQL database on port 54322
-- Storage API
-- Auth API
-- Studio dashboard at `http://localhost:54323`
-
-2. Copy environment variables:
+Copy the example environment file:
 
 ```bash
 cp .env.example .env
 ```
 
-Update `.env` with your Supabase credentials from `supabase status`:
+The `.env` file contains default values for local Supabase development. Key variables:
 
 ```bash
-supabase status
+# Supabase local instance (defaults work with `supabase start`)
+SUPABASE_URL=http://127.0.0.1:54321
+SUPABASE_KEY=<anon-key>                  # Public anon key
+SUPABASE_SERVICE_KEY=<service-role-key>  # Admin key for seeding
+SUPABASE_DB_URL=postgresql://postgres:postgres@127.0.0.1:54322/postgres
+
+# Storage
+STORAGE_BUCKET=datasets
+
+# Redis (via Docker)
+REDIS_URL=redis://localhost:6379/0
 ```
 
-3. Seed the database with UK and US tax-benefit models:
+**Important:** The service key is required for database seeding operations (uploading datasets to storage). The default keys in `.env.example` work with local Supabase.
+
+2. **Start Supabase**
 
 ```bash
-make seed
+supabase start
 ```
 
-This will:
-- Load all variables and parameters from policyengine-uk and policyengine-us
-- Populate the database with all models, versions, parameters, and variables
+This creates a local instance at `http://localhost:54321` with:
+- PostgreSQL on port 54322
+- Storage API with S3-compatible interface
+- Auth API
+- Studio dashboard at `http://localhost:54323`
 
-4. Start Redis and the API:
+3. **Run integration tests**
+
+This will set up the database, seed it with UK/US models, and run tests:
+
+```bash
+make integration-test
+```
+
+This command:
+- Starts Supabase (if not running)
+- Creates all database tables from SQLModel definitions
+- Applies RLS policies and storage bucket configuration
+- Seeds UK and US tax-benefit models with all variables, parameters, and datasets
+- Runs integration tests to verify everything works
+
+4. **Start the API**
 
 ```bash
 docker compose up
@@ -103,7 +122,7 @@ The API provides eleven core resources:
 2. Create policy reform: `POST /policies`
 3. Create simulation: `POST /simulations`
 4. Poll simulation status: `GET /simulations/{id}`
-5. Create aggregate outputs: `POST /outputs/aggregate`
+5. Create aggregates: `POST /outputs/aggregate`
 
 ## API endpoints
 
@@ -123,7 +142,7 @@ GET  /parameter-values                 → List all parameter values
 GET  /dynamics                         → List all dynamics
 GET  /tax-benefit-models               → List all models
 GET  /tax-benefit-model-versions       → List all model versions
-GET  /outputs/aggregate                → List aggregate outputs
+GET  /outputs/aggregate                → List aggregates
 POST /outputs/aggregate                → Compute aggregate
 GET  /change-aggregates                → List change aggregates
 POST /change-aggregates                → Compute reform impact
@@ -182,17 +201,35 @@ ruff format .
 ruff check --fix .
 ```
 
-### Database migrations
+### Database schema
 
-Schema migrations are managed through Supabase SQL migrations:
+The database schema uses a hybrid approach:
+
+**SQLModel for tables:** All table schemas are defined in Python using SQLModel (see `src/policyengine_api/models/`). This provides:
+- Single source of truth in Python code
+- Type safety and IDE autocomplete
+- Automatic relationship handling
+- Easy testing
+
+**SQL migrations for Postgres features:** SQL files in `supabase/migrations/` handle:
+- Row-level security (RLS) policies
+- Storage bucket configuration
+- Postgres-specific features SQLModel can't express
+
+To regenerate the schema:
 
 ```bash
-# Create a new migration
-supabase migration new migration_name
+# Creates all tables from SQLModel and applies SQL migrations
+uv run python scripts/create_tables.py
+```
 
-# Migrations are applied automatically on supabase start
-# Or manually push to production
-supabase db push
+**When to create SQL migrations:**
+
+Only create new SQL migrations for RLS policies, storage buckets, or other Postgres-specific features. Table schemas should be defined in SQLModel classes, not SQL.
+
+```bash
+# Create a new migration (only for RLS/storage/triggers)
+supabase migration new add_new_rls_policy
 ```
 
 ### Supabase management
