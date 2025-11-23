@@ -1,6 +1,5 @@
-from celery import Celery
-from celery.schedules import crontab
 import logfire
+from celery import Celery
 
 from policyengine_api.config.settings import settings
 

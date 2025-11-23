@@ -1,5 +1,5 @@
-from sqlmodel import Session, create_engine
 import logfire
+from sqlmodel import Session, create_engine
 
 from policyengine_api.config.settings import settings
 

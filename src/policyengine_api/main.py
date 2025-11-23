@@ -1,11 +1,11 @@
 from contextlib import asynccontextmanager
 
+import logfire
 from fastapi import FastAPI
 from fastapi_cache import FastAPICache
 from fastapi_cache.backends.redis import RedisBackend
 from redis import asyncio as aioredis
 from rich.console import Console
-import logfire
 
 from policyengine_api.api import api_router
 from policyengine_api.config.settings import settings
@@ -14,12 +14,10 @@ from policyengine_api.services.database import init_db
 console = Console()
 
 # Configure Logfire
-from policyengine_api.config.settings import settings as app_settings
-
 logfire.configure(
     service_name="policyengine-api",
-    token=app_settings.logfire_token if app_settings.logfire_token else None,
-    environment=app_settings.logfire_environment,
+    token=settings.logfire_token if settings.logfire_token else None,
+    environment=settings.logfire_environment,
 )
 logfire.instrument_httpx()
 
@@ -32,7 +30,9 @@ async def lifespan(app: FastAPI):
     console.print("[bold green]Database initialized[/bold green]")
 
     console.print("[bold green]Initializing cache...[/bold green]")
-    redis = aioredis.from_url(settings.redis_url, encoding="utf8", decode_responses=True)
+    redis = aioredis.from_url(
+        settings.redis_url, encoding="utf8", decode_responses=True
+    )
     FastAPICache.init(RedisBackend(redis), prefix="fastapi-cache")
     console.print("[bold green]Cache initialized[/bold green]")
 

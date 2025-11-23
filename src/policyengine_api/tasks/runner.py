@@ -1,11 +1,11 @@
+import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 from uuid import UUID
-import tempfile
 
+import logfire
 from rich.console import Console
 from sqlmodel import Session, create_engine, select
-import logfire
 
 from policyengine_api.config.settings import settings
 from policyengine_api.models import (
@@ -15,7 +15,7 @@ from policyengine_api.models import (
     Simulation,
     SimulationStatus,
 )
-from policyengine_api.services.storage import download_dataset, upload_dataset
+from policyengine_api.services.storage import download_dataset
 from policyengine_api.tasks.celery_app import celery_app
 
 console = Console()
@@ -111,7 +111,8 @@ def run_simulation_task(simulation_id: str):
                     with logfire.span("execute_simulation"):
                         # Run simulation
                         console.print(
-                            f"[bold green]Executing simulation for dataset {dataset.name}[/bold green]"
+                            f"[bold green]Executing simulation for dataset "
+                            f"{dataset.name}[/bold green]"
                         )
                         pe_simulation.run()
 
@@ -128,11 +129,15 @@ def run_simulation_task(simulation_id: str):
                 session.add(simulation)
                 session.commit()
 
-            console.print(f"[bold green]Simulation {simulation_id} completed[/bold green]")
+            console.print(
+                f"[bold green]Simulation {simulation_id} completed[/bold green]"
+            )
 
         except Exception as e:
             with logfire.span("handle_simulation_failure"):
-                console.print(f"[bold red]Simulation {simulation_id} failed: {e}[/bold red]")
+                console.print(
+                    f"[bold red]Simulation {simulation_id} failed: {e}[/bold red]"
+                )
                 simulation.status = SimulationStatus.FAILED
                 simulation.error_message = str(e)
                 simulation.completed_at = datetime.now(timezone.utc)
@@ -152,10 +157,15 @@ def scan_pending_simulations():
             with logfire.span("query_pending_simulations"):
                 # Find all pending simulations
                 pending_simulations = session.exec(
-                    select(Simulation).where(Simulation.status == SimulationStatus.PENDING)
+                    select(Simulation).where(
+                        Simulation.status == SimulationStatus.PENDING
+                    )
                 ).all()
 
-                console.print(f"[bold blue]Found {len(pending_simulations)} pending simulations[/bold blue]")
+                console.print(
+                    f"[bold blue]Found {len(pending_simulations)} "
+                    f"pending simulations[/bold blue]"
+                )
 
             with logfire.span("queue_pending_simulations"):
                 # Queue each pending simulation
@@ -164,10 +174,14 @@ def scan_pending_simulations():
                         console.print(f"  Queueing simulation {simulation.id}")
                         run_simulation_task.delay(str(simulation.id))
 
-                console.print(f"[green]✓[/green] Queued {len(pending_simulations)} simulations")
+                console.print(
+                    f"[green]✓[/green] Queued {len(pending_simulations)} simulations"
+                )
 
         except Exception as e:
-            console.print(f"[bold red]Failed to scan pending simulations: {e}[/bold red]")
+            console.print(
+                f"[bold red]Failed to scan pending simulations: {e}[/bold red]"
+            )
             raise
         finally:
             session.close()

@@ -5,8 +5,8 @@ from uuid import UUID, uuid4
 from sqlmodel import Field, Relationship, SQLModel
 
 if TYPE_CHECKING:
-    from .tax_benefit_model_version import TaxBenefitModelVersion
     from .parameter_value import ParameterValue
+    from .tax_benefit_model_version import TaxBenefitModelVersion
 
 
 class ParameterBase(SQLModel):
@@ -17,7 +17,9 @@ class ParameterBase(SQLModel):
     description: str | None = None
     data_type: str | None = None
     unit: str | None = None
-    tax_benefit_model_version_id: UUID = Field(foreign_key="tax_benefit_model_versions.id")
+    tax_benefit_model_version_id: UUID = Field(
+        foreign_key="tax_benefit_model_versions.id"
+    )
 
 
 class Parameter(ParameterBase, table=True):

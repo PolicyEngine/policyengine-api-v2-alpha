@@ -4,7 +4,6 @@ These tests require a running Supabase instance and seeded database.
 Run with: make integration-test
 """
 
-import os
 from datetime import datetime, timezone
 
 import pytest
@@ -337,7 +336,7 @@ def test_model_relationship_integrity(session):
 
 
 def test_parameter_value_belongs_to_policy_or_dynamic(session):
-    """Test that parameter values correctly belong to either policy or dynamic (but not both)."""
+    """Test parameter values belong to either policy or dynamic (not both)."""
     console.print("[blue]Testing parameter value ownership...")
 
     # Get all parameter values
@@ -349,9 +348,9 @@ def test_parameter_value_belongs_to_policy_or_dynamic(session):
         belongs_to_dynamic = pv.dynamic_id is not None
 
         # Shouldn't belong to both
-        assert not (
-            belongs_to_policy and belongs_to_dynamic
-        ), "Parameter value should not belong to both Policy and Dynamic"
+        assert not (belongs_to_policy and belongs_to_dynamic), (
+            "Parameter value should not belong to both Policy and Dynamic"
+        )
 
     console.print("[green]✓ Parameter value ownership is correct")
 

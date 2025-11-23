@@ -38,9 +38,13 @@ class Settings(BaseSettings):
     @property
     def database_url(self) -> str:
         """Get database URL from Supabase."""
-        return self.supabase_db_url or self.supabase_url.replace(
-            "http://", "postgresql://postgres:postgres@"
-        ).replace("https://", "postgresql://postgres:postgres@") + "/postgres"
+        return (
+            self.supabase_db_url
+            or self.supabase_url.replace(
+                "http://", "postgresql://postgres:postgres@"
+            ).replace("https://", "postgresql://postgres:postgres@")
+            + "/postgres"
+        )
 
 
 settings = Settings()

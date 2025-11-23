@@ -5,8 +5,8 @@ from uuid import UUID, uuid4
 from sqlmodel import Field, Relationship, SQLModel
 
 if TYPE_CHECKING:
-    from .tax_benefit_model import TaxBenefitModel
     from .dataset_version import DatasetVersion
+    from .tax_benefit_model import TaxBenefitModel
 
 
 class DatasetBase(SQLModel):

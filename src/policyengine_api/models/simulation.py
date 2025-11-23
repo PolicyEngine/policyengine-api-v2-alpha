@@ -7,8 +7,8 @@ from sqlmodel import Field, Relationship, SQLModel
 
 if TYPE_CHECKING:
     from .dataset import Dataset
-    from .policy import Policy
     from .dynamic import Dynamic
+    from .policy import Policy
     from .tax_benefit_model_version import TaxBenefitModelVersion
 
 

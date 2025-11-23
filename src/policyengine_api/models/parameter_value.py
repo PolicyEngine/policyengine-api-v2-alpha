@@ -5,9 +5,9 @@ from uuid import UUID, uuid4
 from sqlmodel import JSON, Column, Field, Relationship, SQLModel
 
 if TYPE_CHECKING:
+    from .dynamic import Dynamic
     from .parameter import Parameter
     from .policy import Policy
-    from .dynamic import Dynamic
 
 
 class ParameterValueBase(SQLModel):

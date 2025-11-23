@@ -5,9 +5,9 @@ from uuid import UUID, uuid4
 from sqlmodel import Field, Relationship, SQLModel
 
 if TYPE_CHECKING:
+    from .parameter import Parameter
     from .tax_benefit_model import TaxBenefitModel
     from .variable import Variable
-    from .parameter import Parameter
 
 
 class TaxBenefitModelVersionBase(SQLModel):
@@ -28,8 +28,12 @@ class TaxBenefitModelVersion(TaxBenefitModelVersionBase, table=True):
 
     # Relationships
     model: "TaxBenefitModel" = Relationship(back_populates="versions")
-    variables: list["Variable"] = Relationship(back_populates="tax_benefit_model_version")
-    parameters: list["Parameter"] = Relationship(back_populates="tax_benefit_model_version")
+    variables: list["Variable"] = Relationship(
+        back_populates="tax_benefit_model_version"
+    )
+    parameters: list["Parameter"] = Relationship(
+        back_populates="tax_benefit_model_version"
+    )
 
 
 class TaxBenefitModelVersionCreate(TaxBenefitModelVersionBase):

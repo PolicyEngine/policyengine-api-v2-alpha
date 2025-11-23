@@ -11,27 +11,13 @@ from pathlib import Path
 # Add src to path
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
-from sqlmodel import SQLModel, create_engine, text
 from rich.console import Console
+from sqlmodel import SQLModel, create_engine
 
 from policyengine_api.config.settings import settings
 from policyengine_api.services.storage import get_service_role_client
 
 # Import all models to register them with SQLModel.metadata
-from policyengine_api.models import (
-    Dataset,
-    DatasetVersion,
-    Dynamic,
-    Parameter,
-    ParameterValue,
-    Policy,
-    Simulation,
-    TaxBenefitModel,
-    TaxBenefitModelVersion,
-    Variable,
-    AggregateOutput,
-    ChangeAggregate,
-)
 
 console = Console()
 
@@ -126,4 +112,3 @@ if __name__ == "__main__":
     engine = create_tables()
     apply_migrations(engine)
     console.print("\n[bold green]✓ Database setup complete!")
-

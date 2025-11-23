@@ -2,9 +2,8 @@
 
 from pathlib import Path
 
-from supabase import Client, create_client
-
 from policyengine_api.config.settings import settings
+from supabase import Client, create_client
 
 
 def get_supabase_client() -> Client:
@@ -37,7 +36,7 @@ def upload_dataset(file_path: str, object_name: str | None = None) -> str:
         supabase.storage.from_(settings.storage_bucket).upload(
             object_name,
             f,
-            {"content-type": "application/octet-stream", "upsert": "true"}
+            {"content-type": "application/octet-stream", "upsert": "true"},
         )
 
     return object_name
@@ -63,7 +62,7 @@ def upload_dataset_for_seeding(file_path: str, object_name: str | None = None) -
         supabase.storage.from_(settings.storage_bucket).upload(
             object_name,
             f,
-            {"content-type": "application/octet-stream", "upsert": "true"}
+            {"content-type": "application/octet-stream", "upsert": "true"},
         )
 
     return object_name
