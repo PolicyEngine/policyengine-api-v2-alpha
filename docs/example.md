@@ -17,7 +17,7 @@ docker compose ps
 ## Create a dataset
 
 ```bash
-curl -X POST http://localhost:8000/api/v2/datasets \
+curl -X POST http://localhost:8000/datasets \
   -H "Content-Type: application/json" \
   -d '{
     "name": "FRS 2023-24",
@@ -44,7 +44,7 @@ Save the dataset ID for later.
 ## Create a policy reform
 
 ```bash
-curl -X POST http://localhost:8000/api/v2/policies \
+curl -X POST http://localhost:8000/policies \
   -H "Content-Type: application/json" \
   -d '{
     "name": "Increased personal allowance",
@@ -62,7 +62,7 @@ Save the policy ID.
 ## Create baseline simulation
 
 ```bash
-curl -X POST http://localhost:8000/api/v2/simulations \
+curl -X POST http://localhost:8000/simulations \
   -H "Content-Type: application/json" \
   -d '{
     "dataset_id": "550e8400-e29b-41d4-a716-446655440000",
@@ -75,7 +75,7 @@ The simulation is queued immediately. The worker will process it asynchronously.
 ## Check simulation status
 
 ```bash
-curl http://localhost:8000/api/v2/simulations/SIMULATION_ID | jq
+curl http://localhost:8000/simulations/SIMULATION_ID | jq
 ```
 
 Poll until status is `completed`:
@@ -95,7 +95,7 @@ Poll until status is `completed`:
 Calculate total universal credit spending:
 
 ```bash
-curl -X POST http://localhost:8000/api/v2/outputs/aggregate \
+curl -X POST http://localhost:8000/aggregates \
   -H "Content-Type: application/json" \
   -d '{
     "simulation_id": "770e8400-e29b-41d4-a716-446655440000",
@@ -108,7 +108,7 @@ curl -X POST http://localhost:8000/api/v2/outputs/aggregate \
 Calculate mean income in top decile:
 
 ```bash
-curl -X POST http://localhost:8000/api/v2/outputs/aggregate \
+curl -X POST http://localhost:8000/aggregates \
   -H "Content-Type: application/json" \
   -d '{
     "simulation_id": "770e8400-e29b-41d4-a716-446655440000",
@@ -127,7 +127,7 @@ curl -X POST http://localhost:8000/api/v2/outputs/aggregate \
 Get the computed output:
 
 ```bash
-curl http://localhost:8000/api/v2/outputs/aggregate/OUTPUT_ID | jq
+curl http://localhost:8000/aggregates/OUTPUT_ID | jq
 ```
 
 Response:
@@ -151,7 +151,7 @@ Total UC spending: £45bn
 import httpx
 import time
 
-BASE_URL = "http://localhost:8000/api/v2"
+BASE_URL = "http://localhost:8000"
 
 # Create dataset
 dataset = httpx.post(
@@ -184,7 +184,7 @@ while True:
 
 # Create aggregate
 output = httpx.post(
-    f"{BASE_URL}/outputs/aggregate",
+    f"{BASE_URL}/aggregates",
     json={
         "simulation_id": simulation["id"],
         "variable": "universal_credit",

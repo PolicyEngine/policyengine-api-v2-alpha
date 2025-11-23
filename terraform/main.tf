@@ -375,6 +375,10 @@ resource "aws_ecs_task_definition" "api" {
           value = var.storage_bucket
         },
         {
+          name  = "API_PORT"
+          value = "80"
+        },
+        {
           name  = "DEBUG"
           value = "false"
         }

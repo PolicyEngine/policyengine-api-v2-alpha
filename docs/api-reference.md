@@ -1,6 +1,6 @@
 # API reference
 
-Base URL: `http://localhost:8000/api/v2`
+Base URL: `http://localhost:8000`
 
 ## Datasets
 
@@ -118,7 +118,7 @@ Response includes status field:
 
 ### Create aggregate
 
-`POST /outputs/aggregate`
+`POST /aggregates`
 
 Request body:
 
@@ -143,8 +143,8 @@ Aggregate types:
 
 ### List aggregates
 
-`GET /outputs/aggregate`
+`GET /aggregates`
 
 ### Get aggregate
 
-`GET /outputs/aggregate/{output_id}`
+`GET /aggregates/{output_id}`

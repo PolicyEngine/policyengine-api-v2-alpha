@@ -12,10 +12,10 @@ from policyengine_api.models import (
 from policyengine_api.services.database import get_session
 from policyengine_api.tasks.runner import compute_aggregate_task
 
-router = APIRouter(prefix="/outputs", tags=["outputs"])
+router = APIRouter(prefix="/aggregates", tags=["aggregates"])
 
 
-@router.post("/aggregate", response_model=AggregateOutputRead)
+@router.post("/", response_model=AggregateOutputRead)
 def create_aggregate_output(
     output: AggregateOutputCreate, session: Session = Depends(get_session)
 ):
@@ -31,14 +31,14 @@ def create_aggregate_output(
     return db_output
 
 
-@router.get("/aggregate", response_model=List[AggregateOutputRead])
+@router.get("/", response_model=List[AggregateOutputRead])
 def list_aggregate_outputs(session: Session = Depends(get_session)):
     """List all aggregates."""
     outputs = session.exec(select(AggregateOutput)).all()
     return outputs
 
 
-@router.get("/aggregate/{output_id}", response_model=AggregateOutputRead)
+@router.get("/{output_id}", response_model=AggregateOutputRead)
 def get_aggregate_output(output_id: UUID, session: Session = Depends(get_session)):
     """Get a specific aggregate."""
     output = session.get(AggregateOutput, output_id)

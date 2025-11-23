@@ -29,6 +29,7 @@ class Settings(BaseSettings):
     # API
     api_title: str = "PolicyEngine API v2"
     api_version: str = "0.1.0"
+    api_port: int = 8000
     debug: bool = False
 
     # Seeding
