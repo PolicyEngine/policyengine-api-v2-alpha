@@ -18,6 +18,7 @@ from policyengine_api.config.settings import settings
 from policyengine_api.services.storage import get_service_role_client
 
 # Import all models to register them with SQLModel.metadata
+from policyengine_api import models  # noqa: F401
 
 console = Console()
 
@@ -54,9 +55,13 @@ def create_tables():
 
     engine = create_engine(settings.database_url, echo=False)
 
-    # Drop all tables first (clean slate)
+    # Drop all tables first (clean slate) with CASCADE
     console.print("  Dropping existing tables...")
-    SQLModel.metadata.drop_all(engine)
+    with engine.begin() as conn:
+        conn.exec_driver_sql("DROP SCHEMA public CASCADE")
+        conn.exec_driver_sql("CREATE SCHEMA public")
+        conn.exec_driver_sql("GRANT ALL ON SCHEMA public TO postgres")
+        conn.exec_driver_sql("GRANT ALL ON SCHEMA public TO public")
 
     # Create all tables
     console.print("  Creating tables...")
