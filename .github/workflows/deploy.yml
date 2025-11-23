@@ -221,8 +221,35 @@ jobs:
       - name: Get API endpoint
         run: |
           echo "=== API Endpoint ==="
-          cd terraform
-          ALB_URL=$(terraform output -raw load_balancer_url)
-          echo "API is available at: $ALB_URL"
-          echo "Health check: $ALB_URL/health"
-          echo "Documentation: $ALB_URL/docs"
+          TASK_ARN=$(aws ecs list-tasks \
+            --cluster ${{ vars.ECS_CLUSTER_NAME }} \
+            --service-name ${{ vars.ECS_API_SERVICE_NAME }} \
+            --region ${{ vars.AWS_REGION }} \
+            --desired-status RUNNING \
+            --query 'taskArns[0]' \
+            --output text)
+
+          if [ -n "$TASK_ARN" ] && [ "$TASK_ARN" != "None" ]; then
+            NETWORK_INTERFACE_ID=$(aws ecs describe-tasks \
+              --cluster ${{ vars.ECS_CLUSTER_NAME }} \
+              --tasks $TASK_ARN \
+              --region ${{ vars.AWS_REGION }} \
+              --query 'tasks[0].attachments[0].details[?name==`networkInterfaceId`].value' \
+              --output text)
+
+            PUBLIC_IP=$(aws ec2 describe-network-interfaces \
+              --network-interface-ids $NETWORK_INTERFACE_ID \
+              --region ${{ vars.AWS_REGION }} \
+              --query 'NetworkInterfaces[0].Association.PublicIp' \
+              --output text)
+
+            if [ -n "$PUBLIC_IP" ] && [ "$PUBLIC_IP" != "None" ]; then
+              echo "API is available at: http://$PUBLIC_IP"
+              echo "Health check: http://$PUBLIC_IP/health"
+              echo "Documentation: http://$PUBLIC_IP/docs"
+            else
+              echo "Could not retrieve public IP"
+            fi
+          else
+            echo "No running API tasks found"
+          fi
