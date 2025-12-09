@@ -49,6 +49,19 @@ jobs:
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
 
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker ${{ vars.GCP_REGION }}-docker.pkg.dev
+
+      - name: Build and push Docker image
+        env:
+          IMAGE_URL: ${{ vars.GCP_REGION }}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/${{ vars.PROJECT_NAME }}/${{ vars.PROJECT_NAME }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          docker build -t $IMAGE_URL:$IMAGE_TAG .
+          docker tag $IMAGE_URL:$IMAGE_TAG $IMAGE_URL:latest
+          docker push $IMAGE_URL:$IMAGE_TAG
+          docker push $IMAGE_URL:latest
+
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
@@ -77,19 +90,6 @@ jobs:
           TF_VAR_logfire_token: ${{ secrets.LOGFIRE_TOKEN }}
           TF_VAR_logfire_environment: prod
         run: terraform apply -auto-approve
-
-      - name: Configure Docker for Artifact Registry
-        run: gcloud auth configure-docker ${{ vars.GCP_REGION }}-docker.pkg.dev
-
-      - name: Build and push Docker image
-        env:
-          IMAGE_URL: ${{ vars.GCP_REGION }}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/${{ vars.PROJECT_NAME }}/${{ vars.PROJECT_NAME }}
-          IMAGE_TAG: ${{ github.sha }}
-        run: |
-          docker build -t $IMAGE_URL:$IMAGE_TAG .
-          docker tag $IMAGE_URL:$IMAGE_TAG $IMAGE_URL:latest
-          docker push $IMAGE_URL:$IMAGE_TAG
-          docker push $IMAGE_URL:latest
 
       - name: Deploy API to Cloud Run
         run: |
