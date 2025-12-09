@@ -48,6 +48,23 @@ resource "google_compute_subnetwork" "subnet" {
   network       = google_compute_network.vpc.id
 }
 
+# Allocate IP address range for private service access
+resource "google_compute_global_address" "private_ip_address" {
+  name          = "${var.project_name}-private-ip"
+  purpose       = "VPC_PEERING"
+  address_type  = "INTERNAL"
+  prefix_length = 16
+  network       = google_compute_network.vpc.id
+}
+
+# Create private VPC connection for private service access
+resource "google_service_networking_connection" "private_vpc_connection" {
+  network                 = google_compute_network.vpc.id
+  service                 = "servicenetworking.googleapis.com"
+  reserved_peering_ranges = [google_compute_global_address.private_ip_address.name]
+  depends_on              = [google_project_service.required_apis]
+}
+
 # VPC connector for Cloud Run to access Redis
 resource "google_vpc_access_connector" "connector" {
   name          = "pe-api-v2-alpha-vpc"
@@ -68,7 +85,10 @@ resource "google_redis_instance" "redis" {
   authorized_network = google_compute_network.vpc.id
   connect_mode       = "PRIVATE_SERVICE_ACCESS"
 
-  depends_on = [google_project_service.required_apis]
+  depends_on = [
+    google_project_service.required_apis,
+    google_service_networking_connection.private_vpc_connection
+  ]
 }
 
 # Artifact Registry repository for Docker images
