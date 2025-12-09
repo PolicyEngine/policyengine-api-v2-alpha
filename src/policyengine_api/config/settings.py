@@ -12,12 +12,8 @@ class Settings(BaseSettings):
     supabase_service_key: str = ""
     supabase_db_url: str = ""
 
-    # Redis
-    redis_url: str = "redis://localhost:6379/0"
-
-    # Celery
-    celery_broker_url: str = "redis://localhost:6379/0"
-    celery_result_backend: str = "redis://localhost:6379/1"
+    # Worker
+    worker_poll_interval: int = 60  # seconds
 
     # Storage
     storage_bucket: str = "datasets"

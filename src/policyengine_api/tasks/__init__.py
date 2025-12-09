@@ -1,6 +1,5 @@
-"""Background tasks for PolicyEngine simulations."""
+"""Background task processing."""
 
-from .celery_app import celery_app
-from .runner import compute_aggregate_task, run_simulation_task
+from policyengine_api.tasks.worker import main as run_worker
 
-__all__ = ["celery_app", "run_simulation_task", "compute_aggregate_task"]
+__all__ = ["run_worker"]
