@@ -50,7 +50,7 @@ resource "google_compute_subnetwork" "subnet" {
 
 # VPC connector for Cloud Run to access Redis
 resource "google_vpc_access_connector" "connector" {
-  name          = "${var.project_name}-connector"
+  name          = "pe-api-v2-alpha-vpc"
   region        = var.region
   network       = google_compute_network.vpc.name
   ip_cidr_range = "10.8.0.0/28"
@@ -83,7 +83,7 @@ resource "google_artifact_registry_repository" "repo" {
 
 # Service account for Cloud Run services
 resource "google_service_account" "cloudrun" {
-  account_id   = "${var.project_name}-cloudrun"
+  account_id   = "pe-api-v2-alpha-run"
   display_name = "Cloud Run Service Account"
 }
 
