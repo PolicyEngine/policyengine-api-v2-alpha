@@ -1,29 +1,29 @@
-output "ecr_repository_url" {
-  description = "ECR repository URL for Docker images"
-  value       = aws_ecr_repository.api.repository_url
+output "artifact_registry_url" {
+  description = "Artifact Registry repository URL for Docker images"
+  value       = "${var.region}-docker.pkg.dev/${var.project_id}/${google_artifact_registry_repository.repo.repository_id}"
 }
 
-output "redis_endpoint" {
-  description = "ElastiCache Redis endpoint"
-  value       = aws_elasticache_cluster.redis.cache_nodes[0].address
+output "redis_host" {
+  description = "Redis host address"
+  value       = google_redis_instance.redis.host
 }
 
-output "api_endpoint" {
-  description = "API endpoint (use script to get current IP)"
-  value       = "Run: aws ecs describe-tasks --cluster ${aws_ecs_cluster.main.name} --tasks $(aws ecs list-tasks --cluster ${aws_ecs_cluster.main.name} --service-name ${aws_ecs_service.api.name} --query 'taskArns[0]' --output text) --query 'tasks[0].attachments[0].details[?name==`networkInterfaceId`].value' --output text | xargs -I {} aws ec2 describe-network-interfaces --network-interface-ids {} --query 'NetworkInterfaces[0].Association.PublicIp' --output text"
+output "redis_port" {
+  description = "Redis port"
+  value       = google_redis_instance.redis.port
 }
 
-output "ecs_cluster_name" {
-  description = "ECS cluster name"
-  value       = aws_ecs_cluster.main.name
-}
-
-output "api_service_name" {
-  description = "ECS API service name"
-  value       = aws_ecs_service.api.name
+output "api_url" {
+  description = "API service URL"
+  value       = google_cloud_run_v2_service.api.uri
 }
 
 output "worker_service_name" {
-  description = "ECS worker service name"
-  value       = aws_ecs_service.worker.name
+  description = "Worker service name"
+  value       = google_cloud_run_v2_service.worker.name
+}
+
+output "api_service_name" {
+  description = "API service name"
+  value       = google_cloud_run_v2_service.api.name
 }

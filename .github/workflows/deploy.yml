@@ -1,4 +1,4 @@
-name: Deploy to AWS ECS
+name: Deploy to GCP Cloud Run
 
 on:
   push:
@@ -40,11 +40,14 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
         with:
-          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
-          aws-region: ${{ vars.AWS_REGION }}
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
@@ -75,181 +78,37 @@ jobs:
           TF_VAR_logfire_environment: prod
         run: terraform apply -auto-approve
 
-      - name: Login to Amazon ECR
-        id: login-ecr
-        uses: aws-actions/amazon-ecr-login@v2
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker ${{ vars.GCP_REGION }}-docker.pkg.dev
 
       - name: Build and push Docker image
         env:
-          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          ECR_REPOSITORY: ${{ vars.ECR_REPOSITORY_NAME }}
+          IMAGE_URL: ${{ vars.GCP_REGION }}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/${{ vars.PROJECT_NAME }}/${{ vars.PROJECT_NAME }}
           IMAGE_TAG: ${{ github.sha }}
         run: |
-          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
-          docker tag $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG $ECR_REGISTRY/$ECR_REPOSITORY:latest
-          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
-          docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
+          docker build -t $IMAGE_URL:$IMAGE_TAG .
+          docker tag $IMAGE_URL:$IMAGE_TAG $IMAGE_URL:latest
+          docker push $IMAGE_URL:$IMAGE_TAG
+          docker push $IMAGE_URL:latest
 
-      - name: Update ECS service (API)
+      - name: Deploy API to Cloud Run
         run: |
-          aws ecs update-service \
-            --cluster ${{ vars.ECS_CLUSTER_NAME }} \
-            --service ${{ vars.ECS_API_SERVICE_NAME }} \
-            --force-new-deployment \
-            --region ${{ vars.AWS_REGION }}
+          gcloud run services update-traffic ${{ vars.API_SERVICE_NAME }} \
+            --region=${{ vars.GCP_REGION }} \
+            --to-latest
 
-      - name: Update ECS service (Worker)
+      - name: Deploy Worker to Cloud Run
         run: |
-          aws ecs update-service \
-            --cluster ${{ vars.ECS_CLUSTER_NAME }} \
-            --service ${{ vars.ECS_WORKER_SERVICE_NAME }} \
-            --force-new-deployment \
-            --region ${{ vars.AWS_REGION }}
+          gcloud run services update-traffic ${{ vars.WORKER_SERVICE_NAME }} \
+            --region=${{ vars.GCP_REGION }} \
+            --to-latest
 
-      - name: Monitor API deployment
-        run: |
-          echo "=== Monitoring API deployment ==="
-          for i in {1..30}; do
-            STATUS=$(aws ecs describe-services \
-              --cluster ${{ vars.ECS_CLUSTER_NAME }} \
-              --services ${{ vars.ECS_API_SERVICE_NAME }} \
-              --region ${{ vars.AWS_REGION }} \
-              --query 'services[0].deployments[0].{Status:rolloutState,Running:runningCount,Desired:desiredCount,Pending:pendingCount}' \
-              --output json)
-
-            echo "[$i/30] $(date +%H:%M:%S) - $STATUS"
-
-            # Get latest task and show its logs
-            TASK_ARN=$(aws ecs list-tasks \
-              --cluster ${{ vars.ECS_CLUSTER_NAME }} \
-              --service-name ${{ vars.ECS_API_SERVICE_NAME }} \
-              --region ${{ vars.AWS_REGION }} \
-              --query 'taskArns[0]' \
-              --output text)
-
-            if [ -n "$TASK_ARN" ] && [ "$TASK_ARN" != "None" ]; then
-              TASK_ID=$(echo $TASK_ARN | rev | cut -d'/' -f1 | rev)
-              echo "--- Recent logs from task $TASK_ID ---"
-              aws logs tail /ecs/policyengine-api-v2-alpha \
-                --log-stream-name-prefix "api/$TASK_ID" \
-                --since 30s \
-                --format short \
-                --region ${{ vars.AWS_REGION }} 2>&1 || echo "No logs available yet"
-              echo "---"
-            fi
-
-            # Check if stable
-            if aws ecs describe-services \
-              --cluster ${{ vars.ECS_CLUSTER_NAME }} \
-              --services ${{ vars.ECS_API_SERVICE_NAME }} \
-              --region ${{ vars.AWS_REGION }} \
-              --query 'services[0].deployments | length(@) == `1`' \
-              --output text | grep -q "True"; then
-              echo "API deployment completed!"
-              break
-            fi
-
-            sleep 20
-          done
-
-      - name: Monitor worker deployment
-        run: |
-          echo "=== Monitoring worker deployment ==="
-          for i in {1..30}; do
-            STATUS=$(aws ecs describe-services \
-              --cluster ${{ vars.ECS_CLUSTER_NAME }} \
-              --services ${{ vars.ECS_WORKER_SERVICE_NAME }} \
-              --region ${{ vars.AWS_REGION }} \
-              --query 'services[0].deployments[0].{Status:rolloutState,Running:runningCount,Desired:desiredCount,Pending:pendingCount}' \
-              --output json)
-
-            echo "[$i/30] $(date +%H:%M:%S) - $STATUS"
-
-            # Get latest task and show its logs
-            TASK_ARN=$(aws ecs list-tasks \
-              --cluster ${{ vars.ECS_CLUSTER_NAME }} \
-              --service-name ${{ vars.ECS_WORKER_SERVICE_NAME }} \
-              --region ${{ vars.AWS_REGION }} \
-              --query 'taskArns[0]' \
-              --output text)
-
-            if [ -n "$TASK_ARN" ] && [ "$TASK_ARN" != "None" ]; then
-              TASK_ID=$(echo $TASK_ARN | rev | cut -d'/' -f1 | rev)
-              echo "--- Recent logs from task $TASK_ID ---"
-              aws logs tail /ecs/policyengine-api-v2-alpha \
-                --log-stream-name-prefix "worker/$TASK_ID" \
-                --since 30s \
-                --format short \
-                --region ${{ vars.AWS_REGION }} 2>&1 || echo "No logs available yet"
-              echo "---"
-            fi
-
-            # Check if stable
-            if aws ecs describe-services \
-              --cluster ${{ vars.ECS_CLUSTER_NAME }} \
-              --services ${{ vars.ECS_WORKER_SERVICE_NAME }} \
-              --region ${{ vars.AWS_REGION }} \
-              --query 'services[0].deployments | length(@) == `1`' \
-              --output text | grep -q "True"; then
-              echo "Worker deployment completed!"
-              break
-            fi
-
-            sleep 20
-          done
-
-      - name: Final deployment status
-        run: |
-          echo "=== Final Deployment Status ==="
-          echo "API Service:"
-          aws ecs describe-services \
-            --cluster ${{ vars.ECS_CLUSTER_NAME }} \
-            --services ${{ vars.ECS_API_SERVICE_NAME }} \
-            --region ${{ vars.AWS_REGION }} \
-            --query 'services[0].{Status:status,Running:runningCount,Desired:desiredCount}' \
-            --output table
-
-          echo ""
-          echo "Worker Service:"
-          aws ecs describe-services \
-            --cluster ${{ vars.ECS_CLUSTER_NAME }} \
-            --services ${{ vars.ECS_WORKER_SERVICE_NAME }} \
-            --region ${{ vars.AWS_REGION }} \
-            --query 'services[0].{Status:status,Running:runningCount,Desired:desiredCount}' \
-            --output table
-
-      - name: Get API endpoint
+      - name: Get API URL
         run: |
           echo "=== API Endpoint ==="
-          TASK_ARN=$(aws ecs list-tasks \
-            --cluster ${{ vars.ECS_CLUSTER_NAME }} \
-            --service-name ${{ vars.ECS_API_SERVICE_NAME }} \
-            --region ${{ vars.AWS_REGION }} \
-            --desired-status RUNNING \
-            --query 'taskArns[0]' \
-            --output text)
-
-          if [ -n "$TASK_ARN" ] && [ "$TASK_ARN" != "None" ]; then
-            NETWORK_INTERFACE_ID=$(aws ecs describe-tasks \
-              --cluster ${{ vars.ECS_CLUSTER_NAME }} \
-              --tasks $TASK_ARN \
-              --region ${{ vars.AWS_REGION }} \
-              --query 'tasks[0].attachments[0].details[?name==`networkInterfaceId`].value' \
-              --output text)
-
-            PUBLIC_IP=$(aws ec2 describe-network-interfaces \
-              --network-interface-ids $NETWORK_INTERFACE_ID \
-              --region ${{ vars.AWS_REGION }} \
-              --query 'NetworkInterfaces[0].Association.PublicIp' \
-              --output text)
-
-            if [ -n "$PUBLIC_IP" ] && [ "$PUBLIC_IP" != "None" ]; then
-              echo "API is available at: http://$PUBLIC_IP"
-              echo "Health check: http://$PUBLIC_IP/health"
-              echo "Documentation: http://$PUBLIC_IP/docs"
-            else
-              echo "Could not retrieve public IP"
-            fi
-          else
-            echo "No running API tasks found"
-          fi
+          API_URL=$(gcloud run services describe ${{ vars.API_SERVICE_NAME }} \
+            --region=${{ vars.GCP_REGION }} \
+            --format='value(status.url)')
+          echo "API is available at: $API_URL"
+          echo "Health check: $API_URL/health"
+          echo "Documentation: $API_URL/docs"
