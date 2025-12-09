@@ -1,7 +1,13 @@
-variable "aws_region" {
-  description = "AWS region for deployment"
+variable "project_id" {
+  description = "GCP project ID"
   type        = string
-  default     = "us-east-1"
+  default     = "policyengine-api-v2-alpha"
+}
+
+variable "region" {
+  description = "GCP region for deployment"
+  type        = string
+  default     = "us-central1"
 }
 
 variable "project_name" {
@@ -41,43 +47,55 @@ variable "logfire_environment" {
 }
 
 variable "storage_bucket" {
-  description = "S3 bucket name for datasets"
+  description = "GCS bucket name for datasets"
   type        = string
   default     = "datasets"
 }
 
 variable "api_cpu" {
-  description = "CPU units for API task (256, 512, 1024, 2048, 4096)"
+  description = "CPU for API service (e.g., '1', '2')"
   type        = string
-  default     = "512"
+  default     = "1"
 }
 
 variable "api_memory" {
-  description = "Memory for API task in MB"
+  description = "Memory for API service (e.g., '512Mi', '1Gi')"
   type        = string
-  default     = "1024"
+  default     = "1Gi"
 }
 
-variable "api_desired_count" {
-  description = "Number of API tasks to run"
+variable "api_min_instances" {
+  description = "Minimum number of API instances"
   type        = number
   default     = 1
+}
+
+variable "api_max_instances" {
+  description = "Maximum number of API instances"
+  type        = number
+  default     = 10
 }
 
 variable "worker_cpu" {
-  description = "CPU units for worker task"
+  description = "CPU for worker service"
   type        = string
-  default     = "1024"
+  default     = "2"
 }
 
 variable "worker_memory" {
-  description = "Memory for worker task in MB"
+  description = "Memory for worker service"
   type        = string
-  default     = "2048"
+  default     = "2Gi"
 }
 
-variable "worker_desired_count" {
-  description = "Number of worker tasks to run"
+variable "worker_min_instances" {
+  description = "Minimum number of worker instances"
   type        = number
   default     = 1
+}
+
+variable "worker_max_instances" {
+  description = "Maximum number of worker instances"
+  type        = number
+  default     = 5
 }
