@@ -40,14 +40,3 @@ def get_change_aggregate(output_id: UUID, session: Session = Depends(get_session
     if not output:
         raise HTTPException(status_code=404, detail="Change aggregate not found")
     return output
-
-
-@router.delete("/{output_id}")
-def delete_change_aggregate(output_id: UUID, session: Session = Depends(get_session)):
-    """Delete a change aggregate."""
-    output = session.get(ChangeAggregate, output_id)
-    if not output:
-        raise HTTPException(status_code=404, detail="Change aggregate not found")
-    session.delete(output)
-    session.commit()
-    return {"message": "Change aggregate deleted"}

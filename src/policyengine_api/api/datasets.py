@@ -4,20 +4,10 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel import Session, select
 
-from policyengine_api.models import Dataset, DatasetCreate, DatasetRead
+from policyengine_api.models import Dataset, DatasetRead
 from policyengine_api.services.database import get_session
 
 router = APIRouter(prefix="/datasets", tags=["datasets"])
-
-
-@router.post("/", response_model=DatasetRead)
-def create_dataset(dataset: DatasetCreate, session: Session = Depends(get_session)):
-    """Create a new dataset."""
-    db_dataset = Dataset.model_validate(dataset)
-    session.add(db_dataset)
-    session.commit()
-    session.refresh(db_dataset)
-    return db_dataset
 
 
 @router.get("/", response_model=List[DatasetRead])
@@ -34,14 +24,3 @@ def get_dataset(dataset_id: UUID, session: Session = Depends(get_session)):
     if not dataset:
         raise HTTPException(status_code=404, detail="Dataset not found")
     return dataset
-
-
-@router.delete("/{dataset_id}")
-def delete_dataset(dataset_id: UUID, session: Session = Depends(get_session)):
-    """Delete a dataset."""
-    dataset = session.get(Dataset, dataset_id)
-    if not dataset:
-        raise HTTPException(status_code=404, detail="Dataset not found")
-    session.delete(dataset)
-    session.commit()
-    return {"message": "Dataset deleted"}

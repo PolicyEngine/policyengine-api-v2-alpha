@@ -18,6 +18,7 @@ from .output import (
 from .parameter import Parameter, ParameterCreate, ParameterRead
 from .parameter_value import ParameterValue, ParameterValueCreate, ParameterValueRead
 from .policy import Policy, PolicyCreate, PolicyRead
+from .report import Report, ReportCreate, ReportRead
 from .simulation import Simulation, SimulationCreate, SimulationRead, SimulationStatus
 from .tax_benefit_model import (
     TaxBenefitModel,
@@ -29,6 +30,7 @@ from .tax_benefit_model_version import (
     TaxBenefitModelVersionCreate,
     TaxBenefitModelVersionRead,
 )
+from .user import User, UserCreate, UserRead
 from .variable import Variable, VariableCreate, VariableRead
 
 __all__ = [
@@ -71,4 +73,10 @@ __all__ = [
     "TaxBenefitModelVersion",
     "TaxBenefitModelVersionCreate",
     "TaxBenefitModelVersionRead",
+    "User",
+    "UserCreate",
+    "UserRead",
+    "Report",
+    "ReportCreate",
+    "ReportRead",
 ]

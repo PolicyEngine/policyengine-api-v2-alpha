@@ -5,22 +5,10 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi_cache.decorator import cache
 from sqlmodel import Session, select
 
-from policyengine_api.models import Parameter, ParameterCreate, ParameterRead
+from policyengine_api.models import Parameter, ParameterRead
 from policyengine_api.services.database import get_session
 
 router = APIRouter(prefix="/parameters", tags=["parameters"])
-
-
-@router.post("/", response_model=ParameterRead)
-def create_parameter(
-    parameter: ParameterCreate, session: Session = Depends(get_session)
-):
-    """Create a new parameter."""
-    db_parameter = Parameter.model_validate(parameter)
-    session.add(db_parameter)
-    session.commit()
-    session.refresh(db_parameter)
-    return db_parameter
 
 
 @router.get("/", response_model=List[ParameterRead])
@@ -42,14 +30,3 @@ def get_parameter(parameter_id: UUID, session: Session = Depends(get_session)):
     if not parameter:
         raise HTTPException(status_code=404, detail="Parameter not found")
     return parameter
-
-
-@router.delete("/{parameter_id}")
-def delete_parameter(parameter_id: UUID, session: Session = Depends(get_session)):
-    """Delete a parameter."""
-    parameter = session.get(Parameter, parameter_id)
-    if not parameter:
-        raise HTTPException(status_code=404, detail="Parameter not found")
-    session.delete(parameter)
-    session.commit()
-    return {"message": "Parameter deleted"}

@@ -4,22 +4,10 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel import Session, select
 
-from policyengine_api.models import Simulation, SimulationCreate, SimulationRead
+from policyengine_api.models import Simulation, SimulationRead
 from policyengine_api.services.database import get_session
 
 router = APIRouter(prefix="/simulations", tags=["simulations"])
-
-
-@router.post("/", response_model=SimulationRead)
-def create_simulation(
-    simulation: SimulationCreate, session: Session = Depends(get_session)
-):
-    """Create a new simulation (worker will pick it up for processing)."""
-    db_simulation = Simulation.model_validate(simulation)
-    session.add(db_simulation)
-    session.commit()
-    session.refresh(db_simulation)
-    return db_simulation
 
 
 @router.get("/", response_model=List[SimulationRead])

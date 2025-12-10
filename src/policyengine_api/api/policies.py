@@ -34,14 +34,3 @@ def get_policy(policy_id: UUID, session: Session = Depends(get_session)):
     if not policy:
         raise HTTPException(status_code=404, detail="Policy not found")
     return policy
-
-
-@router.delete("/{policy_id}")
-def delete_policy(policy_id: UUID, session: Session = Depends(get_session)):
-    """Delete a policy."""
-    policy = session.get(Policy, policy_id)
-    if not policy:
-        raise HTTPException(status_code=404, detail="Policy not found")
-    session.delete(policy)
-    session.commit()
-    return {"message": "Policy deleted"}

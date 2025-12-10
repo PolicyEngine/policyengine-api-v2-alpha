@@ -34,14 +34,3 @@ def get_dynamic(dynamic_id: UUID, session: Session = Depends(get_session)):
     if not dynamic:
         raise HTTPException(status_code=404, detail="Dynamic not found")
     return dynamic
-
-
-@router.delete("/{dynamic_id}")
-def delete_dynamic(dynamic_id: UUID, session: Session = Depends(get_session)):
-    """Delete a dynamic."""
-    dynamic = session.get(Dynamic, dynamic_id)
-    if not dynamic:
-        raise HTTPException(status_code=404, detail="Dynamic not found")
-    session.delete(dynamic)
-    session.commit()
-    return {"message": "Dynamic deleted"}

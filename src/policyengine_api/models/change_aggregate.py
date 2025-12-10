@@ -18,6 +18,8 @@ class ChangeAggregateBase(SQLModel):
 
     baseline_simulation_id: UUID = Field(foreign_key="simulations.id")
     reform_simulation_id: UUID = Field(foreign_key="simulations.id")
+    user_id: UUID | None = Field(default=None, foreign_key="users.id")
+    report_id: UUID | None = Field(default=None, foreign_key="reports.id")
     variable: str
     aggregate_type: ChangeAggregateType
     entity: str | None = None
