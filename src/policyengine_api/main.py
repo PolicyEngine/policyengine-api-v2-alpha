@@ -3,8 +3,7 @@ from contextlib import asynccontextmanager
 import logfire
 from fastapi import FastAPI
 from fastapi_cache import FastAPICache
-from fastapi_cache.backends.redis import RedisBackend
-from redis import asyncio as aioredis
+from fastapi_cache.backends.inmemory import InMemoryBackend
 from rich.console import Console
 
 from policyengine_api.api import api_router
@@ -30,10 +29,7 @@ async def lifespan(app: FastAPI):
     console.print("[bold green]Database initialized[/bold green]")
 
     console.print("[bold green]Initializing cache...[/bold green]")
-    redis = aioredis.from_url(
-        settings.redis_url, encoding="utf8", decode_responses=True
-    )
-    FastAPICache.init(RedisBackend(redis), prefix="fastapi-cache")
+    FastAPICache.init(InMemoryBackend(), prefix="fastapi-cache")
     console.print("[bold green]Cache initialized[/bold green]")
 
     yield
