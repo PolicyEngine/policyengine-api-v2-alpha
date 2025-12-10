@@ -186,16 +186,5 @@ resource "google_cloud_run_v2_service_iam_member" "public_access" {
   member   = "allUsers"
 }
 
-# Custom domain mapping
-resource "google_cloud_run_domain_mapping" "api" {
-  name     = "v2.api.policyengine.org"
-  location = var.region
-
-  metadata {
-    namespace = var.project_id
-  }
-
-  spec {
-    route_name = google_cloud_run_v2_service.api.name
-  }
-}
+# Custom domain mapping managed manually via gcloud CLI
+# (Terraform domain mapping requires domain verification with service account)
