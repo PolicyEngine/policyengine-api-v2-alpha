@@ -1,15 +1,15 @@
 # PolicyEngine API v2
 
-FastAPI service for PolicyEngine microsimulations with Supabase backend, object storage, and background task processing.
+FastAPI service for PolicyEngine microsimulations with Supabase backend and object storage.
 
 ## Features
 
 - RESTful API for tax-benefit microsimulations
 - Supabase for PostgreSQL database and object storage
-- Celery workers for background simulation tasks
+- Background worker for simulation processing
 - SQLModel for type-safe database models
 - Logfire observability and monitoring
-- Terraform deployment to AWS
+- Terraform deployment to GCP Cloud Run
 
 ## Quick start
 
@@ -32,7 +32,6 @@ The defaults in `.env.example` work with local Supabase. Key settings:
 ```bash
 SUPABASE_URL=http://127.0.0.1:54321
 SUPABASE_DB_URL=postgresql://postgres:postgres@127.0.0.1:54322/postgres
-REDIS_URL=redis://localhost:6379/0
 STORAGE_BUCKET=datasets
 ```
 
@@ -44,21 +43,23 @@ supabase start
 
 Creates a local instance with PostgreSQL (port 54322), Storage API, and Studio dashboard at `http://localhost:54323`.
 
-3. **Run integration tests**
-
-Sets up database, seeds models, and runs tests:
+3. **Initialise database**
 
 ```bash
-make integration-test
+make init
 ```
 
-This command:
-- Creates all database tables from SQLModel definitions
-- Applies RLS policies and storage bucket migrations
-- Seeds UK and US tax-benefit models with variables, parameters, and datasets
-- Runs integration tests
+This resets the database, creates tables, storage bucket, and RLS policies.
 
-4. **Start the API**
+4. **Seed data**
+
+```bash
+make seed
+```
+
+Seeds UK and US tax-benefit models with variables, parameters, and datasets.
+
+5. **Start the API**
 
 ```bash
 docker compose up
@@ -78,6 +79,8 @@ GET  /datasets                         → List datasets
 POST /datasets                         → Create dataset
 GET  /policies                         → List policies
 POST /policies                         → Create policy
+GET  /dynamics                         → List dynamics
+POST /dynamics                         → Create dynamic
 GET  /simulations                      → List simulations
 POST /simulations                      → Create simulation
 GET  /simulations/{id}                 → Get simulation status
@@ -117,9 +120,10 @@ DELETE /change-aggregates/{id}         → Delete change aggregate
 ### Local development
 
 ```bash
-make integration-test  # Full setup: tables, migrations, seeding, tests
+make init             # Reset and initialise Supabase (tables, buckets, permissions)
 make seed             # Seed UK/US models only
-make reset            # Reset Supabase database
+make integration-test # Full setup: init, seeding, tests
+make reset            # Reset Supabase database (supabase db reset)
 ```
 
 ### Production
@@ -128,7 +132,7 @@ make reset            # Reset Supabase database
 make db-reset-prod    # Reset production database (requires confirmation)
 ```
 
-**Warning:** `db-reset-prod` drops all tables, recreates schema, and reseeds data. It requires typing "yes" to confirm.
+**Warning:** `db-reset-prod` drops all tables and storage, recreates everything, and reseeds data. Requires typing "yes" to confirm.
 
 ## Development
 
@@ -148,38 +152,33 @@ Schema is defined in two parts:
 
 **SQL migrations** (`supabase/migrations/`): Row-level security policies, storage buckets, and Postgres-specific features.
 
-To recreate tables:
+To reset and recreate everything:
 
 ```bash
-uv run python scripts/create_tables.py
+uv run python scripts/init.py
 ```
 
-Only create SQL migrations for RLS policies or storage configuration, not table schemas.
+This drops all tables, deletes the storage bucket, then recreates tables from SQLModel and applies RLS policies.
 
 ## Observability
 
-[Logfire](https://logfire.pydantic.dev/) instruments:
-- HTTP requests and responses
-- Database queries
-- Background tasks
-- Performance metrics
-
-View traces at the [Logfire dashboard](https://logfire.pydantic.dev).
+[Logfire](https://logfire.pydantic.dev/) instruments HTTP requests, database queries, and performance metrics. View traces at the [Logfire dashboard](https://logfire.pydantic.dev).
 
 ## Architecture
 
 ### Components
 
-- **API server**: FastAPI application (port 8000 local, 80 production)
+- **API server**: FastAPI application (port 8000)
 - **Database**: Supabase PostgreSQL
 - **Storage**: Supabase object storage for .h5 dataset files
-- **Worker**: Celery workers for background simulations
-- **Cache**: Redis for Celery broker and API caching
+- **Worker**: Polling worker for background simulations
 
 ### Data models
 
 - **Datasets**: Microdata files in Supabase storage
+- **DatasetVersions**: Versioned dataset snapshots
 - **Policies**: Parameter reforms
+- **Dynamics**: Dynamic behavioural responses
 - **Simulations**: Tax-benefit calculations
 - **Variables**: Model outputs (income_tax, universal_credit)
 - **Parameters**: System settings (personal_allowance, benefit_rates)
@@ -196,11 +195,12 @@ policyengine-api-v2/
 │   ├── config/           # Settings
 │   ├── models/           # SQLModel database models
 │   ├── services/         # Database, storage
-│   ├── tasks/            # Celery tasks
+│   ├── tasks/            # Background worker
 │   └── main.py           # FastAPI app
 ├── supabase/
 │   └── migrations/       # RLS policies and storage
-├── scripts/              # Database setup and seeding
+├── scripts/              # Database init and seeding
+├── terraform/            # GCP Cloud Run deployment
 ├── tests/                # Test suite
 └── docker-compose.yml    # Local services
 ```

@@ -16,8 +16,8 @@ class ChangeAggregateType(str, Enum):
 class ChangeAggregateBase(SQLModel):
     """Base change aggregate fields."""
 
-    baseline_simulation_id: UUID
-    reform_simulation_id: UUID
+    baseline_simulation_id: UUID = Field(foreign_key="simulations.id")
+    reform_simulation_id: UUID = Field(foreign_key="simulations.id")
     variable: str
     aggregate_type: ChangeAggregateType
     entity: str | None = None

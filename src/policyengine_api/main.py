@@ -18,6 +18,7 @@ if settings.logfire_token:
         service_name="policyengine-api",
         token=settings.logfire_token,
         environment=settings.logfire_environment,
+        console=False,
     )
     logfire.instrument_httpx()
 

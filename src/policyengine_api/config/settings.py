@@ -28,9 +28,6 @@ class Settings(BaseSettings):
     api_port: int = 8000
     debug: bool = False
 
-    # Seeding
-    limit_seed_parameters: bool = False
-
     @property
     def database_url(self) -> str:
         """Get database URL from Supabase."""

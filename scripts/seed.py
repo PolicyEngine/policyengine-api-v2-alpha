@@ -1,9 +1,13 @@
 """Seed database with UK and US models, variables, parameters, datasets."""
 
+import json
 import logging
+import math
 import sys
 import warnings
+from datetime import datetime, timezone
 from pathlib import Path
+from uuid import uuid4
 
 import logfire
 
@@ -24,17 +28,14 @@ from policyengine.tax_benefit_models.us.datasets import (  # noqa: E402
     ensure_datasets as ensure_us_datasets,
 )
 from rich.console import Console  # noqa: E402
-from rich.progress import track  # noqa: E402
+from rich.progress import Progress, SpinnerColumn, TextColumn  # noqa: E402
 from sqlmodel import Session, create_engine, select  # noqa: E402
 
 from policyengine_api.config.settings import settings  # noqa: E402
 from policyengine_api.models import (  # noqa: E402
     Dataset,
-    Parameter,
-    ParameterValue,
     TaxBenefitModel,
     TaxBenefitModelVersion,
-    Variable,
 )
 from policyengine_api.services.storage import (  # noqa: E402
     upload_dataset_for_seeding,
@@ -45,6 +46,7 @@ if settings.logfire_token:
     logfire.configure(
         token=settings.logfire_token,
         environment=settings.logfire_environment,
+        console=False,
     )
 
 console = Console()
@@ -55,6 +57,45 @@ def get_quiet_session():
     engine = create_engine(settings.database_url, echo=False)
     with Session(engine) as session:
         yield session
+
+
+def bulk_insert(session, table: str, columns: list[str], rows: list[dict]):
+    """Fast bulk insert using PostgreSQL COPY via StringIO."""
+    if not rows:
+        return
+
+    import io
+
+    # Get raw psycopg2 connection - need to use the connection from session
+    # but not commit separately to avoid transaction issues
+    connection = session.connection()
+    raw_conn = connection.connection.dbapi_connection
+    cursor = raw_conn.cursor()
+
+    # Build CSV-like data in memory
+    output = io.StringIO()
+    for row in rows:
+        values = []
+        for col in columns:
+            val = row[col]
+            if val is None:
+                values.append("\\N")
+            elif isinstance(val, str):
+                # Escape special characters for COPY
+                val = (
+                    val.replace("\\", "\\\\").replace("\t", "\\t").replace("\n", "\\n")
+                )
+                values.append(val)
+            else:
+                values.append(str(val))
+        output.write("\t".join(values) + "\n")
+
+    output.seek(0)
+
+    # COPY is the fastest way to bulk load PostgreSQL
+    cursor.copy_from(output, table, columns=columns, null="\\N")
+    # Let SQLAlchemy handle the commit via session
+    session.commit()
 
 
 def seed_model(model_version, session) -> TaxBenefitModelVersion:
@@ -113,90 +154,183 @@ def seed_model(model_version, session) -> TaxBenefitModelVersion:
 
         # Add variables
         with logfire.span("add_variables", count=len(model_version.variables)):
-            console.print(f"  Adding {len(model_version.variables)} variables...")
-            for var in track(model_version.variables, description="Variables"):
-                db_var = Variable(
-                    name=var.name,
-                    entity=var.entity,
-                    description=var.description or "",
-                    data_type=var.data_type.__name__
-                    if hasattr(var.data_type, "__name__")
-                    else str(var.data_type),
-                    tax_benefit_model_version_id=db_version.id,
+            var_rows = []
+            with Progress(
+                SpinnerColumn(),
+                TextColumn("[progress.description]{task.description}"),
+                console=console,
+            ) as progress:
+                task = progress.add_task(
+                    f"Preparing {len(model_version.variables)} variables",
+                    total=len(model_version.variables),
                 )
-                session.add(db_var)
+                for var in model_version.variables:
+                    var_rows.append(
+                        {
+                            "id": uuid4(),
+                            "name": var.name,
+                            "entity": var.entity,
+                            "description": var.description or "",
+                            "data_type": var.data_type.__name__
+                            if hasattr(var.data_type, "__name__")
+                            else str(var.data_type),
+                            "possible_values": None,
+                            "tax_benefit_model_version_id": db_version.id,
+                            "created_at": datetime.now(timezone.utc),
+                        }
+                    )
+                    progress.advance(task)
 
-            session.commit()
+            console.print(f"  Inserting {len(var_rows)} variables...")
+            bulk_insert(
+                session,
+                "variables",
+                [
+                    "id",
+                    "name",
+                    "entity",
+                    "description",
+                    "data_type",
+                    "possible_values",
+                    "tax_benefit_model_version_id",
+                    "created_at",
+                ],
+                var_rows,
+            )
+
             console.print(
                 f"  [green]✓[/green] Added {len(model_version.variables)} variables"
             )
 
-        # Add parameters (creating a lookup for parameter values later)
-        parameters_to_add = model_version.parameters
-        if settings.limit_seed_parameters:
-            parameters_to_add = model_version.parameters[:10_000]
-            console.print(
-                f"  [yellow]Limiting to {len(parameters_to_add)} parameters "
-                f"(LIMIT_SEED_PARAMETERS=true)[/yellow]"
-            )
+        # Add parameters (only user-facing ones: those with labels or gov.* params)
+        parameters_to_add = [p for p in model_version.parameters if p.label is not None]
+        console.print(
+            f"  Filtered to {len(parameters_to_add)} user-facing parameters "
+            f"(from {len(model_version.parameters)} total)"
+        )
 
         with logfire.span("add_parameters", count=len(parameters_to_add)):
-            console.print(f"  Adding {len(parameters_to_add)} parameters...")
-            param_id_map = {}  # Map from policyengine param id to db param id
+            # Build list of parameter dicts for bulk insert
+            param_rows = []
+            param_names = []  # Track (pe_id, name, generated_uuid)
 
-            for param in track(parameters_to_add, description="Parameters"):
-                db_param = Parameter(
-                    name=param.name,
-                    label=param.label if hasattr(param, "label") else None,
-                    description=param.description or "",
-                    data_type=param.data_type.__name__
-                    if hasattr(param.data_type, "__name__")
-                    else str(param.data_type),
-                    unit=param.unit,
-                    tax_benefit_model_version_id=db_version.id,
+            with Progress(
+                SpinnerColumn(),
+                TextColumn("[progress.description]{task.description}"),
+                console=console,
+            ) as progress:
+                task = progress.add_task(
+                    f"Preparing {len(parameters_to_add)} parameters",
+                    total=len(parameters_to_add),
                 )
-                session.add(db_param)
-                session.commit()
-                session.refresh(db_param)
-                param_id_map[param.id] = db_param.id
+                for param in parameters_to_add:
+                    param_uuid = uuid4()
+                    param_rows.append(
+                        {
+                            "id": param_uuid,
+                            "name": param.name,
+                            "label": param.label if hasattr(param, "label") else None,
+                            "description": param.description or "",
+                            "data_type": param.data_type.__name__
+                            if hasattr(param.data_type, "__name__")
+                            else str(param.data_type),
+                            "unit": param.unit,
+                            "tax_benefit_model_version_id": db_version.id,
+                            "created_at": datetime.now(timezone.utc),
+                        }
+                    )
+                    param_names.append((param.id, param.name, param_uuid))
+                    progress.advance(task)
+
+            console.print(f"  Inserting {len(param_rows)} parameters...")
+            bulk_insert(
+                session,
+                "parameters",
+                [
+                    "id",
+                    "name",
+                    "label",
+                    "description",
+                    "data_type",
+                    "unit",
+                    "tax_benefit_model_version_id",
+                    "created_at",
+                ],
+                param_rows,
+            )
+
+            # Build param_id_map from pre-generated UUIDs
+            param_id_map = {pe_id: db_uuid for pe_id, name, db_uuid in param_names}
 
             console.print(
                 f"  [green]✓[/green] Added {len(parameters_to_add)} parameters"
             )
 
         # Add parameter values
-        # Filter to only include values for parameters we actually added
+        # Filter to only include values for parameters we added
         parameter_values_to_add = [
             pv
             for pv in model_version.parameter_values
             if pv.parameter.id in param_id_map
         ]
+        console.print(f"  Found {len(parameter_values_to_add)} parameter values to add")
 
         with logfire.span("add_parameter_values", count=len(parameter_values_to_add)):
-            console.print(
-                f"  Adding {len(parameter_values_to_add)} parameter values..."
-            )
-            import math
+            pv_rows = []
+            skipped = 0
 
-            for pv in track(parameter_values_to_add, description="Parameter values"):
-                # Handle Infinity values - skip them as they can't be stored in JSON
-                if isinstance(pv.value, float) and (
-                    math.isinf(pv.value) or math.isnan(pv.value)
-                ):
-                    continue
-
-                db_pv = ParameterValue(
-                    parameter_id=param_id_map[pv.parameter.id],
-                    value_json=pv.value,
-                    start_date=pv.start_date,
-                    end_date=pv.end_date,
+            with Progress(
+                SpinnerColumn(),
+                TextColumn("[progress.description]{task.description}"),
+                console=console,
+            ) as progress:
+                task = progress.add_task(
+                    f"Preparing {len(parameter_values_to_add)} parameter values",
+                    total=len(parameter_values_to_add),
                 )
-                session.add(db_pv)
+                for pv in parameter_values_to_add:
+                    # Handle Infinity values - skip them as they can't be stored in JSON
+                    if isinstance(pv.value, float) and (
+                        math.isinf(pv.value) or math.isnan(pv.value)
+                    ):
+                        skipped += 1
+                        progress.advance(task)
+                        continue
 
-            session.commit()
+                    pv_rows.append(
+                        {
+                            "id": uuid4(),
+                            "parameter_id": param_id_map[pv.parameter.id],
+                            "value_json": json.dumps(pv.value),
+                            "start_date": pv.start_date,
+                            "end_date": pv.end_date,
+                            "policy_id": None,
+                            "dynamic_id": None,
+                            "created_at": datetime.now(timezone.utc),
+                        }
+                    )
+                    progress.advance(task)
+
+            console.print(f"  Inserting {len(pv_rows)} parameter values...")
+            bulk_insert(
+                session,
+                "parameter_values",
+                [
+                    "id",
+                    "parameter_id",
+                    "value_json",
+                    "start_date",
+                    "end_date",
+                    "policy_id",
+                    "dynamic_id",
+                    "created_at",
+                ],
+                pv_rows,
+            )
+
             console.print(
-                f"  [green]✓[/green] Added {len(parameter_values_to_add)} "
-                f"parameter values"
+                f"  [green]✓[/green] Added {len(pv_rows)} parameter values"
+                + (f" (skipped {skipped} invalid)" if skipped else "")
             )
 
         return db_version
@@ -228,79 +362,96 @@ def seed_datasets(session):
         # UK datasets
         console.print("  Creating UK datasets...")
         uk_datasets = ensure_uk_datasets()
+        uk_created = 0
+        uk_skipped = 0
 
         with logfire.span("seed_uk_datasets", count=len(uk_datasets)):
-            for _, pe_dataset in track(
-                list(uk_datasets.items()), description="UK datasets"
-            ):
-                # Check if dataset already exists
-                existing = session.exec(
-                    select(Dataset).where(Dataset.name == pe_dataset.name)
-                ).first()
+            with Progress(
+                SpinnerColumn(),
+                TextColumn("[progress.description]{task.description}"),
+                console=console,
+            ) as progress:
+                task = progress.add_task("UK datasets", total=len(uk_datasets))
+                for _, pe_dataset in uk_datasets.items():
+                    progress.update(task, description=f"UK: {pe_dataset.name}")
 
-                if existing:
-                    console.print(
-                        f"  Dataset {pe_dataset.name} already exists, skipping"
+                    # Check if dataset already exists
+                    existing = session.exec(
+                        select(Dataset).where(Dataset.name == pe_dataset.name)
+                    ).first()
+
+                    if existing:
+                        uk_skipped += 1
+                        progress.advance(task)
+                        continue
+
+                    # Upload to S3
+                    object_name = upload_dataset_for_seeding(pe_dataset.filepath)
+
+                    # Create database record
+                    db_dataset = Dataset(
+                        name=pe_dataset.name,
+                        description=pe_dataset.description,
+                        filepath=object_name,
+                        year=pe_dataset.year,
+                        tax_benefit_model_id=uk_model.id,
                     )
-                    continue
+                    session.add(db_dataset)
+                    session.commit()
+                    uk_created += 1
+                    progress.advance(task)
 
-                # Upload to S3
-                object_name = upload_dataset_for_seeding(pe_dataset.filepath)
-                console.print(
-                    f"  Uploaded {pe_dataset.filepath} to S3 as {object_name}"
-                )
-
-                # Create database record
-                db_dataset = Dataset(
-                    name=pe_dataset.name,
-                    description=pe_dataset.description,
-                    filepath=object_name,  # Store S3 key, not local path
-                    year=pe_dataset.year,
-                    tax_benefit_model_id=uk_model.id,
-                )
-                session.add(db_dataset)
-                session.commit()
-                console.print(f"  [green]✓[/green] Created dataset: {db_dataset.name}")
+        console.print(
+            f"  [green]✓[/green] UK: {uk_created} created, {uk_skipped} skipped"
+        )
 
         # US datasets
         console.print("  Creating US datasets...")
         us_datasets = ensure_us_datasets()
+        us_created = 0
+        us_skipped = 0
 
         with logfire.span("seed_us_datasets", count=len(us_datasets)):
-            for _, pe_dataset in track(
-                list(us_datasets.items()), description="US datasets"
-            ):
-                # Check if dataset already exists
-                existing = session.exec(
-                    select(Dataset).where(Dataset.name == pe_dataset.name)
-                ).first()
+            with Progress(
+                SpinnerColumn(),
+                TextColumn("[progress.description]{task.description}"),
+                console=console,
+            ) as progress:
+                task = progress.add_task("US datasets", total=len(us_datasets))
+                for _, pe_dataset in us_datasets.items():
+                    progress.update(task, description=f"US: {pe_dataset.name}")
 
-                if existing:
-                    console.print(
-                        f"  Dataset {pe_dataset.name} already exists, skipping"
+                    # Check if dataset already exists
+                    existing = session.exec(
+                        select(Dataset).where(Dataset.name == pe_dataset.name)
+                    ).first()
+
+                    if existing:
+                        us_skipped += 1
+                        progress.advance(task)
+                        continue
+
+                    # Upload to S3
+                    object_name = upload_dataset_for_seeding(pe_dataset.filepath)
+
+                    # Create database record
+                    db_dataset = Dataset(
+                        name=pe_dataset.name,
+                        description=pe_dataset.description,
+                        filepath=object_name,
+                        year=pe_dataset.year,
+                        tax_benefit_model_id=us_model.id,
                     )
-                    continue
-
-                # Upload to S3
-                object_name = upload_dataset_for_seeding(pe_dataset.filepath)
-                console.print(
-                    f"  Uploaded {pe_dataset.filepath} to S3 as {object_name}"
-                )
-
-                # Create database record
-                db_dataset = Dataset(
-                    name=pe_dataset.name,
-                    description=pe_dataset.description,
-                    filepath=object_name,  # Store S3 key, not local path
-                    year=pe_dataset.year,
-                    tax_benefit_model_id=us_model.id,
-                )
-                session.add(db_dataset)
-                session.commit()
-                console.print(f"  [green]✓[/green] Created dataset: {db_dataset.name}")
+                    session.add(db_dataset)
+                    session.commit()
+                    us_created += 1
+                    progress.advance(task)
 
         console.print(
-            f"[green]✓[/green] Seeded {len(uk_datasets) + len(us_datasets)} datasets\n"
+            f"  [green]✓[/green] US: {us_created} created, {us_skipped} skipped"
+        )
+        console.print(
+            f"[green]✓[/green] Seeded {uk_created + us_created} datasets total\n"
         )
 
 
