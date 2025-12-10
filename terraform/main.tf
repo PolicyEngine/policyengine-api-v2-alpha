@@ -110,6 +110,10 @@ resource "google_cloud_run_v2_service" "api" {
   }
 
   depends_on = [google_project_service.required_apis]
+
+  lifecycle {
+    ignore_changes = [template[0].containers[0].image]
+  }
 }
 
 # Cloud Run job for worker (polling-based, no port needed)
@@ -168,6 +172,10 @@ resource "google_cloud_run_v2_job" "worker" {
   }
 
   depends_on = [google_project_service.required_apis]
+
+  lifecycle {
+    ignore_changes = [template[0].template[0].containers[0].image]
+  }
 }
 
 # Allow public access to API
