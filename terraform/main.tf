@@ -185,3 +185,17 @@ resource "google_cloud_run_v2_service_iam_member" "public_access" {
   role     = "roles/run.invoker"
   member   = "allUsers"
 }
+
+# Custom domain mapping
+resource "google_cloud_run_domain_mapping" "api" {
+  name     = "v2.api.policyengine.org"
+  location = var.region
+
+  metadata {
+    namespace = var.project_id
+  }
+
+  spec {
+    route_name = google_cloud_run_v2_service.api.name
+  }
+}
