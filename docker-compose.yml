@@ -7,12 +7,14 @@ services:
     environment:
       SUPABASE_URL: ${SUPABASE_URL}
       SUPABASE_KEY: ${SUPABASE_KEY}
-      SUPABASE_DB_URL: ${SUPABASE_DB_URL}
+      SUPABASE_DB_URL: postgresql://postgres:postgres@supabase_db_policyengine-api-v2:5432/postgres
       LOGFIRE_TOKEN: ${LOGFIRE_TOKEN}
       DEBUG: "true"
       API_PORT: ${API_PORT:-8000}
     volumes:
       - ./src:/app/src
+    networks:
+      - supabase_network_policyengine-api-v2
     healthcheck:
       test: ["CMD", "python", "-c", "import httpx; exit(0 if httpx.get('http://localhost:${API_PORT:-8000}/health', timeout=2).status_code == 200 else 1)"]
       interval: 5s
@@ -26,11 +28,13 @@ services:
     environment:
       SUPABASE_URL: ${SUPABASE_URL}
       SUPABASE_KEY: ${SUPABASE_KEY}
-      SUPABASE_DB_URL: ${SUPABASE_DB_URL}
+      SUPABASE_DB_URL: postgresql://postgres:postgres@supabase_db_policyengine-api-v2:5432/postgres
       LOGFIRE_TOKEN: ${LOGFIRE_TOKEN}
       WORKER_POLL_INTERVAL: ${WORKER_POLL_INTERVAL:-60}
     volumes:
       - ./src:/app/src
+    networks:
+      - supabase_network_policyengine-api-v2
 
   test:
     build: .
@@ -38,11 +42,13 @@ services:
     environment:
       SUPABASE_URL: ${SUPABASE_URL}
       SUPABASE_KEY: ${SUPABASE_KEY}
-      SUPABASE_DB_URL: ${SUPABASE_DB_URL}
+      SUPABASE_DB_URL: postgresql://postgres:postgres@supabase_db_policyengine-api-v2:5432/postgres
       LOGFIRE_TOKEN: ${LOGFIRE_TOKEN}
     volumes:
       - ./src:/app/src
       - ./tests:/app/tests
+    networks:
+      - supabase_network_policyengine-api-v2
     depends_on:
       api:
         condition: service_healthy
@@ -50,3 +56,7 @@ services:
         condition: service_started
     profiles:
       - test
+
+networks:
+  supabase_network_policyengine-api-v2:
+    external: true
