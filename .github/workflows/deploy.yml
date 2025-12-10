@@ -36,6 +36,9 @@ jobs:
     needs: test
     environment: production
 
+    env:
+      IMAGE_URL: ${{ vars.GCP_REGION }}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/${{ vars.PROJECT_NAME }}/${{ vars.PROJECT_NAME }}
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -53,13 +56,10 @@ jobs:
         run: gcloud auth configure-docker ${{ vars.GCP_REGION }}-docker.pkg.dev
 
       - name: Build and push Docker image
-        env:
-          IMAGE_URL: ${{ vars.GCP_REGION }}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/${{ vars.PROJECT_NAME }}/${{ vars.PROJECT_NAME }}
-          IMAGE_TAG: ${{ github.sha }}
         run: |
-          docker build -t $IMAGE_URL:$IMAGE_TAG .
-          docker tag $IMAGE_URL:$IMAGE_TAG $IMAGE_URL:latest
-          docker push $IMAGE_URL:$IMAGE_TAG
+          docker build -t $IMAGE_URL:${{ github.sha }} .
+          docker tag $IMAGE_URL:${{ github.sha }} $IMAGE_URL:latest
+          docker push $IMAGE_URL:${{ github.sha }}
           docker push $IMAGE_URL:latest
 
       - name: Setup Terraform
@@ -70,16 +70,6 @@ jobs:
       - name: Terraform init
         working-directory: ./terraform
         run: terraform init
-
-      - name: Terraform plan
-        working-directory: ./terraform
-        env:
-          TF_VAR_supabase_url: ${{ secrets.SUPABASE_URL }}
-          TF_VAR_supabase_key: ${{ secrets.SUPABASE_KEY }}
-          TF_VAR_supabase_db_url: ${{ secrets.SUPABASE_DB_URL }}
-          TF_VAR_logfire_token: ${{ secrets.LOGFIRE_TOKEN }}
-          TF_VAR_logfire_environment: prod
-        run: terraform plan
 
       - name: Terraform apply
         working-directory: ./terraform
@@ -93,22 +83,21 @@ jobs:
 
       - name: Deploy API to Cloud Run
         run: |
-          gcloud run services update-traffic ${{ vars.API_SERVICE_NAME }} \
+          gcloud run services update ${{ vars.API_SERVICE_NAME }} \
             --region=${{ vars.GCP_REGION }} \
-            --to-latest
+            --image=$IMAGE_URL:${{ github.sha }}
 
-      - name: Deploy Worker to Cloud Run
+      - name: Update worker job
         run: |
-          gcloud run services update-traffic ${{ vars.WORKER_SERVICE_NAME }} \
+          gcloud run jobs update ${{ vars.WORKER_SERVICE_NAME }} \
             --region=${{ vars.GCP_REGION }} \
-            --to-latest
+            --image=$IMAGE_URL:${{ github.sha }}
 
       - name: Get API URL
         run: |
-          echo "=== API Endpoint ==="
           API_URL=$(gcloud run services describe ${{ vars.API_SERVICE_NAME }} \
             --region=${{ vars.GCP_REGION }} \
             --format='value(status.url)')
-          echo "API is available at: $API_URL"
-          echo "Health check: $API_URL/health"
-          echo "Documentation: $API_URL/docs"
+          echo "API: $API_URL"
+          echo "Health: $API_URL/health"
+          echo "Docs: $API_URL/docs"
