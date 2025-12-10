@@ -10,7 +10,6 @@ from policyengine_api.models import (
     AggregateOutputRead,
 )
 from policyengine_api.services.database import get_session
-from policyengine_api.tasks.runner import compute_aggregate_task
 
 router = APIRouter(prefix="/aggregates", tags=["aggregates"])
 
@@ -19,15 +18,11 @@ router = APIRouter(prefix="/aggregates", tags=["aggregates"])
 def create_aggregate_output(
     output: AggregateOutputCreate, session: Session = Depends(get_session)
 ):
-    """Create and compute an aggregate."""
+    """Create an aggregate (worker will compute it)."""
     db_output = AggregateOutput.model_validate(output)
     session.add(db_output)
     session.commit()
     session.refresh(db_output)
-
-    # Queue computation task
-    compute_aggregate_task.delay(str(db_output.id))
-
     return db_output
 
 

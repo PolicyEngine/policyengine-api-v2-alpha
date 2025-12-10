@@ -6,7 +6,6 @@ from sqlmodel import Session, select
 
 from policyengine_api.models import Simulation, SimulationCreate, SimulationRead
 from policyengine_api.services.database import get_session
-from policyengine_api.tasks.runner import run_simulation_task
 
 router = APIRouter(prefix="/simulations", tags=["simulations"])
 
@@ -15,15 +14,11 @@ router = APIRouter(prefix="/simulations", tags=["simulations"])
 def create_simulation(
     simulation: SimulationCreate, session: Session = Depends(get_session)
 ):
-    """Create and queue a new simulation."""
+    """Create a new simulation (worker will pick it up for processing)."""
     db_simulation = Simulation.model_validate(simulation)
     session.add(db_simulation)
     session.commit()
     session.refresh(db_simulation)
-
-    # Queue simulation task
-    run_simulation_task.delay(str(db_simulation.id))
-
     return db_simulation
 
 

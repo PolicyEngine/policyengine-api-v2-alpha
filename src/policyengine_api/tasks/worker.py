@@ -1,14 +1,17 @@
 """Simple polling worker that processes pending simulations."""
 
+import tempfile
 import time
 from datetime import datetime, timezone
+from pathlib import Path
+from uuid import UUID
 
-import logfire
 from rich.console import Console
 from sqlmodel import Session, create_engine, select
 
 from policyengine_api.config.settings import settings
-from policyengine_api.models import Simulation, SimulationStatus
+from policyengine_api.models import Dataset, Simulation, SimulationStatus
+from policyengine_api.services.storage import download_dataset
 
 console = Console()
 
@@ -21,75 +24,67 @@ def get_db_session():
 
 def run_simulation(simulation_id: str, session: Session):
     """Run a single simulation."""
-    from pathlib import Path
-    import tempfile
-    from uuid import UUID
+    console.print(f"[bold blue]Running simulation {simulation_id}[/bold blue]")
 
-    from policyengine_api.models import Dataset
-    from policyengine_api.services.storage import download_dataset
+    simulation = session.get(Simulation, UUID(simulation_id))
+    if not simulation:
+        raise ValueError(f"Simulation {simulation_id} not found")
 
-    with logfire.span("run_simulation", simulation_id=simulation_id):
-        console.print(f"[bold blue]Running simulation {simulation_id}[/bold blue]")
+    # Update status to running
+    simulation.status = SimulationStatus.RUNNING
+    simulation.started_at = datetime.now(timezone.utc)
+    session.add(simulation)
+    session.commit()
 
-        simulation = session.get(Simulation, UUID(simulation_id))
-        if not simulation:
-            raise ValueError(f"Simulation {simulation_id} not found")
+    # Load dataset
+    dataset = session.get(Dataset, simulation.dataset_id)
+    if not dataset:
+        raise ValueError(f"Dataset {simulation.dataset_id} not found")
 
-        # Update status to running
-        simulation.status = SimulationStatus.RUNNING
-        simulation.started_at = datetime.now(timezone.utc)
-        session.add(simulation)
-        session.commit()
+    # Import policyengine
+    from policyengine.core import Simulation as PESimulation
+    from policyengine.tax_benefit_models.uk import PolicyEngineUKDataset, uk_latest
+    from policyengine.tax_benefit_models.us import PolicyEngineUSDataset, us_latest
 
-        # Load dataset
-        dataset = session.get(Dataset, simulation.dataset_id)
-        if not dataset:
-            raise ValueError(f"Dataset {simulation.dataset_id} not found")
+    # Determine tax-benefit model
+    if simulation.tax_benefit_model == "uk_latest":
+        DatasetClass = PolicyEngineUKDataset
+        model_version = uk_latest
+    elif simulation.tax_benefit_model == "us_latest":
+        DatasetClass = PolicyEngineUSDataset
+        model_version = us_latest
+    else:
+        raise ValueError(f"Unsupported model: {simulation.tax_benefit_model}")
 
-        # Import policyengine
-        from policyengine.core import Simulation as PESimulation
-        from policyengine.tax_benefit_models.uk import PolicyEngineUKDataset, uk_latest
-        from policyengine.tax_benefit_models.us import PolicyEngineUSDataset, us_latest
+    # Download and run
+    with tempfile.TemporaryDirectory() as tmpdir:
+        local_path = Path(tmpdir) / dataset.filepath
+        console.print(f"  Downloading dataset: {dataset.filepath}")
+        download_dataset(dataset.filepath, str(local_path))
 
-        # Determine tax-benefit model
-        if simulation.tax_benefit_model == "uk_latest":
-            DatasetClass = PolicyEngineUKDataset
-            model_version = uk_latest
-        elif simulation.tax_benefit_model == "us_latest":
-            DatasetClass = PolicyEngineUSDataset
-            model_version = us_latest
-        else:
-            raise ValueError(f"Unsupported model: {simulation.tax_benefit_model}")
+        pe_dataset = DatasetClass(
+            name=dataset.name,
+            description=dataset.description or "",
+            filepath=str(local_path),
+            year=dataset.year,
+        )
 
-        # Download and run
-        with tempfile.TemporaryDirectory() as tmpdir:
-            local_path = Path(tmpdir) / dataset.filepath
-            console.print(f"  Downloading dataset: {dataset.filepath}")
-            download_dataset(dataset.filepath, str(local_path))
+        pe_simulation = PESimulation(
+            dataset=pe_dataset,
+            tax_benefit_model_version=model_version,
+            policy=None,
+        )
 
-            pe_dataset = DatasetClass(
-                name=dataset.name,
-                description=dataset.description or "",
-                filepath=str(local_path),
-                year=dataset.year,
-            )
+        console.print(f"[green]Executing simulation for {dataset.name}[/green]")
+        pe_simulation.run()
 
-            pe_simulation = PESimulation(
-                dataset=pe_dataset,
-                tax_benefit_model_version=model_version,
-                policy=None,
-            )
+    # Mark completed
+    simulation.status = SimulationStatus.COMPLETED
+    simulation.completed_at = datetime.now(timezone.utc)
+    session.add(simulation)
+    session.commit()
 
-            console.print(f"[green]Executing simulation for {dataset.name}[/green]")
-            pe_simulation.run()
-
-        # Mark completed
-        simulation.status = SimulationStatus.COMPLETED
-        simulation.completed_at = datetime.now(timezone.utc)
-        session.add(simulation)
-        session.commit()
-
-        console.print(f"[bold green]Simulation {simulation_id} completed[/bold green]")
+    console.print(f"[bold green]Simulation {simulation_id} completed[/bold green]")
 
 
 def process_pending_simulations():
@@ -118,12 +113,6 @@ def process_pending_simulations():
 
 def main():
     """Main worker loop."""
-    logfire.configure(
-        service_name="policyengine-worker",
-        token=settings.logfire_token if settings.logfire_token else None,
-        environment=settings.logfire_environment,
-    )
-
     console.print("[bold]PolicyEngine Worker starting...[/bold]")
     console.print(f"Poll interval: {settings.worker_poll_interval}s")
 

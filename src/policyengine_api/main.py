@@ -12,13 +12,14 @@ from policyengine_api.services.database import init_db
 
 console = Console()
 
-# Configure Logfire
-logfire.configure(
-    service_name="policyengine-api",
-    token=settings.logfire_token if settings.logfire_token else None,
-    environment=settings.logfire_environment,
-)
-logfire.instrument_httpx()
+# Configure Logfire (only if token is set)
+if settings.logfire_token:
+    logfire.configure(
+        service_name="policyengine-api",
+        token=settings.logfire_token,
+        environment=settings.logfire_environment,
+    )
+    logfire.instrument_httpx()
 
 
 @asynccontextmanager
