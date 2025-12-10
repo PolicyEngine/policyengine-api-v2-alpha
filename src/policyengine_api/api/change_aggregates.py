@@ -11,7 +11,7 @@ from policyengine_api.models import (
 )
 from policyengine_api.services.database import get_session
 
-router = APIRouter(prefix="/change-aggregates", tags=["change-aggregates"])
+router = APIRouter(prefix="/outputs/change-aggregates", tags=["change-aggregates"])
 
 
 @router.post("/", response_model=ChangeAggregateRead)
