@@ -6,6 +6,7 @@ from . import (
     change_aggregates,
     datasets,
     dynamics,
+    household,
     outputs,
     parameter_values,
     parameters,
@@ -29,5 +30,6 @@ api_router.include_router(dynamics.router)
 api_router.include_router(tax_benefit_models.router)
 api_router.include_router(tax_benefit_model_versions.router)
 api_router.include_router(change_aggregates.router)
+api_router.include_router(household.router)
 
 __all__ = ["api_router"]

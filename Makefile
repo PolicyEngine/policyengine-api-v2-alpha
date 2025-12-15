@@ -8,7 +8,7 @@ install:
 	uv pip install -e .
 
 dev:
-	uv pip install -e ".[dev]"
+	docker compose up
 
 format:
 	ruff format .
