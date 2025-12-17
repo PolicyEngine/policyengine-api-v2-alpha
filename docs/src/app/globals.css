@@ -1,0 +1,102 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Instrument+Serif:ital@0;1&display=swap');
+@import "tailwindcss";
+
+@theme {
+  /* PolicyEngine brand colors */
+  --color-pe-green: #2c6e49;
+  --color-pe-green-light: #4c9a6d;
+  --color-pe-green-dark: #1a4a2e;
+  --color-pe-blue: #1a365d;
+  --color-pe-slate: #334155;
+  --color-pe-gray: #64748b;
+
+  /* Neutral palette */
+  --color-surface: #fafbfc;
+  --color-surface-elevated: #ffffff;
+  --color-surface-sunken: #f1f5f9;
+  --color-border: #e2e8f0;
+  --color-border-strong: #cbd5e1;
+
+  /* Text colors */
+  --color-text-primary: #0f172a;
+  --color-text-secondary: #475569;
+  --color-text-muted: #94a3b8;
+
+  /* Code colors */
+  --color-code-bg: #1e293b;
+  --color-code-text: #e2e8f0;
+
+  /* Status colors */
+  --color-success: #16a34a;
+  --color-error: #dc2626;
+  --color-warning: #d97706;
+  --color-info: #2563eb;
+
+  /* Typography */
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+  --font-display: "Instrument Serif", Georgia, serif;
+}
+
+body {
+  font-family: var(--font-sans);
+  background: var(--color-surface);
+  color: var(--color-text-primary);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--color-surface-sunken);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-border-strong);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-pe-gray);
+}
+
+/* Code block styling */
+pre {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+code {
+  font-family: var(--font-mono);
+}
+
+/* Method badges */
+.method-get { background: #dbeafe; color: #1d4ed8; }
+.method-post { background: #dcfce7; color: #16a34a; }
+.method-put { background: #fef3c7; color: #d97706; }
+.method-delete { background: #fee2e2; color: #dc2626; }
+
+/* Smooth transitions */
+* {
+  transition-property: background-color, border-color, color, fill, stroke, opacity, box-shadow, transform;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  transition-duration: 150ms;
+}
+
+/* Focus states */
+*:focus-visible {
+  outline: 2px solid var(--color-pe-green);
+  outline-offset: 2px;
+}
+
+/* Selection */
+::selection {
+  background: var(--color-pe-green);
+  color: white;
+}

@@ -41,6 +41,30 @@ class HouseholdCalculateResponse(BaseModel):
     household: dict[str, Any]
 
 
+class HouseholdImpactRequest(BaseModel):
+    """Request body for household impact comparison."""
+
+    tax_benefit_model_name: Literal["policyengine_uk", "policyengine_us"]
+    people: list[dict[str, Any]]
+    benunit: dict[str, Any] = Field(default_factory=dict)
+    marital_unit: dict[str, Any] = Field(default_factory=dict)
+    family: dict[str, Any] = Field(default_factory=dict)
+    spm_unit: dict[str, Any] = Field(default_factory=dict)
+    tax_unit: dict[str, Any] = Field(default_factory=dict)
+    household: dict[str, Any] = Field(default_factory=dict)
+    year: int | None = None
+    policy_id: UUID | None = None  # Reform policy (baseline uses no policy)
+    dynamic_id: UUID | None = None
+
+
+class HouseholdImpactResponse(BaseModel):
+    """Response from household impact comparison."""
+
+    baseline: HouseholdCalculateResponse
+    reform: HouseholdCalculateResponse
+    impact: dict[str, Any]  # Computed differences
+
+
 def _get_pe_policy(policy_id: UUID | None, model_version, session: Session):
     """Convert database Policy to policyengine Policy."""
     if policy_id is None:
@@ -201,4 +225,96 @@ def _calculate_us(
         spm_unit=result.spm_unit,
         tax_unit=result.tax_unit,
         household=result.household,
+    )
+
+
+def _compute_impact(baseline: HouseholdCalculateResponse, reform: HouseholdCalculateResponse) -> dict[str, Any]:
+    """Compute difference between baseline and reform."""
+    impact = {}
+
+    # Compute household-level differences
+    hh_impact = {}
+    for key in baseline.household:
+        if key in reform.household:
+            baseline_val = baseline.household[key]
+            reform_val = reform.household[key]
+            if isinstance(baseline_val, (int, float)) and isinstance(reform_val, (int, float)):
+                hh_impact[key] = {
+                    "baseline": baseline_val,
+                    "reform": reform_val,
+                    "change": reform_val - baseline_val,
+                }
+    impact["household"] = hh_impact
+
+    # Compute person-level differences
+    person_impact = []
+    for i, (bp, rp) in enumerate(zip(baseline.person, reform.person)):
+        person_diff = {}
+        for key in bp:
+            if key in rp:
+                baseline_val = bp[key]
+                reform_val = rp[key]
+                if isinstance(baseline_val, (int, float)) and isinstance(reform_val, (int, float)):
+                    person_diff[key] = {
+                        "baseline": baseline_val,
+                        "reform": reform_val,
+                        "change": reform_val - baseline_val,
+                    }
+        person_impact.append(person_diff)
+    impact["person"] = person_impact
+
+    return impact
+
+
+@router.post("/impact", response_model=HouseholdImpactResponse)
+def calculate_household_impact_comparison(
+    request: HouseholdImpactRequest,
+    session: Session = Depends(get_session),
+) -> HouseholdImpactResponse:
+    """Calculate the impact of a policy reform on a household.
+
+    Compares the household under baseline (current law) vs reform (policy_id).
+    Returns both calculations plus computed differences.
+    """
+    # Build baseline request (no policy)
+    baseline_request = HouseholdCalculateRequest(
+        tax_benefit_model_name=request.tax_benefit_model_name,
+        people=request.people,
+        benunit=request.benunit,
+        marital_unit=request.marital_unit,
+        family=request.family,
+        spm_unit=request.spm_unit,
+        tax_unit=request.tax_unit,
+        household=request.household,
+        year=request.year,
+        policy_id=None,
+        dynamic_id=request.dynamic_id,
+    )
+
+    # Build reform request (with policy)
+    reform_request = HouseholdCalculateRequest(
+        tax_benefit_model_name=request.tax_benefit_model_name,
+        people=request.people,
+        benunit=request.benunit,
+        marital_unit=request.marital_unit,
+        family=request.family,
+        spm_unit=request.spm_unit,
+        tax_unit=request.tax_unit,
+        household=request.household,
+        year=request.year,
+        policy_id=request.policy_id,
+        dynamic_id=request.dynamic_id,
+    )
+
+    # Calculate both
+    baseline = calculate_household(baseline_request, session)
+    reform = calculate_household(reform_request, session)
+
+    # Compute impact
+    impact = _compute_impact(baseline, reform)
+
+    return HouseholdImpactResponse(
+        baseline=baseline,
+        reform=reform,
+        impact=impact,
     )
