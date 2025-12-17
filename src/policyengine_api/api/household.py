@@ -41,7 +41,7 @@ class HouseholdCalculateResponse(BaseModel):
     household: dict[str, Any]
 
 
-def _get_pe_policy(policy_id: UUID | None, session: Session):
+def _get_pe_policy(policy_id: UUID | None, model_version, session: Session):
     """Convert database Policy to policyengine Policy."""
     if policy_id is None:
         return None
@@ -53,10 +53,18 @@ def _get_pe_policy(policy_id: UUID | None, session: Session):
     if not db_policy:
         raise HTTPException(status_code=404, detail=f"Policy {policy_id} not found")
 
+    # Build param lookup from model version
+    param_lookup = {p.name: p for p in model_version.parameters}
+
     pe_param_values = []
     for pv in db_policy.parameter_values:
+        if not pv.parameter:
+            continue
+        pe_param = param_lookup.get(pv.parameter.name)
+        if not pe_param:
+            continue
         pe_pv = PEParameterValue(
-            parameter=pv.parameter.name if pv.parameter else None,
+            parameter=pe_param,
             value=pv.value_json.get("value")
             if isinstance(pv.value_json, dict)
             else pv.value_json,
@@ -72,7 +80,7 @@ def _get_pe_policy(policy_id: UUID | None, session: Session):
     )
 
 
-def _get_pe_dynamic(dynamic_id: UUID | None, session: Session):
+def _get_pe_dynamic(dynamic_id: UUID | None, model_version, session: Session):
     """Convert database Dynamic to policyengine Dynamic."""
     if dynamic_id is None:
         return None
@@ -84,10 +92,18 @@ def _get_pe_dynamic(dynamic_id: UUID | None, session: Session):
     if not db_dynamic:
         raise HTTPException(status_code=404, detail=f"Dynamic {dynamic_id} not found")
 
+    # Build param lookup from model version
+    param_lookup = {p.name: p for p in model_version.parameters}
+
     pe_param_values = []
     for pv in db_dynamic.parameter_values:
+        if not pv.parameter:
+            continue
+        pe_param = param_lookup.get(pv.parameter.name)
+        if not pe_param:
+            continue
         pe_pv = PEParameterValue(
-            parameter=pv.parameter.name if pv.parameter else None,
+            parameter=pe_param,
             value=pv.value_json.get("value")
             if isinstance(pv.value_json, dict)
             else pv.value_json,
@@ -109,8 +125,17 @@ def calculate_household(
     session: Session = Depends(get_session),
 ) -> HouseholdCalculateResponse:
     """Calculate tax and benefit impacts for a household."""
-    policy = _get_pe_policy(request.policy_id, session)
-    dynamic = _get_pe_dynamic(request.dynamic_id, session)
+    if request.tax_benefit_model_name == "policyengine_uk":
+        from policyengine.tax_benefit_models.uk import uk_latest
+
+        pe_model_version = uk_latest
+    else:
+        from policyengine.tax_benefit_models.us import us_latest
+
+        pe_model_version = us_latest
+
+    policy = _get_pe_policy(request.policy_id, pe_model_version, session)
+    dynamic = _get_pe_dynamic(request.dynamic_id, pe_model_version, session)
 
     if request.tax_benefit_model_name == "policyengine_uk":
         return _calculate_uk(request, policy, dynamic)

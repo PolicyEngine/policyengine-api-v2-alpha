@@ -1,7 +1,17 @@
 from datetime import datetime, timezone
+from enum import Enum
 from uuid import UUID, uuid4
 
-from sqlmodel import Field, SQLModel, Text, Column
+from sqlmodel import Column, Field, SQLModel, Text
+
+
+class ReportStatus(str, Enum):
+    """Report processing status."""
+
+    PENDING = "pending"
+    RUNNING = "running"
+    COMPLETED = "completed"
+    FAILED = "failed"
 
 
 class ReportBase(SQLModel):
@@ -9,9 +19,13 @@ class ReportBase(SQLModel):
 
     label: str
     description: str | None = None
-    user_id: UUID = Field(foreign_key="users.id")
+    user_id: UUID | None = Field(default=None, foreign_key="users.id")
     markdown: str | None = Field(default=None, sa_column=Column(Text))
     parent_report_id: UUID | None = Field(default=None, foreign_key="reports.id")
+    status: ReportStatus = ReportStatus.PENDING
+    error_message: str | None = None
+    baseline_simulation_id: UUID | None = Field(default=None, foreign_key="simulations.id")
+    reform_simulation_id: UUID | None = Field(default=None, foreign_key="simulations.id")
 
 
 class Report(ReportBase, table=True):

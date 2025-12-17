@@ -144,6 +144,9 @@ def apply_rls_policies(engine):
         "datasets",
         "dataset_versions",
         "simulations",
+        "reports",
+        "decile_impacts",
+        "program_statistics",
         "policies",
         "dynamics",
         "aggregates",
@@ -153,6 +156,7 @@ def apply_rls_policies(engine):
         "variables",
         "parameters",
         "parameter_values",
+        "users",
     ]
 
     # Read-only tables (public can read, only service role can write)
@@ -171,12 +175,15 @@ def apply_rls_policies(engine):
         "simulations",
         "policies",
         "dynamics",
+        "reports",
     ]
 
     # Read-only results tables
     results_tables = [
         "aggregates",
         "change_aggregates",
+        "decile_impacts",
+        "program_statistics",
     ]
 
     sql_parts = []
