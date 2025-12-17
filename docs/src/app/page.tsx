@@ -93,7 +93,7 @@ export default function Home() {
       <div className="mt-8 p-4 bg-[var(--color-surface-sunken)] rounded-lg">
         <p className="text-sm text-[var(--color-text-muted)]">
           <strong className="text-[var(--color-text-secondary)]">Tip:</strong> Use the base URL input in the header to switch between local and production environments.
-          The default is <code className="px-1.5 py-0.5 bg-[var(--color-surface-elevated)] rounded text-xs">http://localhost:8000</code>.
+          The default is <code className="px-1.5 py-0.5 bg-[var(--color-surface-elevated)] rounded text-xs">https://v2.api.policyengine.org</code>.
         </p>
       </div>
     </div>

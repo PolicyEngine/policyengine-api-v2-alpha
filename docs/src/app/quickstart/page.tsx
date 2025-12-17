@@ -32,7 +32,7 @@ docker compose up -d`}
             Define a policy reform by specifying parameter changes:
           </p>
           <pre className="p-4 bg-[var(--color-code-bg)] text-[var(--color-code-text)] rounded-lg text-sm overflow-x-auto">
-{`curl -X POST http://localhost:8000/policies \\
+{`curl -X POST https://v2.api.policyengine.org/policies \\
   -H "Content-Type: application/json" \\
   -d '{
     "name": "Increased personal allowance",
@@ -53,7 +53,7 @@ docker compose up -d`}
             Submit an economic impact analysis request. This creates baseline and reform simulations and queues them for processing:
           </p>
           <pre className="p-4 bg-[var(--color-code-bg)] text-[var(--color-code-text)] rounded-lg text-sm overflow-x-auto">
-{`curl -X POST http://localhost:8000/analysis/economic-impact \\
+{`curl -X POST https://v2.api.policyengine.org/analysis/economic-impact \\
   -H "Content-Type: application/json" \\
   -d '{
     "tax_benefit_model_name": "policyengine_uk",
@@ -72,7 +72,7 @@ docker compose up -d`}
             Check the status until the report is complete:
           </p>
           <pre className="p-4 bg-[var(--color-code-bg)] text-[var(--color-code-text)] rounded-lg text-sm overflow-x-auto">
-{`curl http://localhost:8000/analysis/economic-impact/<report-id>`}
+{`curl https://v2.api.policyengine.org/analysis/economic-impact/<report-id>`}
           </pre>
           <p className="text-sm text-[var(--color-text-secondary)] mt-4 mb-3">
             Once complete, the response includes decile impacts and program statistics:
@@ -112,7 +112,7 @@ docker compose up -d`}
 {`import httpx
 import time
 
-BASE_URL = "http://localhost:8000"
+BASE_URL = "https://v2.api.policyengine.org"
 
 # Create economic impact analysis
 response = httpx.post(

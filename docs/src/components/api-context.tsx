@@ -8,12 +8,12 @@ interface ApiContextType {
 }
 
 const ApiContext = createContext<ApiContextType>({
-  baseUrl: "http://localhost:8000",
+  baseUrl: "https://v2.api.policyengine.org",
   setBaseUrl: () => {},
 });
 
 export function ApiProvider({ children }: { children: ReactNode }) {
-  const [baseUrl, setBaseUrl] = useState("http://localhost:8000");
+  const [baseUrl, setBaseUrl] = useState("https://v2.api.policyengine.org");
 
   return (
     <ApiContext.Provider value={{ baseUrl, setBaseUrl }}>

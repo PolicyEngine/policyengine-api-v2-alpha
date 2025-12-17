@@ -4,6 +4,12 @@ on:
   push:
     branches:
       - main
+    paths:
+      - "src/**"
+      - "terraform/**"
+      - "Dockerfile"
+      - "pyproject.toml"
+      - "uv.lock"
 
 permissions:
   id-token: write
