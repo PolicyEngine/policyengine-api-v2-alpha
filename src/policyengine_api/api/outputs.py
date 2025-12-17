@@ -14,16 +14,20 @@ from policyengine_api.services.database import get_session
 router = APIRouter(prefix="/outputs/aggregates", tags=["aggregates"])
 
 
-@router.post("/", response_model=AggregateOutputRead)
-def create_aggregate_output(
-    output: AggregateOutputCreate, session: Session = Depends(get_session)
+@router.post("/", response_model=List[AggregateOutputRead])
+def create_aggregate_outputs(
+    outputs: List[AggregateOutputCreate], session: Session = Depends(get_session)
 ):
-    """Create an aggregate (worker will compute it)."""
-    db_output = AggregateOutput.model_validate(output)
-    session.add(db_output)
+    """Create aggregates from a list of specifications (worker will compute them)."""
+    db_outputs = []
+    for output in outputs:
+        db_output = AggregateOutput.model_validate(output)
+        session.add(db_output)
+        db_outputs.append(db_output)
     session.commit()
-    session.refresh(db_output)
-    return db_output
+    for db_output in db_outputs:
+        session.refresh(db_output)
+    return db_outputs
 
 
 @router.get("/", response_model=List[AggregateOutputRead])

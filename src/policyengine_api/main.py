@@ -2,6 +2,7 @@ from contextlib import asynccontextmanager
 
 import logfire
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi_cache import FastAPICache
 from fastapi_cache.backends.inmemory import InMemoryBackend
 from rich.console import Console
@@ -42,6 +43,15 @@ app = FastAPI(
     version=settings.api_version,
     debug=settings.debug,
     lifespan=lifespan,
+)
+
+# Add CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 # Instrument FastAPI with Logfire

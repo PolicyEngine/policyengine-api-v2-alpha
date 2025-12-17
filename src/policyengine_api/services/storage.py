@@ -1,9 +1,13 @@
 """Supabase storage service for datasets."""
 
+import hashlib
 from pathlib import Path
 
 from policyengine_api.config.settings import settings
 from supabase import Client, create_client
+
+# Local cache directory for downloaded datasets
+CACHE_DIR = Path("/tmp/policyengine_dataset_cache")
 
 
 def get_supabase_client() -> Client:
@@ -68,29 +72,58 @@ def upload_dataset_for_seeding(file_path: str, object_name: str | None = None) -
     return object_name
 
 
-def download_dataset(object_name: str, local_path: str) -> str:
-    """Download dataset from Supabase storage.
+def get_cached_dataset_path(object_name: str) -> Path:
+    """Get the local cache path for a dataset.
 
     Args:
         object_name: Name in storage bucket
-        local_path: Where to save locally
+
+    Returns:
+        Path to cached file
+    """
+    CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    return CACHE_DIR / object_name
+
+
+def download_dataset(object_name: str, local_path: str | None = None) -> str:
+    """Download dataset from Supabase storage with local caching.
+
+    Args:
+        object_name: Name in storage bucket
+        local_path: Where to save locally (optional, uses cache if not provided)
 
     Returns:
         Local file path
     """
+    # Check cache first
+    cache_path = get_cached_dataset_path(object_name)
+
+    if cache_path.exists():
+        # If specific local_path requested, copy from cache
+        if local_path and local_path != str(cache_path):
+            Path(local_path).parent.mkdir(parents=True, exist_ok=True)
+            import shutil
+            shutil.copy(cache_path, local_path)
+            return local_path
+        return str(cache_path)
+
+    # Download from Supabase
     supabase = get_supabase_client()
-
-    # Ensure parent directory exists
-    Path(local_path).parent.mkdir(parents=True, exist_ok=True)
-
-    # Download file using Supabase storage client
     data = supabase.storage.from_(settings.storage_bucket).download(object_name)
 
-    # Save locally
-    with open(local_path, "wb") as f:
+    # Save to cache
+    cache_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(cache_path, "wb") as f:
         f.write(data)
 
-    return local_path
+    # If specific local_path requested, copy from cache
+    if local_path and local_path != str(cache_path):
+        Path(local_path).parent.mkdir(parents=True, exist_ok=True)
+        import shutil
+        shutil.copy(cache_path, local_path)
+        return local_path
+
+    return str(cache_path)
 
 
 def get_dataset_url(object_name: str) -> str:

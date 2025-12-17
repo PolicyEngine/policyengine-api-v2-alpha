@@ -5,11 +5,12 @@ services:
     ports:
       - "${API_PORT:-8000}:${API_PORT:-8000}"
     environment:
-      SUPABASE_URL: ${SUPABASE_URL}
+      SUPABASE_URL: http://supabase_kong_policyengine-api-v2:8000
       SUPABASE_KEY: ${SUPABASE_KEY}
+      SUPABASE_SERVICE_KEY: ${SUPABASE_SERVICE_KEY}
       SUPABASE_DB_URL: postgresql://postgres:postgres@supabase_db_policyengine-api-v2:5432/postgres
       LOGFIRE_TOKEN: ${LOGFIRE_TOKEN}
-      DEBUG: "true"
+      DEBUG: "false"
       API_PORT: ${API_PORT:-8000}
     volumes:
       - ./src:/app/src
@@ -26,13 +27,15 @@ services:
     build: .
     command: python -m policyengine_api.tasks.worker
     environment:
-      SUPABASE_URL: ${SUPABASE_URL}
+      SUPABASE_URL: http://supabase_kong_policyengine-api-v2:8000
       SUPABASE_KEY: ${SUPABASE_KEY}
+      SUPABASE_SERVICE_KEY: ${SUPABASE_SERVICE_KEY}
       SUPABASE_DB_URL: postgresql://postgres:postgres@supabase_db_policyengine-api-v2:5432/postgres
       LOGFIRE_TOKEN: ${LOGFIRE_TOKEN}
-      WORKER_POLL_INTERVAL: ${WORKER_POLL_INTERVAL:-60}
+      WORKER_POLL_INTERVAL: ${WORKER_POLL_INTERVAL:-5}
     volumes:
       - ./src:/app/src
+      - dataset_cache:/tmp/policyengine_dataset_cache
     networks:
       - supabase_network_policyengine-api-v2
 
@@ -40,8 +43,9 @@ services:
     build: .
     command: pytest tests/ -v
     environment:
-      SUPABASE_URL: ${SUPABASE_URL}
+      SUPABASE_URL: http://supabase_kong_policyengine-api-v2:8000
       SUPABASE_KEY: ${SUPABASE_KEY}
+      SUPABASE_SERVICE_KEY: ${SUPABASE_SERVICE_KEY}
       SUPABASE_DB_URL: postgresql://postgres:postgres@supabase_db_policyengine-api-v2:5432/postgres
       LOGFIRE_TOKEN: ${LOGFIRE_TOKEN}
     volumes:
@@ -60,3 +64,6 @@ services:
 networks:
   supabase_network_policyengine-api-v2:
     external: true
+
+volumes:
+  dataset_cache:
