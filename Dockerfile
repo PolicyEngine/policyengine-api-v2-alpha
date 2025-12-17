@@ -10,4 +10,4 @@ COPY src/ ./src/
 RUN uv pip install --system -e .
 
 # Run migrations and start server
-CMD uvicorn policyengine_api.main:app --host 0.0.0.0 --port ${API_PORT:-80} --proxy-headers
+CMD uvicorn policyengine_api.main:app --host 0.0.0.0 --port ${API_PORT:-80} --proxy-headers --forwarded-allow-ips='*'
