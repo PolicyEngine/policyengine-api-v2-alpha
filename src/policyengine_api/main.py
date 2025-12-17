@@ -5,6 +5,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi_cache import FastAPICache
 from fastapi_cache.backends.inmemory import InMemoryBackend
+from fastapi_mcp import FastApiMCP
 from rich.console import Console
 
 from policyengine_api.api import api_router
@@ -59,6 +60,10 @@ app.add_middleware(
 logfire.instrument_fastapi(app)
 
 app.include_router(api_router)
+
+# Mount MCP server - exposes all API endpoints as MCP tools at /mcp
+mcp = FastApiMCP(app)
+mcp.mount()
 
 
 @app.get("/health")

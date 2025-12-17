@@ -10,6 +10,7 @@ const navigation = [
       { name: "Introduction", href: "/" },
       { name: "Architecture", href: "/architecture" },
       { name: "Quick start", href: "/quickstart" },
+      { name: "MCP integration", href: "/mcp" },
     ],
   },
   {
