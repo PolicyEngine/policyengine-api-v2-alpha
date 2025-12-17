@@ -14,6 +14,7 @@ class Settings(BaseSettings):
 
     # Worker
     worker_poll_interval: int = 60  # seconds
+    worker_port: int = 8080
 
     # Storage
     storage_bucket: str = "datasets"

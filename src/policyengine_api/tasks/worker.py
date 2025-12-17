@@ -1,9 +1,12 @@
 """Simple polling worker that processes pending simulations and reports."""
 
+import threading
 import time
+from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from uuid import UUID
 
+from fastapi import FastAPI
 from rich.console import Console
 from sqlmodel import Session, create_engine, select
 
@@ -24,6 +27,7 @@ from policyengine_api.models import (
 from policyengine_api.services.storage import download_dataset
 
 console = Console()
+worker_thread: threading.Thread | None = None
 
 
 def get_db_session():
@@ -458,9 +462,9 @@ def process_pending_work():
         session.close()
 
 
-def main():
-    """Main worker loop."""
-    console.print("[bold]PolicyEngine Worker starting...[/bold]")
+def worker_loop():
+    """Background worker loop."""
+    console.print("[bold]PolicyEngine Worker loop starting...[/bold]")
     console.print(f"Poll interval: {settings.worker_poll_interval}s")
 
     while True:
@@ -470,6 +474,40 @@ def main():
             console.print(f"[red]Error in worker loop: {e}[/red]")
 
         time.sleep(settings.worker_poll_interval)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Start worker thread on startup."""
+    global worker_thread
+    console.print("[bold green]Starting worker thread...[/bold green]")
+    worker_thread = threading.Thread(target=worker_loop, daemon=True)
+    worker_thread.start()
+    yield
+    console.print("[bold yellow]Worker shutting down...[/bold yellow]")
+
+
+app = FastAPI(title="PolicyEngine Worker", lifespan=lifespan)
+
+
+@app.get("/health")
+def health_check():
+    """Health check endpoint."""
+    return {
+        "status": "healthy",
+        "worker_alive": worker_thread is not None and worker_thread.is_alive(),
+    }
+
+
+def main():
+    """Run worker as HTTP service."""
+    import uvicorn
+
+    uvicorn.run(
+        app,
+        host="0.0.0.0",
+        port=int(settings.worker_port),
+    )
 
 
 if __name__ == "__main__":
