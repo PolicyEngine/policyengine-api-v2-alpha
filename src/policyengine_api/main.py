@@ -43,7 +43,7 @@ app = FastAPI(
     version=settings.api_version,
     debug=settings.debug,
     lifespan=lifespan,
-    redirect_slashes=False,
+    redirect_slashes=True,
 )
 
 # Add CORS middleware
