@@ -1,8 +1,10 @@
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 import logfire
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from fastapi_cache import FastAPICache
 from fastapi_cache.backends.inmemory import InMemoryBackend
 from fastapi_mcp import FastApiMCP
@@ -45,6 +47,7 @@ app = FastAPI(
     debug=settings.debug,
     lifespan=lifespan,
     redirect_slashes=True,
+    docs_url=None,  # Disable default Swagger UI - we serve custom docs
 )
 
 # Add CORS middleware
@@ -65,6 +68,11 @@ app.include_router(api_router)
 # Using mount_http() for streamable HTTP transport (required by Claude Code)
 mcp = FastApiMCP(app)
 mcp.mount_http()
+
+# Mount static docs site at /docs (built from Next.js in docs/out)
+docs_path = Path(__file__).parent.parent.parent / "docs" / "out"
+if docs_path.exists():
+    app.mount("/docs", StaticFiles(directory=docs_path, html=True), name="docs")
 
 
 @app.get("/health")
