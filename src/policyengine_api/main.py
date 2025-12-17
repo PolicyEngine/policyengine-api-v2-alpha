@@ -62,8 +62,9 @@ logfire.instrument_fastapi(app)
 app.include_router(api_router)
 
 # Mount MCP server - exposes all API endpoints as MCP tools at /mcp
+# Using mount_http() for streamable HTTP transport (required by Claude Code)
 mcp = FastApiMCP(app)
-mcp.mount()
+mcp.mount_http()
 
 
 @app.get("/health")
