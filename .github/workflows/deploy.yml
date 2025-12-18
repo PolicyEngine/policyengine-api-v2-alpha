@@ -93,9 +93,9 @@ jobs:
             --region=${{ vars.GCP_REGION }} \
             --image=$IMAGE_URL:${{ github.sha }}
 
-      - name: Update worker job
+      - name: Deploy worker to Cloud Run
         run: |
-          gcloud run jobs update ${{ vars.WORKER_SERVICE_NAME }} \
+          gcloud run services update ${{ vars.WORKER_SERVICE_NAME }} \
             --region=${{ vars.GCP_REGION }} \
             --image=$IMAGE_URL:${{ github.sha }}
 
