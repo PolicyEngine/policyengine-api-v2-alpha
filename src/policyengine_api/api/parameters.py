@@ -21,15 +21,31 @@ router = APIRouter(prefix="/parameters", tags=["parameters"])
 @router.get("/", response_model=List[ParameterRead])
 @cache(expire=3600)  # Cache for 1 hour
 def list_parameters(
-    skip: int = 0, limit: int = 100, session: Session = Depends(get_session)
+    skip: int = 0,
+    limit: int = 100,
+    search: str | None = None,
+    session: Session = Depends(get_session),
 ):
-    """List available parameters with pagination.
+    """List available parameters with pagination and search.
 
     Parameters are policy levers (e.g. tax rates, thresholds, benefit amounts)
     that can be modified in reforms. Use parameter names when creating policies.
+
+    Use the `search` parameter to filter by parameter name, label, or description.
+    For example: search="basic_rate" or search="income tax"
     """
+    query = select(Parameter)
+
+    if search:
+        search_filter = (
+            Parameter.name.contains(search)
+            | Parameter.label.contains(search)
+            | Parameter.description.contains(search)
+        )
+        query = query.where(search_filter)
+
     parameters = session.exec(
-        select(Parameter).order_by(Parameter.name).offset(skip).limit(limit)
+        query.order_by(Parameter.name).offset(skip).limit(limit)
     ).all()
     return parameters
 

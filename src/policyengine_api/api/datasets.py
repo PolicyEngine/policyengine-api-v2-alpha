@@ -23,6 +23,10 @@ def list_datasets(session: Session = Depends(get_session)):
 
     Returns datasets that can be used with the /analysis/economic-impact endpoint.
     Each dataset represents population microdata for a specific country and year.
+
+    USAGE: For UK analysis, look for datasets with names containing "uk" or "frs".
+    For US analysis, look for datasets with names containing "us" or "cps".
+    Use the dataset's id when calling /analysis/economic-impact.
     """
     datasets = session.exec(select(Dataset)).all()
     return datasets
