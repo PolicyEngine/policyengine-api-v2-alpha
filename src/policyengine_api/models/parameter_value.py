@@ -1,5 +1,5 @@
 from datetime import datetime, timezone
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 from uuid import UUID, uuid4
 
 from sqlmodel import JSON, Column, Field, Relationship, SQLModel
@@ -14,7 +14,7 @@ class ParameterValueBase(SQLModel):
     """Base parameter value fields."""
 
     parameter_id: UUID = Field(foreign_key="parameters.id")
-    value_json: str = Field(sa_column=Column(JSON))  # Polymorphic value storage
+    value_json: Any = Field(sa_column=Column(JSON))  # Polymorphic value storage
     start_date: datetime
     end_date: datetime | None = None
 
