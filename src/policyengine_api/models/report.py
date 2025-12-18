@@ -24,8 +24,12 @@ class ReportBase(SQLModel):
     parent_report_id: UUID | None = Field(default=None, foreign_key="reports.id")
     status: ReportStatus = ReportStatus.PENDING
     error_message: str | None = None
-    baseline_simulation_id: UUID | None = Field(default=None, foreign_key="simulations.id")
-    reform_simulation_id: UUID | None = Field(default=None, foreign_key="simulations.id")
+    baseline_simulation_id: UUID | None = Field(
+        default=None, foreign_key="simulations.id"
+    )
+    reform_simulation_id: UUID | None = Field(
+        default=None, foreign_key="simulations.id"
+    )
 
 
 class Report(ReportBase, table=True):

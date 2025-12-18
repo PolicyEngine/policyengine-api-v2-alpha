@@ -25,6 +25,7 @@ def _safe_float(value: float | None) -> float | None:
         return None
     return value
 
+
 from policyengine_api.models import (
     Dataset,
     DecileImpact,
@@ -65,7 +66,8 @@ class EconomicImpactRequest(BaseModel):
         description="Dataset ID from /datasets endpoint containing population microdata"
     )
     policy_id: UUID | None = Field(
-        default=None, description="Reform policy ID to compare against baseline (current law)"
+        default=None,
+        description="Reform policy ID to compare against baseline (current law)",
     )
     dynamic_id: UUID | None = Field(
         default=None, description="Optional behavioural response specification ID"

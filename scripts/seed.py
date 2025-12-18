@@ -563,9 +563,7 @@ def seed_example_policies(session):
                 )
                 session.add(us_param_value)
                 session.commit()
-                console.print(
-                    f"  [green]✓[/green] Created US policy: {us_policy_name}"
-                )
+                console.print(f"  [green]✓[/green] Created US policy: {us_policy_name}")
             else:
                 console.print(
                     "  [yellow]Warning: US first bracket parameter not found[/yellow]"

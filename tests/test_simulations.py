@@ -2,8 +2,6 @@
 
 from uuid import uuid4
 
-import pytest
-
 
 def test_list_simulations(client):
     """List simulations returns a list."""

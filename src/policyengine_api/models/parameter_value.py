@@ -10,7 +10,7 @@ if TYPE_CHECKING:
     from .policy import Policy
 
 
-class ParameterValueBase(SQLModel): 
+class ParameterValueBase(SQLModel):
     """Base parameter value fields."""
 
     parameter_id: UUID = Field(foreign_key="parameters.id")

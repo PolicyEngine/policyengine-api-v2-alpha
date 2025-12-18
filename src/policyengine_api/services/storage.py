@@ -1,6 +1,5 @@
 """Supabase storage service for datasets."""
 
-import hashlib
 from pathlib import Path
 
 from policyengine_api.config.settings import settings
@@ -103,6 +102,7 @@ def download_dataset(object_name: str, local_path: str | None = None) -> str:
         if local_path and local_path != str(cache_path):
             Path(local_path).parent.mkdir(parents=True, exist_ok=True)
             import shutil
+
             shutil.copy(cache_path, local_path)
             return local_path
         return str(cache_path)
@@ -120,6 +120,7 @@ def download_dataset(object_name: str, local_path: str | None = None) -> str:
     if local_path and local_path != str(cache_path):
         Path(local_path).parent.mkdir(parents=True, exist_ok=True)
         import shutil
+
         shutil.copy(cache_path, local_path)
         return local_path
 
