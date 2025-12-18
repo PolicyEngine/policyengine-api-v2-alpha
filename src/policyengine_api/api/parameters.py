@@ -9,7 +9,6 @@ from typing import List
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
-from fastapi_cache.decorator import cache
 from sqlmodel import Session, select
 
 from policyengine_api.models import Parameter, ParameterRead
@@ -19,7 +18,6 @@ router = APIRouter(prefix="/parameters", tags=["parameters"])
 
 
 @router.get("/", response_model=List[ParameterRead])
-@cache(expire=3600)  # Cache for 1 hour
 def list_parameters(
     skip: int = 0,
     limit: int = 100,

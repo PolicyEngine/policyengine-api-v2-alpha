@@ -205,12 +205,9 @@ def seed_model(model_version, session) -> TaxBenefitModelVersion:
                 f"  [green]✓[/green] Added {len(model_version.variables)} variables"
             )
 
-        # Add parameters (only user-facing ones: those with labels or gov.* params)
-        parameters_to_add = [p for p in model_version.parameters if p.label is not None]
-        console.print(
-            f"  Filtered to {len(parameters_to_add)} user-facing parameters "
-            f"(from {len(model_version.parameters)} total)"
-        )
+        # Add all parameters - users need to search by name to find policy levers
+        parameters_to_add = model_version.parameters
+        console.print(f"  Adding all {len(parameters_to_add)} parameters")
 
         with logfire.span("add_parameters", count=len(parameters_to_add)):
             # Build list of parameter dicts for bulk insert
