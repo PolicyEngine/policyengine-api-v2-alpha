@@ -29,9 +29,29 @@ class Policy(PolicyBase, table=True):
 
 
 class PolicyCreate(PolicyBase):
-    """Schema for creating policies."""
+    """Schema for creating policies.
 
-    pass
+    When creating a policy with parameter values, provide a list of
+    parameter value definitions. Each parameter value needs:
+    - parameter_id: UUID of the parameter to modify
+    - value_json: The new value (number, string, or nested object)
+    - start_date: When this value takes effect
+    - end_date: Optional end date (null for indefinite)
+
+    Example:
+    {
+        "name": "Lower basic rate to 16p",
+        "description": "Reduce UK basic income tax rate",
+        "parameter_values": [{
+            "parameter_id": "uuid-here",
+            "value_json": 0.16,
+            "start_date": "2026-01-01T00:00:00Z",
+            "end_date": null
+        }]
+    }
+    """
+
+    parameter_values: list[dict] = []
 
 
 class PolicyRead(PolicyBase):

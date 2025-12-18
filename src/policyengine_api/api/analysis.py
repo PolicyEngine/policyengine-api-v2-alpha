@@ -6,6 +6,13 @@ across a population dataset, computing distributional impacts and program statis
 
 This is an async operation - the endpoint returns immediately with a report_id,
 and you poll /analysis/economic-impact/{report_id} until status is "completed".
+
+WORKFLOW for full economic analysis:
+1. Create a policy with parameter changes: POST /policies
+2. Get a dataset: GET /datasets (look for UK/US datasets)
+3. Start analysis: POST /analysis/economic-impact with policy_id and dataset_id
+4. Check status: GET /analysis/economic-impact/{report_id} - repeat until status="completed"
+5. Review results: The completed response includes decile_impacts and program_statistics
 """
 
 import math
