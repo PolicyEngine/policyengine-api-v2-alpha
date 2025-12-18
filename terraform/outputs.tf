@@ -8,9 +8,9 @@ output "api_url" {
   value       = google_cloud_run_v2_service.api.uri
 }
 
-output "worker_job_name" {
-  description = "Worker job name"
-  value       = google_cloud_run_v2_job.worker.name
+output "worker_service_name" {
+  description = "Worker service name"
+  value       = google_cloud_run_v2_service.worker.name
 }
 
 output "api_service_name" {
