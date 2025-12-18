@@ -1,3 +1,10 @@
+"""Variable metadata endpoints.
+
+Variables are the inputs and outputs of tax-benefit calculations. Use these
+endpoints to discover what variables exist (e.g. employment_income, income_tax)
+and their metadata. Variable names can be used in household calculation requests.
+"""
+
 from typing import List
 from uuid import UUID
 
@@ -16,7 +23,12 @@ router = APIRouter(prefix="/variables", tags=["variables"])
 def list_variables(
     skip: int = 0, limit: int = 100, session: Session = Depends(get_session)
 ):
-    """List all variables with pagination, sorted by name."""
+    """List available variables with pagination.
+
+    Variables are inputs (e.g. employment_income, age) and outputs (e.g. income_tax,
+    household_net_income) of tax-benefit calculations. Use variable names in
+    household calculation requests.
+    """
     variables = session.exec(
         select(Variable).order_by(Variable.name).offset(skip).limit(limit)
     ).all()

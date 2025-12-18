@@ -1,3 +1,10 @@
+"""Aggregate output endpoints.
+
+Aggregates are computed statistics from simulations (e.g. total tax revenue,
+benefit spending, poverty rates). These are typically created automatically
+by the worker when processing economic impact analyses.
+"""
+
 from typing import List
 from uuid import UUID
 
@@ -18,7 +25,10 @@ router = APIRouter(prefix="/outputs/aggregates", tags=["aggregates"])
 def create_aggregate_outputs(
     outputs: List[AggregateOutputCreate], session: Session = Depends(get_session)
 ):
-    """Create aggregates from a list of specifications (worker will compute them)."""
+    """Create aggregate output specifications for the worker to compute.
+
+    Aggregates are statistics like sums, means, or counts of simulation variables.
+    """
     db_outputs = []
     for output in outputs:
         db_output = AggregateOutput.model_validate(output)

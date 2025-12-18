@@ -1,3 +1,10 @@
+"""Tax-benefit model version endpoints.
+
+Each tax-benefit model has versions representing specific releases.
+Versions define which variables and parameters are available.
+The latest version is used automatically in calculations.
+"""
+
 from typing import List
 from uuid import UUID
 
@@ -14,7 +21,11 @@ router = APIRouter(
 
 @router.get("/", response_model=List[TaxBenefitModelVersionRead])
 def list_tax_benefit_model_versions(session: Session = Depends(get_session)):
-    """List all tax-benefit model versions."""
+    """List all model versions.
+
+    Versions represent releases of tax-benefit models with specific
+    variable and parameter definitions.
+    """
     versions = session.exec(select(TaxBenefitModelVersion)).all()
     return versions
 

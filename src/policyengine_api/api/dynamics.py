@@ -1,3 +1,9 @@
+"""Behavioural dynamics endpoints.
+
+Dynamics represent behavioural response assumptions (e.g. labour supply elasticities)
+that modify how the model accounts for behavioural changes in response to policy reforms.
+"""
+
 from typing import List
 from uuid import UUID
 
@@ -12,7 +18,11 @@ router = APIRouter(prefix="/dynamics", tags=["dynamics"])
 
 @router.post("/", response_model=DynamicRead)
 def create_dynamic(dynamic: DynamicCreate, session: Session = Depends(get_session)):
-    """Create a new dynamic."""
+    """Create a new behavioural dynamics specification.
+
+    Dynamics define behavioural response parameters. Use with household or
+    economic impact endpoints via the dynamic_id parameter.
+    """
     db_dynamic = Dynamic.model_validate(dynamic)
     session.add(db_dynamic)
     session.commit()

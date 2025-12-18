@@ -1,3 +1,10 @@
+"""Policy reform endpoints.
+
+Policies represent tax-benefit parameter reforms that can be compared against
+baseline (current law). Create a policy, then use its ID with the household
+calculation or economic impact endpoints to see the reform's effects.
+"""
+
 from typing import List
 from uuid import UUID
 
@@ -12,7 +19,11 @@ router = APIRouter(prefix="/policies", tags=["policies"])
 
 @router.post("/", response_model=PolicyRead)
 def create_policy(policy: PolicyCreate, session: Session = Depends(get_session)):
-    """Create a new policy."""
+    """Create a new policy reform.
+
+    Policies define changes to tax-benefit parameters. After creating a policy,
+    use its ID with /household/calculate or /analysis/economic-impact to see effects.
+    """
     db_policy = Policy.model_validate(policy)
     session.add(db_policy)
     session.commit()

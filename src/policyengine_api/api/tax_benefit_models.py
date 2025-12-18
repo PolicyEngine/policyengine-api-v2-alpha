@@ -1,3 +1,10 @@
+"""Tax-benefit model metadata endpoints.
+
+Tax-benefit models represent country-specific microsimulation systems
+(e.g. policyengine-uk, policyengine-us). Each model has versions that
+define the available variables and parameters.
+"""
+
 from typing import List
 from uuid import UUID
 
@@ -12,7 +19,11 @@ router = APIRouter(prefix="/tax-benefit-models", tags=["tax-benefit-models"])
 
 @router.get("/", response_model=List[TaxBenefitModelRead])
 def list_tax_benefit_models(session: Session = Depends(get_session)):
-    """List all tax-benefit models."""
+    """List available tax-benefit models.
+
+    Models are country-specific (e.g. policyengine-uk, policyengine-us).
+    Use the model name with household calculation and economic impact endpoints.
+    """
     models = session.exec(select(TaxBenefitModel)).all()
     return models
 

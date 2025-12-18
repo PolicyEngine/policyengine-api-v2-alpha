@@ -1,3 +1,10 @@
+"""Parameter metadata endpoints.
+
+Parameters are the policy levers that can be modified in reforms (e.g. tax rates,
+benefit amounts, thresholds). Use these endpoints to discover available parameters.
+Parameter names are used when creating policy reforms.
+"""
+
 from typing import List
 from uuid import UUID
 
@@ -16,7 +23,11 @@ router = APIRouter(prefix="/parameters", tags=["parameters"])
 def list_parameters(
     skip: int = 0, limit: int = 100, session: Session = Depends(get_session)
 ):
-    """List all parameters with pagination, sorted by name."""
+    """List available parameters with pagination.
+
+    Parameters are policy levers (e.g. tax rates, thresholds, benefit amounts)
+    that can be modified in reforms. Use parameter names when creating policies.
+    """
     parameters = session.exec(
         select(Parameter).order_by(Parameter.name).offset(skip).limit(limit)
     ).all()

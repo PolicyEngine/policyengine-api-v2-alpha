@@ -1,3 +1,10 @@
+"""Simulation status endpoints.
+
+Simulations are economy-wide tax-benefit calculations running on population datasets.
+They are created automatically when you call /analysis/economic-impact. Use these
+endpoints to check simulation status (pending, running, completed, failed).
+"""
+
 from typing import List
 from uuid import UUID
 
@@ -12,7 +19,11 @@ router = APIRouter(prefix="/simulations", tags=["simulations"])
 
 @router.get("/", response_model=List[SimulationRead])
 def list_simulations(session: Session = Depends(get_session)):
-    """List all simulations."""
+    """List all simulations.
+
+    Simulations are created automatically via /analysis/economic-impact.
+    Check status to see if computation is pending, running, completed, or failed.
+    """
     simulations = session.exec(select(Simulation)).all()
     return simulations
 

@@ -1,11 +1,19 @@
-"""Economic impact analysis endpoints."""
+"""Economic impact analysis endpoints.
+
+Use these endpoints to analyse the economy-wide effects of policy reforms.
+The /analysis/economic-impact endpoint compares baseline vs reform scenarios
+across a population dataset, computing distributional impacts and program statistics.
+
+This is an async operation - the endpoint returns immediately with a report_id,
+and you poll /analysis/economic-impact/{report_id} until status is "completed".
+"""
 
 import math
 from typing import Literal
 from uuid import UUID, uuid5
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlmodel import Session, select
 
 
@@ -40,12 +48,28 @@ router = APIRouter(prefix="/analysis", tags=["analysis"])
 
 
 class EconomicImpactRequest(BaseModel):
-    """Request body for economic impact analysis."""
+    """Request body for economic impact analysis.
 
-    tax_benefit_model_name: Literal["policyengine_uk", "policyengine_us"]
-    dataset_id: UUID
-    policy_id: UUID | None = None  # Reform policy (baseline uses no policy)
-    dynamic_id: UUID | None = None
+    Example:
+    {
+        "tax_benefit_model_name": "policyengine_uk",
+        "dataset_id": "uuid-from-datasets-endpoint",
+        "policy_id": "uuid-of-reform-policy"
+    }
+    """
+
+    tax_benefit_model_name: Literal["policyengine_uk", "policyengine_us"] = Field(
+        description="Which country model to use"
+    )
+    dataset_id: UUID = Field(
+        description="Dataset ID from /datasets endpoint containing population microdata"
+    )
+    policy_id: UUID | None = Field(
+        default=None, description="Reform policy ID to compare against baseline (current law)"
+    )
+    dynamic_id: UUID | None = Field(
+        default=None, description="Optional behavioural response specification ID"
+    )
 
 
 class SimulationInfo(BaseModel):
@@ -257,10 +281,14 @@ def economic_impact(
     request: EconomicImpactRequest,
     session: Session = Depends(get_session),
 ) -> EconomicImpactResponse:
-    """Create or get economic impact analysis.
+    """Run economy-wide impact analysis comparing baseline vs reform.
 
-    Creates simulations and a report for the worker to process.
-    Returns current status and results if completed.
+    This is an async operation. The endpoint returns immediately with a report_id
+    and status="pending". Poll GET /analysis/economic-impact/{report_id} until
+    status="completed" to get results.
+
+    Results include decile impacts (income changes by income group) and
+    program statistics (budgetary effects of tax/benefit programs).
     """
     # Validate dataset exists
     dataset = session.get(Dataset, request.dataset_id)

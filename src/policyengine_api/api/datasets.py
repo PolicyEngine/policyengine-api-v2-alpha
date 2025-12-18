@@ -1,3 +1,10 @@
+"""Dataset endpoints for accessing microdata used in simulations.
+
+Datasets contain population microdata (e.g. survey data) used to run
+economy-wide tax-benefit simulations. Use these endpoints to discover
+available datasets and get their IDs for use with the economic-impact endpoint.
+"""
+
 from typing import List
 from uuid import UUID
 
@@ -12,7 +19,11 @@ router = APIRouter(prefix="/datasets", tags=["datasets"])
 
 @router.get("/", response_model=List[DatasetRead])
 def list_datasets(session: Session = Depends(get_session)):
-    """List all datasets."""
+    """List all available datasets.
+
+    Returns datasets that can be used with the /analysis/economic-impact endpoint.
+    Each dataset represents population microdata for a specific country and year.
+    """
     datasets = session.exec(select(Dataset)).all()
     return datasets
 

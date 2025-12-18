@@ -1,3 +1,10 @@
+"""Parameter value endpoints.
+
+Parameter values represent the actual values of policy parameters at specific
+time periods. These store both baseline (current law) values and reform values
+when a policy modifies a parameter.
+"""
+
 from typing import List
 from uuid import UUID
 
@@ -12,7 +19,11 @@ router = APIRouter(prefix="/parameter-values", tags=["parameter-values"])
 
 @router.get("/", response_model=List[ParameterValueRead])
 def list_parameter_values(session: Session = Depends(get_session)):
-    """List all parameter values."""
+    """List all parameter values.
+
+    Parameter values store the numeric/string values for policy parameters
+    at specific time periods (start_date to end_date).
+    """
     parameter_values = session.exec(select(ParameterValue)).all()
     return parameter_values
 

@@ -1,3 +1,10 @@
+"""Change aggregate endpoints.
+
+Change aggregates compare statistics between baseline and reform simulations
+(e.g. change in tax revenue, change in poverty rate). These are typically
+created automatically when processing economic impact analyses.
+"""
+
 from typing import List
 from uuid import UUID
 
@@ -18,7 +25,10 @@ router = APIRouter(prefix="/outputs/change-aggregates", tags=["change-aggregates
 def create_change_aggregates(
     outputs: List[ChangeAggregateCreate], session: Session = Depends(get_session)
 ):
-    """Create change aggregates from a list of specifications."""
+    """Create change aggregate specifications comparing baseline vs reform.
+
+    Change aggregates compute the difference in statistics between two simulations.
+    """
     db_outputs = []
     for output in outputs:
         db_output = ChangeAggregate.model_validate(output)
