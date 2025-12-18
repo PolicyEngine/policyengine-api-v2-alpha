@@ -14,19 +14,68 @@ router = APIRouter(prefix="/household", tags=["household"])
 
 
 class HouseholdCalculateRequest(BaseModel):
-    """Request body for household calculation."""
+    """Request body for household calculation.
 
-    tax_benefit_model_name: Literal["policyengine_uk", "policyengine_us"]
-    people: list[dict[str, Any]]
-    benunit: dict[str, Any] = Field(default_factory=dict)
-    marital_unit: dict[str, Any] = Field(default_factory=dict)
-    family: dict[str, Any] = Field(default_factory=dict)
-    spm_unit: dict[str, Any] = Field(default_factory=dict)
-    tax_unit: dict[str, Any] = Field(default_factory=dict)
-    household: dict[str, Any] = Field(default_factory=dict)
-    year: int | None = None
-    policy_id: UUID | None = None
-    dynamic_id: UUID | None = None
+    IMPORTANT: Use flat values for variables, NOT time-period dictionaries.
+    The year is specified separately via the `year` parameter.
+
+    CORRECT: {"employment_income": 70000, "age": 40}
+    WRONG: {"employment_income": {"2024": 70000}, "age": {"2024": 40}}
+
+    Example US request:
+    {
+        "tax_benefit_model_name": "policyengine_us",
+        "people": [{"employment_income": 70000, "age": 40}],
+        "tax_unit": {"state_code": "CA"},
+        "household": {"state_fips": 6},
+        "year": 2024
+    }
+
+    Example UK request:
+    {
+        "tax_benefit_model_name": "policyengine_uk",
+        "people": [{"employment_income": 50000, "age": 30}],
+        "household": {},
+        "year": 2026
+    }
+    """
+
+    tax_benefit_model_name: Literal["policyengine_uk", "policyengine_us"] = Field(
+        description="Which country model to use"
+    )
+    people: list[dict[str, Any]] = Field(
+        description="List of people with flat variable values (e.g. [{'age': 30, 'employment_income': 50000}]). Do NOT use time-period format."
+    )
+    benunit: dict[str, Any] = Field(
+        default_factory=dict, description="UK benefit unit variables (flat values)"
+    )
+    marital_unit: dict[str, Any] = Field(
+        default_factory=dict, description="US marital unit variables (flat values)"
+    )
+    family: dict[str, Any] = Field(
+        default_factory=dict, description="US family variables (flat values)"
+    )
+    spm_unit: dict[str, Any] = Field(
+        default_factory=dict, description="US SPM unit variables (flat values)"
+    )
+    tax_unit: dict[str, Any] = Field(
+        default_factory=dict,
+        description="US tax unit variables (flat values, e.g. {'state_code': 'CA'})",
+    )
+    household: dict[str, Any] = Field(
+        default_factory=dict,
+        description="Household variables (flat values, e.g. {'state_fips': 6} for US)",
+    )
+    year: int | None = Field(
+        default=None,
+        description="Simulation year (default: 2024 for US, 2026 for UK). Specify this instead of embedding years in variable values.",
+    )
+    policy_id: UUID | None = Field(
+        default=None, description="Optional policy reform ID"
+    )
+    dynamic_id: UUID | None = Field(
+        default=None, description="Optional behavioural response ID"
+    )
 
 
 class HouseholdCalculateResponse(BaseModel):
@@ -42,19 +91,54 @@ class HouseholdCalculateResponse(BaseModel):
 
 
 class HouseholdImpactRequest(BaseModel):
-    """Request body for household impact comparison."""
+    """Request body for household impact comparison.
 
-    tax_benefit_model_name: Literal["policyengine_uk", "policyengine_us"]
-    people: list[dict[str, Any]]
-    benunit: dict[str, Any] = Field(default_factory=dict)
-    marital_unit: dict[str, Any] = Field(default_factory=dict)
-    family: dict[str, Any] = Field(default_factory=dict)
-    spm_unit: dict[str, Any] = Field(default_factory=dict)
-    tax_unit: dict[str, Any] = Field(default_factory=dict)
-    household: dict[str, Any] = Field(default_factory=dict)
-    year: int | None = None
-    policy_id: UUID | None = None  # Reform policy (baseline uses no policy)
-    dynamic_id: UUID | None = None
+    Same format as HouseholdCalculateRequest - use flat values, NOT time-period dictionaries.
+
+    Example:
+    {
+        "tax_benefit_model_name": "policyengine_us",
+        "people": [{"employment_income": 70000, "age": 40}],
+        "tax_unit": {"state_code": "CA"},
+        "household": {"state_fips": 6},
+        "year": 2024,
+        "policy_id": "uuid-of-reform-policy"
+    }
+    """
+
+    tax_benefit_model_name: Literal["policyengine_uk", "policyengine_us"] = Field(
+        description="Which country model to use"
+    )
+    people: list[dict[str, Any]] = Field(
+        description="List of people with flat variable values. Do NOT use time-period format."
+    )
+    benunit: dict[str, Any] = Field(
+        default_factory=dict, description="UK benefit unit variables (flat values)"
+    )
+    marital_unit: dict[str, Any] = Field(
+        default_factory=dict, description="US marital unit variables (flat values)"
+    )
+    family: dict[str, Any] = Field(
+        default_factory=dict, description="US family variables (flat values)"
+    )
+    spm_unit: dict[str, Any] = Field(
+        default_factory=dict, description="US SPM unit variables (flat values)"
+    )
+    tax_unit: dict[str, Any] = Field(
+        default_factory=dict, description="US tax unit variables (flat values)"
+    )
+    household: dict[str, Any] = Field(
+        default_factory=dict, description="Household variables (flat values)"
+    )
+    year: int | None = Field(
+        default=None, description="Simulation year (default: 2024 for US, 2026 for UK)"
+    )
+    policy_id: UUID | None = Field(
+        default=None, description="Reform policy ID to compare against baseline"
+    )
+    dynamic_id: UUID | None = Field(
+        default=None, description="Optional behavioural response ID"
+    )
 
 
 class HouseholdImpactResponse(BaseModel):
@@ -148,7 +232,14 @@ def calculate_household(
     request: HouseholdCalculateRequest,
     session: Session = Depends(get_session),
 ) -> HouseholdCalculateResponse:
-    """Calculate tax and benefit impacts for a household."""
+    """Calculate tax and benefit impacts for a household.
+
+    Use flat values for all variables - do NOT use time-period format like {"2024": value}.
+    The simulation year is specified via the `year` parameter.
+
+    US example: people=[{"employment_income": 70000, "age": 40}], tax_unit={"state_code": "CA"}, year=2024
+    UK example: people=[{"employment_income": 50000, "age": 30}], year=2026
+    """
     if request.tax_benefit_model_name == "policyengine_uk":
         from policyengine.tax_benefit_models.uk import uk_latest
 
@@ -275,6 +366,8 @@ def calculate_household_impact_comparison(
 
     Compares the household under baseline (current law) vs reform (policy_id).
     Returns both calculations plus computed differences.
+
+    Use flat values for all variables - do NOT use time-period format like {"2024": value}.
     """
     # Build baseline request (no policy)
     baseline_request = HouseholdCalculateRequest(
