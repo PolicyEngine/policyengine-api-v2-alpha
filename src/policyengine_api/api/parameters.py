@@ -37,10 +37,15 @@ def list_parameters(
     query = select(Parameter)
 
     if search:
-        search_filter = (
-            Parameter.name.contains(search)
-            | Parameter.label.contains(search)
-            | Parameter.description.contains(search)
+        from sqlmodel import or_
+
+        search_pattern = f"%{search}%"
+        search_filter = or_(
+            Parameter.name.ilike(search_pattern),
+            Parameter.label.ilike(search_pattern) if Parameter.label else False,
+            Parameter.description.ilike(search_pattern)
+            if Parameter.description
+            else False,
         )
         query = query.where(search_filter)
 
