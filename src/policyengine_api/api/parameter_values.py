@@ -18,13 +18,30 @@ router = APIRouter(prefix="/parameter-values", tags=["parameter-values"])
 
 
 @router.get("/", response_model=List[ParameterValueRead])
-def list_parameter_values(session: Session = Depends(get_session)):
-    """List all parameter values.
+def list_parameter_values(
+    parameter_id: UUID | None = None,
+    policy_id: UUID | None = None,
+    skip: int = 0,
+    limit: int = 100,
+    session: Session = Depends(get_session),
+):
+    """List parameter values with optional filtering.
 
     Parameter values store the numeric/string values for policy parameters
     at specific time periods (start_date to end_date).
+
+    Use `parameter_id` to filter by a specific parameter.
+    Use `policy_id` to filter by a specific policy reform.
     """
-    parameter_values = session.exec(select(ParameterValue)).all()
+    query = select(ParameterValue)
+
+    if parameter_id:
+        query = query.where(ParameterValue.parameter_id == parameter_id)
+
+    if policy_id:
+        query = query.where(ParameterValue.policy_id == policy_id)
+
+    parameter_values = session.exec(query.offset(skip).limit(limit)).all()
     return parameter_values
 
 
