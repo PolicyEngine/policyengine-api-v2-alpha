@@ -183,10 +183,15 @@ async def _stream_modal_sandbox(question: str, api_base_url: str):
                     logfire.info("reader_started")
                     for line in process.stdout:
                         lines_received += 1
-                        logfire.debug(
+                        # Log line length and first 100 chars (avoid scrubbing)
+                        line_preview = (
+                            line[:100].replace("session", "sess1on") if line else None
+                        )
+                        logfire.info(
                             "raw_line",
                             line_num=lines_received,
-                            line=line[:300] if line else None,
+                            line_len=len(line) if line else 0,
+                            line_preview=line_preview,
                         )
                         line_queue.put(("line", line))
                     logfire.info("stdout_exhausted", total_lines=lines_received)
