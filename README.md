@@ -6,7 +6,7 @@ FastAPI service for PolicyEngine microsimulations with Supabase backend and obje
 
 - RESTful API for tax-benefit microsimulations
 - Supabase for PostgreSQL database and object storage
-- Background worker for simulation processing
+- Modal.com serverless compute with sub-1s cold starts
 - SQLModel for type-safe database models
 - Logfire observability and monitoring
 - Terraform deployment to GCP Cloud Run
@@ -171,7 +171,7 @@ This drops all tables, deletes the storage bucket, then recreates tables from SQ
 - **API server**: FastAPI application (port 8000)
 - **Database**: Supabase PostgreSQL
 - **Storage**: Supabase object storage for .h5 dataset files
-- **Worker**: Polling worker for background simulations
+- **Compute**: Modal.com serverless functions for simulations
 
 ### Data models
 
@@ -195,7 +195,7 @@ policyengine-api-v2/
 │   ├── config/           # Settings
 │   ├── models/           # SQLModel database models
 │   ├── services/         # Database, storage
-│   ├── tasks/            # Background worker
+│   ├── modal_app.py      # Modal.com serverless functions
 │   └── main.py           # FastAPI app
 ├── supabase/
 │   └── migrations/       # RLS policies and storage

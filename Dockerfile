@@ -1,10 +1,10 @@
 # Build docs
-FROM node:22-slim AS docs-builder
+FROM oven/bun:1 AS docs-builder
 WORKDIR /docs
 COPY docs/package.json docs/bun.lock ./
-RUN npm install
+RUN bun install
 COPY docs/ ./
-RUN npm run build
+RUN bun run build
 
 # Build API
 FROM ghcr.io/astral-sh/uv:python3.13-bookworm-slim

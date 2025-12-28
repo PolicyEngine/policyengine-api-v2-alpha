@@ -15,11 +15,12 @@ FastAPI backend for tax-benefit policy microsimulations using PolicyEngine's UK 
 
 ```bash
 make install          # install dependencies with uv
-make dev              # start supabase + api + worker via docker compose
+make dev              # start supabase + api via docker compose
 make test             # run unit tests
 make integration-test # full integration tests
 make format           # ruff formatting
 make lint             # ruff linting with auto-fix
+make modal-deploy     # deploy Modal.com serverless functions
 ```
 
 Local development uses docker compose with a local Supabase instance. Copy `.env.example` to `.env` for local config.
@@ -29,7 +30,7 @@ Local development uses docker compose with a local Supabase instance. Copy `.env
 - `src/policyengine_api/api/` - FastAPI routers (14 endpoint groups)
 - `src/policyengine_api/models/` - SQLModel database models
 - `src/policyengine_api/services/` - database and storage services
-- `src/policyengine_api/tasks/` - background worker for async simulations
+- `src/policyengine_api/modal_app.py` - Modal.com serverless functions
 - `supabase/migrations/` - SQL migrations for RLS and Postgres features
 - `terraform/` - GCP Cloud Run infrastructure
 - `docs/` - Next.js documentation site
@@ -38,7 +39,7 @@ Local development uses docker compose with a local Supabase instance. Copy `.env
 
 SQLModel defines all database schemas. Use Pydantic BaseModel for request/response schemas and BaseSettings for configuration. All API endpoints should be async functions.
 
-The background worker processes simulations asynchronously. Clients poll simulation status until complete.
+Modal.com serverless functions handle compute-intensive simulations with sub-1s cold starts. Clients poll simulation status until complete.
 
 MCP server exposes all endpoints as Claude tools via streamable HTTP transport.
 
