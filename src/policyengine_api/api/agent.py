@@ -183,14 +183,17 @@ async def _stream_modal_sandbox(question: str, api_base_url: str):
                     logfire.info("reader_started")
                     for line in process.stdout:
                         lines_received += 1
-                        # Log line length and first 100 chars (avoid scrubbing)
+                        # Log line length and first 500 chars (avoid scrubbing)
                         line_preview = (
-                            line[:100].replace("session", "sess1on") if line else None
+                            line[:500].replace("session", "sess1on") if line else None
                         )
+                        # Check if multiple JSON objects concatenated (embedded newlines)
+                        newline_count = line.count("\n") if line else 0
                         logfire.info(
                             "raw_line",
                             line_num=lines_received,
                             line_len=len(line) if line else 0,
+                            newline_count=newline_count,
                             line_preview=line_preview,
                         )
                         line_queue.put(("line", line))
