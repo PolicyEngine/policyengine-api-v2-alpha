@@ -9,7 +9,9 @@ const navigation = [
     items: [
       { name: "Introduction", href: "/" },
       { name: "Architecture", href: "/architecture" },
+      { name: "API design", href: "/design" },
       { name: "Quick start", href: "/quickstart" },
+      { name: "Environment setup", href: "/setup" },
       { name: "MCP integration", href: "/mcp" },
       { name: "AI demo", href: "/demo" },
     ],
