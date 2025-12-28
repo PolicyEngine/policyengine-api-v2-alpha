@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import ReactMarkdown from "react-markdown";
+import remarkBreaks from "remark-breaks";
 import { useApi } from "./api-context";
 
 // Types for Claude Code stream-json format
@@ -366,7 +367,7 @@ export function PolicyChat() {
                   <div className="font-mono">
                     {content ? (
                       <div className="prose prose-sm max-w-none text-sm [&>*]:text-[var(--color-text-primary)] [&_code]:bg-[var(--color-surface)] [&_code]:px-1 [&_code]:py-0.5 [&_code]:rounded [&_strong]:font-semibold">
-                        <ReactMarkdown>{content}</ReactMarkdown>
+                        <ReactMarkdown remarkPlugins={[remarkBreaks]}>{content}</ReactMarkdown>
                       </div>
                     ) : currentToolCalls.length === 0 ? (
                       <span className="text-sm text-[var(--color-text-muted)]">
@@ -379,7 +380,7 @@ export function PolicyChat() {
                   </div>
                 ) : message.status === "completed" ? (
                   <div className="font-mono prose prose-sm max-w-none text-sm [&>*]:text-[var(--color-text-primary)] [&_code]:bg-[var(--color-surface)] [&_code]:px-1 [&_code]:py-0.5 [&_code]:rounded [&_strong]:font-semibold [&_h1]:text-base [&_h2]:text-sm [&_h3]:text-sm">
-                    <ReactMarkdown>{content}</ReactMarkdown>
+                    <ReactMarkdown remarkPlugins={[remarkBreaks]}>{content}</ReactMarkdown>
                     {isLastMessage && isTyping && (
                       <span className="inline-block w-2 h-4 bg-[var(--color-pe-green)] ml-0.5 animate-pulse" />
                     )}
