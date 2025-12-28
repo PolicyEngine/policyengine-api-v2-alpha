@@ -41,6 +41,19 @@ class TestDemoEndpoints:
 class TestClaudeCodeInvocation:
     """Test that Claude Code is invoked correctly."""
 
+    def test_claude_cli_runs(self):
+        """Claude CLI must be installed and able to run a simple prompt."""
+        import subprocess
+
+        # Actually run Claude with a simple prompt (no tools needed)
+        result = subprocess.run(
+            ["claude", "--print", "Say 'hello' and nothing else"],
+            capture_output=True,
+            timeout=30,
+        )
+        assert result.returncode == 0, f"claude failed: {result.stderr.decode()}"
+        assert "hello" in result.stdout.decode().lower(), "Expected 'hello' in output"
+
     @pytest.mark.asyncio
     async def test_stream_claude_code_invokes_claude_cli(self):
         """_stream_claude_code should invoke the claude CLI with correct args."""
