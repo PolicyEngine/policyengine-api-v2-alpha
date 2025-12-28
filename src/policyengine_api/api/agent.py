@@ -114,19 +114,39 @@ async def _stream_modal_sandbox(question: str, api_base_url: str):
 
         def stream_reader():
             try:
+                logfire.info("stream_reader: starting to read stdout")
+                line_count = 0
                 for line in process.stdout:
+                    line_count += 1
+                    logfire.info(
+                        "stream_reader: got line",
+                        line_num=line_count,
+                        line_preview=line[:200] if line else None,
+                    )
                     line_queue.put(("line", line))
+                logfire.info("stream_reader: stdout exhausted, waiting for process")
                 process.wait()
+                logfire.info(
+                    "stream_reader: process finished", returncode=process.returncode
+                )
                 if process.returncode != 0:
                     stderr = process.stderr.read()
+                    logfire.error(
+                        "stream_reader: process failed",
+                        returncode=process.returncode,
+                        stderr=stderr[:500] if stderr else None,
+                    )
                     line_queue.put(("error", (process.returncode, stderr)))
                 else:
                     line_queue.put(("done", process.returncode))
             except Exception as e:
+                logfire.exception("stream_reader: exception", error=str(e))
                 line_queue.put(("exception", str(e)))
 
+        logfire.info("_stream_modal_sandbox: starting reader thread")
         reader_thread = threading.Thread(target=stream_reader, daemon=True)
         reader_thread.start()
+        logfire.info("_stream_modal_sandbox: reader thread started, entering main loop")
 
         while True:
             try:

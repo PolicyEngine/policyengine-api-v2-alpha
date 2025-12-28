@@ -42,6 +42,14 @@ def run_claude_code_in_sandbox(
 
     Returns the sandbox and process handle for streaming output.
     """
+    import logfire
+
+    logfire.info(
+        "run_claude_code_in_sandbox: starting",
+        question=question[:100],
+        api_base_url=api_base_url,
+    )
+
     # MCP config for Claude Code (type: sse for HTTP SSE transport)
     mcp_config = f"""{{
   "mcpServers": {{
@@ -53,8 +61,11 @@ def run_claude_code_in_sandbox(
 }}"""
 
     # Get reference to deployed app (required when calling from outside Modal)
+    logfire.info("run_claude_code_in_sandbox: looking up Modal app")
     sandbox_app = modal.App.lookup("policyengine-sandbox", create_if_missing=True)
+    logfire.info("run_claude_code_in_sandbox: Modal app found")
 
+    logfire.info("run_claude_code_in_sandbox: creating sandbox")
     sb = modal.Sandbox.create(
         app=sandbox_app,
         image=sandbox_image,
@@ -62,22 +73,58 @@ def run_claude_code_in_sandbox(
         timeout=600,
         workdir="/tmp",
     )
+    logfire.info("run_claude_code_in_sandbox: sandbox created")
+
+    # Check environment inside sandbox
+    logfire.info("run_claude_code_in_sandbox: checking sandbox environment")
+    env_check = sb.exec(
+        "sh",
+        "-c",
+        "which claude && echo PATH=$PATH && echo ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:0:10}...",
+    )
+    env_check.wait()
+    env_stdout = env_check.stdout.read()
+    env_stderr = env_check.stderr.read()
+    logfire.info(
+        "run_claude_code_in_sandbox: env check",
+        stdout=env_stdout[:500] if env_stdout else None,
+        stderr=env_stderr[:500] if env_stderr else None,
+        returncode=env_check.returncode,
+    )
 
     # Write MCP config
+    logfire.info("run_claude_code_in_sandbox: writing MCP config")
     sb.exec("mkdir", "-p", "/root/.claude")
     config_process = sb.exec(
         "sh", "-c", f"cat > /root/.claude/mcp_servers.json << 'EOF'\n{mcp_config}\nEOF"
     )
     config_process.wait()
+    logfire.info(
+        "run_claude_code_in_sandbox: MCP config written",
+        returncode=config_process.returncode,
+    )
+
+    # Verify config was written
+    verify_process = sb.exec("cat", "/root/.claude/mcp_servers.json")
+    verify_process.wait()
+    logfire.info(
+        "run_claude_code_in_sandbox: MCP config contents",
+        config=verify_process.stdout.read()[:500],
+    )
 
     # Run Claude Code with the question
+    logfire.info("run_claude_code_in_sandbox: starting claude CLI")
     process = sb.exec(
         "claude",
         "-p",
         question,
+        "--output-format",
+        "stream-json",
+        "--verbose",
         "--allowedTools",
         "mcp__policyengine__*,Bash,Read,Grep,Glob,Write,Edit",
     )
+    logfire.info("run_claude_code_in_sandbox: claude CLI process started, returning")
 
     return sb, process
 
