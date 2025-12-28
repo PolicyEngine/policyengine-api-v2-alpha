@@ -4,6 +4,8 @@ This runs the actual Claude Code CLI in an isolated sandbox, connected
 to the PolicyEngine API via MCP. Outputs are streamed back in real-time.
 """
 
+import json
+
 import modal
 
 # Sandbox image with Bun and Claude Code CLI (v2 - with ToS pre-accept)
@@ -57,14 +59,10 @@ def run_claude_code_in_sandbox(
     )
 
     # MCP config for Claude Code (type: sse for HTTP SSE transport)
-    mcp_config = f"""{{
-  "mcpServers": {{
-    "policyengine": {{
-      "type": "sse",
-      "url": "{api_base_url}/mcp"
-    }}
-  }}
-}}"""
+    mcp_config = {
+        "mcpServers": {"policyengine": {"type": "sse", "url": f"{api_base_url}/mcp"}}
+    }
+    mcp_config_json = json.dumps(mcp_config)
 
     # Get reference to deployed app (required when calling from outside Modal)
     print("[SANDBOX] looking up Modal app", flush=True)
@@ -85,29 +83,23 @@ def run_claude_code_in_sandbox(
     print("[SANDBOX] sandbox created", flush=True)
     logfire.info("run_claude_code_in_sandbox: sandbox created")
 
-    # Write MCP config
-    logfire.info("run_claude_code_in_sandbox: writing MCP config")
-    sb.exec("mkdir", "-p", "/root/.claude")
-    config_process = sb.exec(
-        "sh", "-c", f"cat > /root/.claude/mcp_servers.json << 'EOF'\n{mcp_config}\nEOF"
-    )
-    config_process.wait()
-    logfire.info(
-        "run_claude_code_in_sandbox: MCP config written",
-        returncode=config_process.returncode,
-    )
-
     # Run Claude Code with the question
     # Note: Can't use --dangerously-skip-permissions as root (Modal runs as root)
     # Use shell wrapper with </dev/null to properly close stdin (prevents hanging)
     # --max-turns: limit execution to prevent runaway
+    # Use --mcp-config to pass MCP config directly (more reliable than config file)
     print("[SANDBOX] Starting claude CLI with question", flush=True)
-    logfire.info("run_claude_code_in_sandbox: starting claude CLI")
+    logfire.info(
+        "run_claude_code_in_sandbox: starting claude CLI",
+        mcp_url=f"{api_base_url}/mcp",
+    )
 
-    # Escape the question for shell
+    # Escape the question and config for shell
     escaped_question = question.replace("'", "'\"'\"'")
+    escaped_mcp_config = mcp_config_json.replace("'", "'\"'\"'")
     cmd = (
         f"claude -p '{escaped_question}' "
+        f"--mcp-config '{escaped_mcp_config}' "
         "--output-format stream-json --verbose --max-turns 10 "
         "--allowedTools 'mcp__policyengine__*,Bash,Read,Grep,Glob,Write,Edit' "
         "< /dev/null 2>&1"
@@ -129,8 +121,6 @@ def run_policy_analysis(
 
     This is the non-streaming version that returns the full result.
     """
-    import json
-    import os
     import subprocess
 
     import logfire
@@ -140,24 +130,28 @@ def run_policy_analysis(
     with logfire.span(
         "run_policy_analysis", question=question[:100], api_base_url=api_base_url
     ):
-        # Write MCP config
-        os.makedirs("/root/.claude", exist_ok=True)
+        # MCP config for Claude Code (type: sse for HTTP SSE transport)
         mcp_config = {
             "mcpServers": {
                 "policyengine": {"type": "sse", "url": f"{api_base_url}/mcp"}
             }
         }
-        with open("/root/.claude/mcp_servers.json", "w") as f:
-            json.dump(mcp_config, f)
+        mcp_config_json = json.dumps(mcp_config)
 
-        logfire.info("Starting Claude Code", question=question[:100])
+        logfire.info(
+            "Starting Claude Code",
+            question=question[:100],
+            mcp_url=f"{api_base_url}/mcp",
+        )
 
-        # Run Claude Code (no --dangerously-skip-permissions since we run as root)
+        # Run Claude Code with --mcp-config (no --dangerously-skip-permissions as root)
         result = subprocess.run(
             [
                 "claude",
                 "-p",
                 question,
+                "--mcp-config",
+                mcp_config_json,
                 "--max-turns",
                 "10",
                 "--allowedTools",
