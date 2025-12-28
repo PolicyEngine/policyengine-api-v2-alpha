@@ -46,6 +46,7 @@ def run_claude_code_in_sandbox(
 
     from policyengine_api.config import settings
 
+    print("[SANDBOX] run_claude_code_in_sandbox starting", flush=True)
     logfire.info(
         "run_claude_code_in_sandbox: starting",
         question=question[:100],
@@ -63,10 +64,13 @@ def run_claude_code_in_sandbox(
 }}"""
 
     # Get reference to deployed app (required when calling from outside Modal)
+    print("[SANDBOX] looking up Modal app", flush=True)
     logfire.info("run_claude_code_in_sandbox: looking up Modal app")
     sandbox_app = modal.App.lookup("policyengine-sandbox", create_if_missing=True)
+    print("[SANDBOX] Modal app found", flush=True)
     logfire.info("run_claude_code_in_sandbox: Modal app found")
 
+    print("[SANDBOX] creating sandbox", flush=True)
     logfire.info("run_claude_code_in_sandbox: creating sandbox")
     sb = modal.Sandbox.create(
         app=sandbox_app,
@@ -75,6 +79,7 @@ def run_claude_code_in_sandbox(
         timeout=600,
         workdir="/tmp",
     )
+    print("[SANDBOX] sandbox created", flush=True)
     logfire.info("run_claude_code_in_sandbox: sandbox created")
 
     # Log from inside the sandbox via Python

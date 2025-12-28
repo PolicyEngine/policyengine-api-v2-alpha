@@ -89,7 +89,8 @@ async def _stream_modal_sandbox(question: str, api_base_url: str):
     """Stream output from Claude Code running in Modal Sandbox."""
     from concurrent.futures import ThreadPoolExecutor
 
-    # Immediate log and yield
+    # Immediate log
+    print("[AGENT] _stream_modal_sandbox started", flush=True)
     logfire.info("_stream_modal_sandbox: started", question=question[:100])
 
     sb = None
@@ -97,6 +98,7 @@ async def _stream_modal_sandbox(question: str, api_base_url: str):
     try:
         from policyengine_api.agent_sandbox import run_claude_code_in_sandbox
 
+        print("[AGENT] creating sandbox", flush=True)
         logfire.info(
             "_stream_modal_sandbox: creating sandbox", api_base_url=api_base_url
         )
@@ -106,6 +108,7 @@ async def _stream_modal_sandbox(question: str, api_base_url: str):
         sb, process = await loop.run_in_executor(
             executor, run_claude_code_in_sandbox, question, api_base_url
         )
+        print("[AGENT] sandbox created", flush=True)
         logfire.info("_stream_modal_sandbox: sandbox created")
 
         # Poll for lines with timeout to allow other async tasks
@@ -215,6 +218,7 @@ async def stream_analysis(request: AskRequest):
     data: {"type": "done", "returncode": 0}
     ```
     """
+    print(f"[AGENT] /stream called, use_modal={settings.agent_use_modal}", flush=True)
     api_base_url = settings.policyengine_api_url
     logfire.info(
         "stream_analysis: called",
