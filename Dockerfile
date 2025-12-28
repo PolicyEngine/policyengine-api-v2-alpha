@@ -11,6 +11,15 @@ FROM ghcr.io/astral-sh/uv:python3.13-bookworm-slim
 
 WORKDIR /app
 
+# Install bun and Claude Code CLI for demo endpoint
+RUN apt-get update && apt-get install -y curl unzip && \
+    curl -fsSL https://bun.sh/install | bash && \
+    /root/.bun/bin/bun install -g @anthropic-ai/claude-code && \
+    apt-get clean && rm -rf /var/lib/apt/lists/*
+
+ENV BUN_INSTALL=/root/.bun
+ENV PATH="/root/.bun/bin:$PATH"
+
 # Copy project files
 COPY pyproject.toml README.md ./
 COPY src/ ./src/

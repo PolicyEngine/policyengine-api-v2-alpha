@@ -32,9 +32,9 @@ class Settings(BaseSettings):
     # Seeding
     limit_seed_parameters: bool = False
 
-    # Demo agent (Modal required in production - container doesn't have Claude CLI)
+    # Demo agent
     anthropic_api_key: str = ""
-    demo_use_modal: bool = True
+    demo_use_modal: bool = False
     policyengine_api_url: str = "https://v2.api.policyengine.org"
 
     @property
