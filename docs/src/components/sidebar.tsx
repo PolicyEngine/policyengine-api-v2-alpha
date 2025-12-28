@@ -13,6 +13,7 @@ const navigation = [
       { name: "Quick start", href: "/quickstart" },
       { name: "Environment setup", href: "/setup" },
       { name: "MCP integration", href: "/mcp" },
+      { name: "AI demo", href: "/demo" },
     ],
   },
   {

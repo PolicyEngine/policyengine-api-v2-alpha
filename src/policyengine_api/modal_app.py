@@ -33,28 +33,26 @@ base_image = (
 def _import_uk():
     """Import UK model at build time to snapshot in memory."""
     from policyengine.tax_benefit_models.uk import uk_latest  # noqa: F401
+
     print("UK model loaded and snapshotted")
 
 
 def _import_us():
     """Import US model at build time to snapshot in memory."""
     from policyengine.tax_benefit_models.us import us_latest  # noqa: F401
+
     print("US model loaded and snapshotted")
 
 
 # UK image - uses run_function to snapshot imported modules in memory
-uk_image = (
-    base_image
-    .run_commands("uv pip install --system policyengine-uk>=2.0.0")
-    .run_function(_import_uk)
-)
+uk_image = base_image.run_commands(
+    "uv pip install --system policyengine-uk>=2.0.0"
+).run_function(_import_uk)
 
 # US image - uses run_function to snapshot imported modules in memory
-us_image = (
-    base_image
-    .run_commands("uv pip install --system policyengine-us>=1.0.0")
-    .run_function(_import_us)
-)
+us_image = base_image.run_commands(
+    "uv pip install --system policyengine-us>=1.0.0"
+).run_function(_import_us)
 
 app = modal.App("policyengine")
 
@@ -362,7 +360,9 @@ def simulate_economy_uk(simulation_id: str) -> None:
     from sqlmodel import Session, create_engine
 
     console = Console()
-    console.print(f"[bold blue]Running UK economy simulation {simulation_id}[/bold blue]")
+    console.print(
+        f"[bold blue]Running UK economy simulation {simulation_id}[/bold blue]"
+    )
 
     database_url = os.environ["DATABASE_URL"]
     supabase_url = os.environ["SUPABASE_URL"]
@@ -385,7 +385,9 @@ def simulate_economy_uk(simulation_id: str) -> None:
 
             # Skip if already completed
             if simulation.status == SimulationStatus.COMPLETED:
-                console.print(f"[yellow]Simulation {simulation_id} already completed[/yellow]")
+                console.print(
+                    f"[yellow]Simulation {simulation_id} already completed[/yellow]"
+                )
                 return
 
             # Update status to running
@@ -409,7 +411,9 @@ def simulate_economy_uk(simulation_id: str) -> None:
 
             # Get policy and dynamic
             policy = _get_pe_policy_uk(simulation.policy_id, pe_model_version, session)
-            dynamic = _get_pe_dynamic_uk(simulation.dynamic_id, pe_model_version, session)
+            dynamic = _get_pe_dynamic_uk(
+                simulation.dynamic_id, pe_model_version, session
+            )
 
             # Download dataset
             console.print(f"  Loading dataset: {dataset.filepath}")
@@ -440,10 +444,14 @@ def simulate_economy_uk(simulation_id: str) -> None:
             session.add(simulation)
             session.commit()
 
-        console.print(f"[bold green]UK economy simulation {simulation_id} completed[/bold green]")
+        console.print(
+            f"[bold green]UK economy simulation {simulation_id} completed[/bold green]"
+        )
 
     except Exception as e:
-        console.print(f"[bold red]UK economy simulation {simulation_id} failed: {e}[/bold red]")
+        console.print(
+            f"[bold red]UK economy simulation {simulation_id} failed: {e}[/bold red]"
+        )
         with Session(engine) as session:
             simulation = session.get(Simulation, UUID(simulation_id))
             if simulation:
@@ -465,7 +473,9 @@ def simulate_economy_us(simulation_id: str) -> None:
     from sqlmodel import Session, create_engine
 
     console = Console()
-    console.print(f"[bold blue]Running US economy simulation {simulation_id}[/bold blue]")
+    console.print(
+        f"[bold blue]Running US economy simulation {simulation_id}[/bold blue]"
+    )
 
     database_url = os.environ["DATABASE_URL"]
     supabase_url = os.environ["SUPABASE_URL"]
@@ -488,7 +498,9 @@ def simulate_economy_us(simulation_id: str) -> None:
 
             # Skip if already completed
             if simulation.status == SimulationStatus.COMPLETED:
-                console.print(f"[yellow]Simulation {simulation_id} already completed[/yellow]")
+                console.print(
+                    f"[yellow]Simulation {simulation_id} already completed[/yellow]"
+                )
                 return
 
             # Update status to running
@@ -512,7 +524,9 @@ def simulate_economy_us(simulation_id: str) -> None:
 
             # Get policy and dynamic
             policy = _get_pe_policy_us(simulation.policy_id, pe_model_version, session)
-            dynamic = _get_pe_dynamic_us(simulation.dynamic_id, pe_model_version, session)
+            dynamic = _get_pe_dynamic_us(
+                simulation.dynamic_id, pe_model_version, session
+            )
 
             # Download dataset
             console.print(f"  Loading dataset: {dataset.filepath}")
@@ -543,10 +557,14 @@ def simulate_economy_us(simulation_id: str) -> None:
             session.add(simulation)
             session.commit()
 
-        console.print(f"[bold green]US economy simulation {simulation_id} completed[/bold green]")
+        console.print(
+            f"[bold green]US economy simulation {simulation_id} completed[/bold green]"
+        )
 
     except Exception as e:
-        console.print(f"[bold red]US economy simulation {simulation_id} failed: {e}[/bold red]")
+        console.print(
+            f"[bold red]US economy simulation {simulation_id} failed: {e}[/bold red]"
+        )
         with Session(engine) as session:
             simulation = session.get(Simulation, UUID(simulation_id))
             if simulation:
@@ -764,10 +782,14 @@ def economy_comparison_uk(job_id: str) -> None:
             session.add(report)
             session.commit()
 
-        console.print(f"[bold green]UK economy comparison {job_id} completed[/bold green]")
+        console.print(
+            f"[bold green]UK economy comparison {job_id} completed[/bold green]"
+        )
 
     except Exception as e:
-        console.print(f"[bold red]UK economy comparison {job_id} failed: {e}[/bold red]")
+        console.print(
+            f"[bold red]UK economy comparison {job_id} failed: {e}[/bold red]"
+        )
         with Session(engine) as session:
             report = session.get(Report, UUID(job_id))
             if report:
@@ -973,10 +995,14 @@ def economy_comparison_us(job_id: str) -> None:
             session.add(report)
             session.commit()
 
-        console.print(f"[bold green]US economy comparison {job_id} completed[/bold green]")
+        console.print(
+            f"[bold green]US economy comparison {job_id} completed[/bold green]"
+        )
 
     except Exception as e:
-        console.print(f"[bold red]US economy comparison {job_id} failed: {e}[/bold red]")
+        console.print(
+            f"[bold red]US economy comparison {job_id} failed: {e}[/bold red]"
+        )
         with Session(engine) as session:
             report = session.get(Report, UUID(job_id))
             if report:

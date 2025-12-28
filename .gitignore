@@ -32,6 +32,9 @@ htmlcov/
 # Environment
 .env
 .env.local
+.env.prod
+docs/.env
+docs/.env.local
 
 # IDE
 .vscode/
@@ -49,4 +52,3 @@ htmlcov/
 data/
 *.h5
 *.db
-.env.prod

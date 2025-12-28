@@ -117,4 +117,6 @@ jobs:
         env:
           MODAL_TOKEN_ID: ${{ secrets.MODAL_TOKEN_ID }}
           MODAL_TOKEN_SECRET: ${{ secrets.MODAL_TOKEN_SECRET }}
-        run: uv run modal deploy src/policyengine_api/modal_app.py
+        run: |
+          uv run modal deploy src/policyengine_api/modal_app.py
+          uv run modal deploy src/policyengine_api/demo_sandbox.py
