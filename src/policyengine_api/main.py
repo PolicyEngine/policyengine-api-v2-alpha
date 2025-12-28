@@ -18,11 +18,19 @@ console = Console()
 
 # Configure Logfire (only if token is set)
 if settings.logfire_token:
+
+    def _scrubbing_callback(m: logfire.ScrubMatch):
+        """Allow 'session' through for Claude stream debugging."""
+        if m.path in (("attributes", "line"), ("attributes", "line_preview")):
+            if m.pattern_match.group(0) == "session":
+                return m.value
+
     logfire.configure(
         service_name="policyengine-api",
         token=settings.logfire_token,
         environment=settings.logfire_environment,
         console=False,
+        scrubbing=logfire.ScrubbingOptions(callback=_scrubbing_callback),
     )
     logfire.instrument_httpx()
 
