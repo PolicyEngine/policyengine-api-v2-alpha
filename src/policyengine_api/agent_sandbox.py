@@ -10,6 +10,7 @@ import modal
 sandbox_image = (
     modal.Image.debian_slim(python_version="3.12")
     .apt_install("curl", "git", "unzip")
+    .pip_install("logfire")
     .run_commands(
         # Install Bun
         "curl -fsSL https://bun.sh/install | bash",
@@ -28,6 +29,7 @@ app = modal.App("policyengine-sandbox")
 
 # Secrets
 anthropic_secret = modal.Secret.from_name("anthropic-api-key")
+logfire_secret = modal.Secret.from_name("logfire-token")
 
 
 def run_claude_code_in_sandbox(
@@ -50,7 +52,7 @@ def run_claude_code_in_sandbox(
 
     sb = modal.Sandbox.create(
         image=sandbox_image,
-        secrets=[anthropic_secret],
+        secrets=[anthropic_secret, logfire_secret],
         timeout=600,
         workdir="/tmp",
     )
@@ -74,7 +76,7 @@ def run_claude_code_in_sandbox(
     return sb, process
 
 
-@app.function(image=sandbox_image, secrets=[anthropic_secret], timeout=600)
+@app.function(image=sandbox_image, secrets=[anthropic_secret, logfire_secret], timeout=600)
 def run_policy_analysis(
     question: str, api_base_url: str = "https://v2.api.policyengine.org"
 ) -> dict:
@@ -86,33 +88,50 @@ def run_policy_analysis(
     import os
     import subprocess
 
-    # Write MCP config
-    os.makedirs("/root/.claude", exist_ok=True)
-    mcp_config = {
-        "mcpServers": {"policyengine": {"type": "sse", "url": f"{api_base_url}/mcp"}}
-    }
-    with open("/root/.claude/mcp_servers.json", "w") as f:
-        json.dump(mcp_config, f)
+    import logfire
 
-    # Run Claude Code
-    result = subprocess.run(
-        [
-            "claude",
-            "-p",
-            question,
-            "--allowedTools",
-            "mcp__policyengine__*,Bash,Read,Grep,Glob,Write,Edit",
-        ],
-        capture_output=True,
-        text=True,
-        timeout=540,
-    )
+    logfire.configure(service_name="policyengine-agent-sandbox")
 
-    return {
-        "status": "completed" if result.returncode == 0 else "failed",
-        "report": result.stdout,
-        "error": result.stderr if result.returncode != 0 else None,
-    }
+    with logfire.span("run_policy_analysis", question=question[:100], api_base_url=api_base_url):
+        # Write MCP config
+        os.makedirs("/root/.claude", exist_ok=True)
+        mcp_config = {
+            "mcpServers": {"policyengine": {"type": "sse", "url": f"{api_base_url}/mcp"}}
+        }
+        with open("/root/.claude/mcp_servers.json", "w") as f:
+            json.dump(mcp_config, f)
+
+        logfire.info("Starting Claude Code", question=question[:100])
+
+        # Run Claude Code
+        result = subprocess.run(
+            [
+                "claude",
+                "-p",
+                question,
+                "--allowedTools",
+                "mcp__policyengine__*,Bash,Read,Grep,Glob,Write,Edit",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=540,
+        )
+
+        logfire.info(
+            "Claude Code finished",
+            returncode=result.returncode,
+            stdout_len=len(result.stdout),
+            stderr_len=len(result.stderr),
+        )
+
+        if result.returncode != 0:
+            logfire.error("Claude Code failed", stderr=result.stderr[:500])
+
+        return {
+            "status": "completed" if result.returncode == 0 else "failed",
+            "report": result.stdout,
+            "error": result.stderr if result.returncode != 0 else None,
+        }
 
 
 # For local testing

@@ -272,9 +272,20 @@ export function PolicyChat() {
   };
 
   const exampleQuestions = [
+    // UK tax questions
     "How much would it cost to set the UK basic income tax rate to 19p?",
     "What would happen if we doubled child benefit?",
     "How would a £15,000 personal allowance affect different income groups?",
+    "What is the budgetary impact of abolishing the higher rate of income tax?",
+    "How much does universal credit cost the government?",
+    // US tax questions
+    "What would a $2,000 child tax credit cost in the US?",
+    "How would doubling SNAP benefits affect poverty rates?",
+    "What is the revenue impact of a 25% top marginal tax rate?",
+    // Household calculations
+    "Calculate tax for a UK household earning £50,000",
+    "What benefits would a single parent with two children receive in California?",
+    "How much income tax does someone earning $100,000 in New York pay?",
   ];
 
   const formatToolName = (name: string) => {
