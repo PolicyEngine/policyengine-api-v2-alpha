@@ -86,28 +86,80 @@ async def _stream_claude_code(question: str, api_base_url: str):
 
 async def _stream_modal_sandbox(question: str, api_base_url: str):
     """Stream output from Claude Code running in Modal Sandbox."""
+    from concurrent.futures import ThreadPoolExecutor
+
     import logfire
 
     sb = None
+    executor = ThreadPoolExecutor(max_workers=1)
     try:
         from policyengine_api.agent_sandbox import run_claude_code_in_sandbox
 
-        logfire.info("Creating Modal sandbox", question=question[:100], api_base_url=api_base_url)
-        sb, process = run_claude_code_in_sandbox(question, api_base_url)
+        logfire.info(
+            "Creating Modal sandbox", question=question[:100], api_base_url=api_base_url
+        )
+
+        # Run blocking Modal SDK calls in thread pool to avoid blocking event loop
+        loop = asyncio.get_event_loop()
+        sb, process = await loop.run_in_executor(
+            executor, run_claude_code_in_sandbox, question, api_base_url
+        )
         logfire.info("Modal sandbox created, streaming output")
 
-        # Stream stdout line by line
-        for line in process.stdout:
-            yield f"data: {json.dumps({'type': 'output', 'content': line})}\n\n"
+        # Poll for lines with timeout to allow other async tasks
+        import queue
+        import threading
 
-        process.wait()
+        line_queue = queue.Queue()
 
-        if process.returncode != 0:
-            stderr = process.stderr.read()
-            logfire.error("Claude Code failed in sandbox", returncode=process.returncode, stderr=stderr[:500])
-            yield f"data: {json.dumps({'type': 'error', 'content': stderr})}\n\n"
+        def stream_reader():
+            try:
+                for line in process.stdout:
+                    line_queue.put(("line", line))
+                process.wait()
+                if process.returncode != 0:
+                    stderr = process.stderr.read()
+                    line_queue.put(("error", (process.returncode, stderr)))
+                else:
+                    line_queue.put(("done", process.returncode))
+            except Exception as e:
+                line_queue.put(("exception", str(e)))
 
-        yield f"data: {json.dumps({'type': 'done', 'returncode': process.returncode})}\n\n"
+        reader_thread = threading.Thread(target=stream_reader, daemon=True)
+        reader_thread.start()
+
+        while True:
+            try:
+                # Non-blocking check with short timeout
+                item = await loop.run_in_executor(
+                    executor, lambda: line_queue.get(timeout=0.1)
+                )
+                event_type, data = item
+
+                if event_type == "line":
+                    yield f"data: {json.dumps({'type': 'output', 'content': data})}\n\n"
+                elif event_type == "error":
+                    returncode, stderr = data
+                    logfire.error(
+                        "Claude Code failed in sandbox",
+                        returncode=returncode,
+                        stderr=stderr[:500],
+                    )
+                    yield f"data: {json.dumps({'type': 'error', 'content': stderr})}\n\n"
+                    yield f"data: {json.dumps({'type': 'done', 'returncode': returncode})}\n\n"
+                    break
+                elif event_type == "done":
+                    yield f"data: {json.dumps({'type': 'done', 'returncode': data})}\n\n"
+                    break
+                elif event_type == "exception":
+                    raise Exception(data)
+            except Exception as e:
+                if "Empty" in type(e).__name__:
+                    # Queue timeout, continue polling
+                    await asyncio.sleep(0)
+                    continue
+                raise
+
     except Exception as e:
         logfire.exception("Modal sandbox failed", error=str(e))
         yield f"data: {json.dumps({'type': 'error', 'content': f'Sandbox error: {str(e)}'})}\n\n"
@@ -115,9 +167,10 @@ async def _stream_modal_sandbox(question: str, api_base_url: str):
     finally:
         if sb is not None:
             try:
-                sb.terminate()
+                await loop.run_in_executor(executor, sb.terminate)
             except Exception:
                 pass
+        executor.shutdown(wait=False)
 
 
 @router.post("/stream")

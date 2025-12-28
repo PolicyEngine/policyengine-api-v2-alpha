@@ -82,7 +82,9 @@ def run_claude_code_in_sandbox(
     return sb, process
 
 
-@app.function(image=sandbox_image, secrets=[anthropic_secret, logfire_secret], timeout=600)
+@app.function(
+    image=sandbox_image, secrets=[anthropic_secret, logfire_secret], timeout=600
+)
 def run_policy_analysis(
     question: str, api_base_url: str = "https://v2.api.policyengine.org"
 ) -> dict:
@@ -98,11 +100,15 @@ def run_policy_analysis(
 
     logfire.configure(service_name="policyengine-agent-sandbox")
 
-    with logfire.span("run_policy_analysis", question=question[:100], api_base_url=api_base_url):
+    with logfire.span(
+        "run_policy_analysis", question=question[:100], api_base_url=api_base_url
+    ):
         # Write MCP config
         os.makedirs("/root/.claude", exist_ok=True)
         mcp_config = {
-            "mcpServers": {"policyengine": {"type": "sse", "url": f"{api_base_url}/mcp"}}
+            "mcpServers": {
+                "policyengine": {"type": "sse", "url": f"{api_base_url}/mcp"}
+            }
         }
         with open("/root/.claude/mcp_servers.json", "w") as f:
             json.dump(mcp_config, f)
