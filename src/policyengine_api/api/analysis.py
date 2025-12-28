@@ -48,6 +48,7 @@ def _safe_float(value: float | None) -> float | None:
         return None
     return value
 
+
 # Namespace for deterministic UUIDs
 SIMULATION_NAMESPACE = UUID("a1b2c3d4-e5f6-7890-abcd-ef1234567890")
 REPORT_NAMESPACE = UUID("b2c3d4e5-f6a7-8901-bcde-f12345678901")
