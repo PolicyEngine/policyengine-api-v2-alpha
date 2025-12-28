@@ -90,21 +90,30 @@ async def _stream_modal_sandbox(question: str, api_base_url: str):
 
     import logfire
 
+    # Immediate yield to confirm generator is running
+    print(f"[AGENT] _stream_modal_sandbox called with question: {question[:50]}")
+    yield f"data: {json.dumps({'type': 'output', 'content': '[DEBUG] Generator started\\n'})}\n\n"
+
     sb = None
     executor = ThreadPoolExecutor(max_workers=1)
     try:
         from policyengine_api.agent_sandbox import run_claude_code_in_sandbox
 
+        print("[AGENT] About to call run_claude_code_in_sandbox")
         logfire.info(
             "Creating Modal sandbox", question=question[:100], api_base_url=api_base_url
         )
+        yield f"data: {json.dumps({'type': 'output', 'content': '[DEBUG] Creating Modal sandbox...\\n'})}\n\n"
 
         # Run blocking Modal SDK calls in thread pool to avoid blocking event loop
         loop = asyncio.get_event_loop()
+        print("[AGENT] Calling run_in_executor for sandbox creation")
         sb, process = await loop.run_in_executor(
             executor, run_claude_code_in_sandbox, question, api_base_url
         )
+        print("[AGENT] Sandbox created successfully")
         logfire.info("Modal sandbox created, streaming output")
+        yield f"data: {json.dumps({'type': 'output', 'content': '[DEBUG] Sandbox created, starting stream...\\n'})}\n\n"
 
         # Poll for lines with timeout to allow other async tasks
         import queue
@@ -181,6 +190,10 @@ async def _stream_modal_sandbox(question: str, api_base_url: str):
                 raise
 
     except Exception as e:
+        import traceback
+
+        tb = traceback.format_exc()
+        print(f"[AGENT] Exception in _stream_modal_sandbox: {e}\n{tb}")
         logfire.exception("Modal sandbox failed", error=str(e))
         yield f"data: {json.dumps({'type': 'error', 'content': f'Sandbox error: {str(e)}'})}\n\n"
         yield f"data: {json.dumps({'type': 'done', 'returncode': 1})}\n\n"
@@ -213,14 +226,19 @@ async def stream_analysis(request: AskRequest):
     data: {"type": "done", "returncode": 0}
     ```
     """
+    print(f"[AGENT] /stream endpoint called with question: {request.question[:50]}")
+    print(f"[AGENT] agent_use_modal = {settings.agent_use_modal}")
     api_base_url = settings.policyengine_api_url
+    print(f"[AGENT] api_base_url = {api_base_url}")
 
     if settings.agent_use_modal:
+        print("[AGENT] Using Modal sandbox path")
         return StreamingResponse(
             _stream_modal_sandbox(request.question, api_base_url),
             media_type="text/event-stream",
         )
     else:
+        print("[AGENT] Using local claude path")
         return StreamingResponse(
             _stream_claude_code(request.question, api_base_url),
             media_type="text/event-stream",
