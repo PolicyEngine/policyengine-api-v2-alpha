@@ -114,6 +114,14 @@ resource "google_cloud_run_v2_service" "api" {
         name  = "MODAL_TOKEN_SECRET"
         value = var.modal_token_secret
       }
+      env {
+        name  = "AGENT_USE_MODAL"
+        value = "true"
+      }
+      env {
+        name  = "POLICYENGINE_API_URL"
+        value = "https://v2.api.policyengine.org"
+      }
     }
   }
 

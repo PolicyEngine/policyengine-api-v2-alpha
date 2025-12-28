@@ -86,12 +86,16 @@ async def _stream_claude_code(question: str, api_base_url: str):
 
 async def _stream_modal_sandbox(question: str, api_base_url: str):
     """Stream output from Claude Code running in Modal Sandbox."""
+    import logfire
 
-    from policyengine_api.agent_sandbox import run_claude_code_in_sandbox
-
-    sb, process = run_claude_code_in_sandbox(question, api_base_url)
-
+    sb = None
     try:
+        from policyengine_api.agent_sandbox import run_claude_code_in_sandbox
+
+        logfire.info("Creating Modal sandbox", question=question[:100], api_base_url=api_base_url)
+        sb, process = run_claude_code_in_sandbox(question, api_base_url)
+        logfire.info("Modal sandbox created, streaming output")
+
         # Stream stdout line by line
         for line in process.stdout:
             yield f"data: {json.dumps({'type': 'output', 'content': line})}\n\n"
@@ -100,11 +104,20 @@ async def _stream_modal_sandbox(question: str, api_base_url: str):
 
         if process.returncode != 0:
             stderr = process.stderr.read()
+            logfire.error("Claude Code failed in sandbox", returncode=process.returncode, stderr=stderr[:500])
             yield f"data: {json.dumps({'type': 'error', 'content': stderr})}\n\n"
 
         yield f"data: {json.dumps({'type': 'done', 'returncode': process.returncode})}\n\n"
+    except Exception as e:
+        logfire.exception("Modal sandbox failed", error=str(e))
+        yield f"data: {json.dumps({'type': 'error', 'content': f'Sandbox error: {str(e)}'})}\n\n"
+        yield f"data: {json.dumps({'type': 'done', 'returncode': 1})}\n\n"
     finally:
-        sb.terminate()
+        if sb is not None:
+            try:
+                sb.terminate()
+            except Exception:
+                pass
 
 
 @router.post("/stream")
