@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 export default function Home() {
   return (
     <div className="max-w-4xl">
@@ -9,7 +11,7 @@ export default function Home() {
       </p>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
-        <a
+        <Link
           href="/quickstart"
           className="block p-6 border border-[var(--color-border)] rounded-xl bg-white hover:border-[var(--color-pe-green)] transition-colors group"
         >
@@ -19,9 +21,9 @@ export default function Home() {
           <p className="text-sm text-[var(--color-text-secondary)]">
             Get up and running with the API in minutes. Complete walkthrough from setup to your first simulation.
           </p>
-        </a>
+        </Link>
 
-        <a
+        <Link
           href="/endpoints/economic-impact"
           className="block p-6 border border-[var(--color-border)] rounded-xl bg-white hover:border-[var(--color-pe-green)] transition-colors group"
         >
@@ -31,9 +33,9 @@ export default function Home() {
           <p className="text-sm text-[var(--color-text-secondary)]">
             Calculate distributional impacts, decile analysis, and program statistics for policy reforms.
           </p>
-        </a>
+        </Link>
 
-        <a
+        <Link
           href="/architecture"
           className="block p-6 border border-[var(--color-border)] rounded-xl bg-white hover:border-[var(--color-pe-green)] transition-colors group"
         >
@@ -43,9 +45,9 @@ export default function Home() {
           <p className="text-sm text-[var(--color-text-secondary)]">
             Understand the system design: API server, worker, database, and how they work together.
           </p>
-        </a>
+        </Link>
 
-        <a
+        <Link
           href="/endpoints/datasets"
           className="block p-6 border border-[var(--color-border)] rounded-xl bg-white hover:border-[var(--color-pe-green)] transition-colors group"
         >
@@ -55,7 +57,7 @@ export default function Home() {
           <p className="text-sm text-[var(--color-text-secondary)]">
             Interactive documentation for all endpoints with live testing capabilities.
           </p>
-        </a>
+        </Link>
       </div>
 
       <div className="p-6 border border-[var(--color-border)] rounded-xl bg-white">
