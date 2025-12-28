@@ -46,6 +46,7 @@ def run_claude_code_in_sandbox(
 
     from policyengine_api.config import settings
 
+    print("[SANDBOX] run_claude_code_in_sandbox: starting", flush=True)
     logfire.info(
         "run_claude_code_in_sandbox: starting",
         question=question[:100],
@@ -63,10 +64,13 @@ def run_claude_code_in_sandbox(
 }}"""
 
     # Get reference to deployed app (required when calling from outside Modal)
+    print("[SANDBOX] looking up Modal app", flush=True)
     logfire.info("run_claude_code_in_sandbox: looking up Modal app")
     sandbox_app = modal.App.lookup("policyengine-sandbox", create_if_missing=True)
+    print("[SANDBOX] Modal app found", flush=True)
     logfire.info("run_claude_code_in_sandbox: Modal app found")
 
+    print("[SANDBOX] creating sandbox", flush=True)
     logfire.info("run_claude_code_in_sandbox: creating sandbox")
     sb = modal.Sandbox.create(
         app=sandbox_app,
@@ -75,9 +79,11 @@ def run_claude_code_in_sandbox(
         timeout=600,
         workdir="/tmp",
     )
+    print("[SANDBOX] sandbox created", flush=True)
     logfire.info("run_claude_code_in_sandbox: sandbox created")
 
     # Log from inside the sandbox via Python
+    print("[SANDBOX] logging from inside sandbox", flush=True)
     logfire.info("run_claude_code_in_sandbox: logging from inside sandbox")
     escaped_question = question[:50].replace("'", "\\'").replace('"', '\\"')
     sandbox_log = sb.exec(
@@ -136,6 +142,7 @@ print('Logfire configured inside sandbox')
     )
 
     # Run Claude Code with the question
+    # --dangerously-skip-permissions: auto-accept permission prompts (required for non-interactive)
     logfire.info("run_claude_code_in_sandbox: starting claude CLI")
     process = sb.exec(
         "claude",
@@ -144,6 +151,7 @@ print('Logfire configured inside sandbox')
         "--output-format",
         "stream-json",
         "--verbose",
+        "--dangerously-skip-permissions",
         "--allowedTools",
         "mcp__policyengine__*,Bash,Read,Grep,Glob,Write,Edit",
     )
