@@ -99,21 +99,20 @@ def run_claude_code_in_sandbox(
 
     # Run Claude Code with the question
     # Note: Can't use --dangerously-skip-permissions as root (Modal runs as root)
+    # Use shell wrapper with </dev/null to properly close stdin (prevents hanging)
     # --max-turns: limit execution to prevent runaway
     print("[SANDBOX] Starting claude CLI with question", flush=True)
     logfire.info("run_claude_code_in_sandbox: starting claude CLI")
-    process = sb.exec(
-        "claude",
-        "-p",
-        question,
-        "--output-format",
-        "stream-json",
-        "--verbose",
-        "--max-turns",
-        "10",
-        "--allowedTools",
-        "mcp__policyengine__*,Bash,Read,Grep,Glob,Write,Edit",
+
+    # Escape the question for shell
+    escaped_question = question.replace("'", "'\"'\"'")
+    cmd = (
+        f"claude -p '{escaped_question}' "
+        "--output-format stream-json --verbose --max-turns 10 "
+        "--allowedTools 'mcp__policyengine__*,Bash,Read,Grep,Glob,Write,Edit' "
+        "< /dev/null 2>&1"
     )
+    process = sb.exec("sh", "-c", cmd)
     print("[SANDBOX] claude CLI process started", flush=True)
     logfire.info("run_claude_code_in_sandbox: claude CLI process started, returning")
 
