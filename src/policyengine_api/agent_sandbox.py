@@ -50,7 +50,11 @@ def run_claude_code_in_sandbox(
   }}
 }}"""
 
+    # Get reference to deployed app (required when calling from outside Modal)
+    sandbox_app = modal.App.lookup("policyengine-sandbox", create_if_missing=True)
+
     sb = modal.Sandbox.create(
+        app=sandbox_app,
         image=sandbox_image,
         secrets=[anthropic_secret, logfire_secret],
         timeout=600,
