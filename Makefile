@@ -115,6 +115,12 @@ db-reset-prod:
 
 modal-deploy:
 	@echo "Deploying Modal functions..."
+	@set -a && . .env.prod && set +a && \
+	uv run modal secret create policyengine-db \
+		"DATABASE_URL=$$SUPABASE_POOLER_URL" \
+		"SUPABASE_URL=$$SUPABASE_URL" \
+		"SUPABASE_KEY=$$SUPABASE_KEY" \
+		--force
 	uv run modal deploy src/policyengine_api/modal_app.py
 
 modal-serve:
