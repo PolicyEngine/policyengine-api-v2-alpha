@@ -7,7 +7,7 @@ FastAPI backend for tax-benefit policy microsimulations using PolicyEngine's UK 
 ```
 Level 2: Reports        AI-generated documents (future)
 Level 1: Analyses       Operations on simulations (economy_comparison_*)
-Level 0: Simulations    Single world-state calculations (simulate_household_*)
+Level 0: Simulations    Single world-state calculations (simulate_household_*, simulate_economy_*)
 ```
 
 See [docs/DESIGN.md](docs/DESIGN.md) for the full design including future endpoints.
@@ -26,6 +26,8 @@ See [docs/DESIGN.md](docs/DESIGN.md) for the full design including future endpoi
 |----------|---------|
 | `simulate_household_uk` | Single UK household calculation |
 | `simulate_household_us` | Single US household calculation |
+| `simulate_economy_uk` | Single UK economy simulation |
+| `simulate_economy_us` | Single US economy simulation |
 | `economy_comparison_uk` | UK economy comparison (decile impacts, budget impact) |
 | `economy_comparison_us` | US economy comparison |
 

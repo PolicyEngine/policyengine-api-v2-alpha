@@ -6,7 +6,7 @@ imports happen at image build time, not runtime.
 
 Function naming follows the API hierarchy:
 - simulate_household_*: Single household calculation (/simulate/household)
-- simulate_economy_*: Single economy simulation (/simulate/economy) [future]
+- simulate_economy_*: Single economy simulation (/simulate/economy)
 - economy_comparison_*: Full economy comparison analysis (/analysis/compare/economy)
 
 Deploy with: modal deploy src/policyengine_api/modal_app.py
@@ -348,6 +348,212 @@ def simulate_household_us(
                 },
             )
             session.commit()
+        raise
+
+
+@app.function(image=uk_image, secrets=[secrets], memory=8192, timeout=1800)
+def simulate_economy_uk(simulation_id: str) -> None:
+    """Run a single UK economy simulation and write results to database."""
+    import os
+    from datetime import datetime, timezone
+    from uuid import UUID
+
+    from rich.console import Console
+    from sqlmodel import Session, create_engine
+
+    console = Console()
+    console.print(f"[bold blue]Running UK economy simulation {simulation_id}[/bold blue]")
+
+    database_url = os.environ["DATABASE_URL"]
+    supabase_url = os.environ["SUPABASE_URL"]
+    supabase_key = os.environ["SUPABASE_KEY"]
+    storage_bucket = os.environ.get("STORAGE_BUCKET", "datasets")
+
+    engine = create_engine(database_url)
+
+    from policyengine_api.models import (
+        Dataset,
+        Simulation,
+        SimulationStatus,
+    )
+
+    try:
+        with Session(engine) as session:
+            simulation = session.get(Simulation, UUID(simulation_id))
+            if not simulation:
+                raise ValueError(f"Simulation {simulation_id} not found")
+
+            # Skip if already completed
+            if simulation.status == SimulationStatus.COMPLETED:
+                console.print(f"[yellow]Simulation {simulation_id} already completed[/yellow]")
+                return
+
+            # Update status to running
+            simulation.status = SimulationStatus.RUNNING
+            session.add(simulation)
+            session.commit()
+
+            # Get dataset
+            dataset = session.get(Dataset, simulation.dataset_id)
+            if not dataset:
+                raise ValueError(f"Dataset {simulation.dataset_id} not found")
+
+            # Import policyengine
+            from policyengine.core import Simulation as PESimulation
+            from policyengine.tax_benefit_models.uk import uk_latest
+            from policyengine.tax_benefit_models.uk.datasets import (
+                PolicyEngineUKDataset,
+            )
+
+            pe_model_version = uk_latest
+
+            # Get policy and dynamic
+            policy = _get_pe_policy_uk(simulation.policy_id, pe_model_version, session)
+            dynamic = _get_pe_dynamic_uk(simulation.dynamic_id, pe_model_version, session)
+
+            # Download dataset
+            console.print(f"  Loading dataset: {dataset.filepath}")
+            local_path = download_dataset(
+                dataset.filepath, supabase_url, supabase_key, storage_bucket
+            )
+
+            pe_dataset = PolicyEngineUKDataset(
+                name=dataset.name,
+                description=dataset.description or "",
+                filepath=local_path,
+                year=dataset.year,
+            )
+
+            # Create and run simulation
+            console.print("  Running simulation...")
+            pe_sim = PESimulation(
+                dataset=pe_dataset,
+                tax_benefit_model_version=pe_model_version,
+                policy=policy,
+                dynamic=dynamic,
+            )
+            pe_sim.ensure()
+
+            # Mark as completed
+            simulation.status = SimulationStatus.COMPLETED
+            simulation.completed_at = datetime.now(timezone.utc)
+            session.add(simulation)
+            session.commit()
+
+        console.print(f"[bold green]UK economy simulation {simulation_id} completed[/bold green]")
+
+    except Exception as e:
+        console.print(f"[bold red]UK economy simulation {simulation_id} failed: {e}[/bold red]")
+        with Session(engine) as session:
+            simulation = session.get(Simulation, UUID(simulation_id))
+            if simulation:
+                simulation.status = SimulationStatus.FAILED
+                simulation.error_message = str(e)
+                session.add(simulation)
+                session.commit()
+        raise
+
+
+@app.function(image=us_image, secrets=[secrets], memory=8192, timeout=1800)
+def simulate_economy_us(simulation_id: str) -> None:
+    """Run a single US economy simulation and write results to database."""
+    import os
+    from datetime import datetime, timezone
+    from uuid import UUID
+
+    from rich.console import Console
+    from sqlmodel import Session, create_engine
+
+    console = Console()
+    console.print(f"[bold blue]Running US economy simulation {simulation_id}[/bold blue]")
+
+    database_url = os.environ["DATABASE_URL"]
+    supabase_url = os.environ["SUPABASE_URL"]
+    supabase_key = os.environ["SUPABASE_KEY"]
+    storage_bucket = os.environ.get("STORAGE_BUCKET", "datasets")
+
+    engine = create_engine(database_url)
+
+    from policyengine_api.models import (
+        Dataset,
+        Simulation,
+        SimulationStatus,
+    )
+
+    try:
+        with Session(engine) as session:
+            simulation = session.get(Simulation, UUID(simulation_id))
+            if not simulation:
+                raise ValueError(f"Simulation {simulation_id} not found")
+
+            # Skip if already completed
+            if simulation.status == SimulationStatus.COMPLETED:
+                console.print(f"[yellow]Simulation {simulation_id} already completed[/yellow]")
+                return
+
+            # Update status to running
+            simulation.status = SimulationStatus.RUNNING
+            session.add(simulation)
+            session.commit()
+
+            # Get dataset
+            dataset = session.get(Dataset, simulation.dataset_id)
+            if not dataset:
+                raise ValueError(f"Dataset {simulation.dataset_id} not found")
+
+            # Import policyengine
+            from policyengine.core import Simulation as PESimulation
+            from policyengine.tax_benefit_models.us import us_latest
+            from policyengine.tax_benefit_models.us.datasets import (
+                PolicyEngineUSDataset,
+            )
+
+            pe_model_version = us_latest
+
+            # Get policy and dynamic
+            policy = _get_pe_policy_us(simulation.policy_id, pe_model_version, session)
+            dynamic = _get_pe_dynamic_us(simulation.dynamic_id, pe_model_version, session)
+
+            # Download dataset
+            console.print(f"  Loading dataset: {dataset.filepath}")
+            local_path = download_dataset(
+                dataset.filepath, supabase_url, supabase_key, storage_bucket
+            )
+
+            pe_dataset = PolicyEngineUSDataset(
+                name=dataset.name,
+                description=dataset.description or "",
+                filepath=local_path,
+                year=dataset.year,
+            )
+
+            # Create and run simulation
+            console.print("  Running simulation...")
+            pe_sim = PESimulation(
+                dataset=pe_dataset,
+                tax_benefit_model_version=pe_model_version,
+                policy=policy,
+                dynamic=dynamic,
+            )
+            pe_sim.ensure()
+
+            # Mark as completed
+            simulation.status = SimulationStatus.COMPLETED
+            simulation.completed_at = datetime.now(timezone.utc)
+            session.add(simulation)
+            session.commit()
+
+        console.print(f"[bold green]US economy simulation {simulation_id} completed[/bold green]")
+
+    except Exception as e:
+        console.print(f"[bold red]US economy simulation {simulation_id} failed: {e}[/bold red]")
+        with Session(engine) as session:
+            simulation = session.get(Simulation, UUID(simulation_id))
+            if simulation:
+                simulation.status = SimulationStatus.FAILED
+                simulation.error_message = str(e)
+                session.add(simulation)
+                session.commit()
         raise
 
 
