@@ -10,6 +10,7 @@ import json
 import os
 from uuid import uuid4
 
+import logfire
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
@@ -88,23 +89,50 @@ async def _stream_modal_sandbox(question: str, api_base_url: str):
     """Stream output from Claude Code running in Modal Sandbox."""
     from concurrent.futures import ThreadPoolExecutor
 
-    import logfire
+    # Immediate log and yield to confirm generator is running
+    logfire.info("_stream_modal_sandbox: generator started", question=question[:100])
+    yield (
+        "data: "
+        + json.dumps({"type": "output", "content": "[DEBUG] Generator started\n"})
+        + "\n\n"
+    )
 
     sb = None
     executor = ThreadPoolExecutor(max_workers=1)
     try:
         from policyengine_api.agent_sandbox import run_claude_code_in_sandbox
 
+        logfire.info("_stream_modal_sandbox: importing run_claude_code_in_sandbox")
         logfire.info(
-            "Creating Modal sandbox", question=question[:100], api_base_url=api_base_url
+            "_stream_modal_sandbox: creating Modal sandbox",
+            question=question[:100],
+            api_base_url=api_base_url,
+        )
+        yield (
+            "data: "
+            + json.dumps(
+                {"type": "output", "content": "[DEBUG] Creating Modal sandbox...\n"}
+            )
+            + "\n\n"
         )
 
         # Run blocking Modal SDK calls in thread pool to avoid blocking event loop
         loop = asyncio.get_event_loop()
+        logfire.info("_stream_modal_sandbox: calling run_in_executor")
         sb, process = await loop.run_in_executor(
             executor, run_claude_code_in_sandbox, question, api_base_url
         )
-        logfire.info("Modal sandbox created, streaming output")
+        logfire.info("_stream_modal_sandbox: sandbox created successfully")
+        yield (
+            "data: "
+            + json.dumps(
+                {
+                    "type": "output",
+                    "content": "[DEBUG] Sandbox created, starting stream...\n",
+                }
+            )
+            + "\n\n"
+        )
 
         # Poll for lines with timeout to allow other async tasks
         import queue
@@ -181,7 +209,12 @@ async def _stream_modal_sandbox(question: str, api_base_url: str):
                 raise
 
     except Exception as e:
-        logfire.exception("Modal sandbox failed", error=str(e))
+        import traceback
+
+        tb = traceback.format_exc()
+        logfire.exception(
+            "_stream_modal_sandbox: exception", error=str(e), traceback=tb
+        )
         yield f"data: {json.dumps({'type': 'error', 'content': f'Sandbox error: {str(e)}'})}\n\n"
         yield f"data: {json.dumps({'type': 'done', 'returncode': 1})}\n\n"
     finally:
@@ -213,14 +246,22 @@ async def stream_analysis(request: AskRequest):
     data: {"type": "done", "returncode": 0}
     ```
     """
+    logfire.info(
+        "stream_analysis: endpoint called",
+        question=request.question[:100],
+        agent_use_modal=settings.agent_use_modal,
+        api_base_url=settings.policyengine_api_url,
+    )
     api_base_url = settings.policyengine_api_url
 
     if settings.agent_use_modal:
+        logfire.info("stream_analysis: using Modal sandbox path")
         return StreamingResponse(
             _stream_modal_sandbox(request.question, api_base_url),
             media_type="text/event-stream",
         )
     else:
+        logfire.info("stream_analysis: using local claude path")
         return StreamingResponse(
             _stream_claude_code(request.question, api_base_url),
             media_type="text/event-stream",
