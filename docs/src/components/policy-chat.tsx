@@ -6,7 +6,7 @@ import { useApi } from "./api-context";
 interface Message {
   role: "user" | "assistant";
   content: string;
-  status?: "pending" | "running" | "completed" | "failed";
+  status?: "pending" | "streaming" | "completed" | "failed";
 }
 
 export function PolicyChat() {
@@ -24,85 +24,6 @@ export function PolicyChat() {
     scrollToBottom();
   }, [messages]);
 
-  const pollForResult = async (jobId: string) => {
-    const maxAttempts = 120; // 10 minutes max
-    let attempts = 0;
-
-    while (attempts < maxAttempts) {
-      try {
-        const res = await fetch(`${baseUrl}/demo/status/${jobId}`);
-        const data = await res.json();
-
-        if (data.status === "completed") {
-          setMessages((prev) => {
-            const newMessages = [...prev];
-            const lastIndex = newMessages.length - 1;
-            if (newMessages[lastIndex]?.role === "assistant") {
-              newMessages[lastIndex] = {
-                role: "assistant",
-                content: data.report || "Analysis complete.",
-                status: "completed",
-              };
-            }
-            return newMessages;
-          });
-          setIsLoading(false);
-          return;
-        } else if (data.status === "failed") {
-          setMessages((prev) => {
-            const newMessages = [...prev];
-            const lastIndex = newMessages.length - 1;
-            if (newMessages[lastIndex]?.role === "assistant") {
-              newMessages[lastIndex] = {
-                role: "assistant",
-                content: `Error: ${data.error || "Analysis failed"}`,
-                status: "failed",
-              };
-            }
-            return newMessages;
-          });
-          setIsLoading(false);
-          return;
-        }
-
-        // Update status message
-        setMessages((prev) => {
-          const newMessages = [...prev];
-          const lastIndex = newMessages.length - 1;
-          if (newMessages[lastIndex]?.role === "assistant") {
-            newMessages[lastIndex] = {
-              role: "assistant",
-              content: `Analysing... (${data.status})`,
-              status: data.status,
-            };
-          }
-          return newMessages;
-        });
-
-        await new Promise((resolve) => setTimeout(resolve, 2000));
-        attempts++;
-      } catch (err) {
-        console.error("Poll error:", err);
-        await new Promise((resolve) => setTimeout(resolve, 2000));
-        attempts++;
-      }
-    }
-
-    setMessages((prev) => {
-      const newMessages = [...prev];
-      const lastIndex = newMessages.length - 1;
-      if (newMessages[lastIndex]?.role === "assistant") {
-        newMessages[lastIndex] = {
-          role: "assistant",
-          content: "Analysis timed out. Please try again.",
-          status: "failed",
-        };
-      }
-      return newMessages;
-    });
-    setIsLoading(false);
-  };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!input.trim() || isLoading) return;
@@ -117,11 +38,11 @@ export function PolicyChat() {
     // Add pending assistant message
     setMessages((prev) => [
       ...prev,
-      { role: "assistant", content: "Starting analysis...", status: "pending" },
+      { role: "assistant", content: "", status: "pending" },
     ]);
 
     try {
-      const res = await fetch(`${baseUrl}/demo/ask`, {
+      const res = await fetch(`${baseUrl}/demo/stream`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ question: userMessage }),
@@ -131,8 +52,85 @@ export function PolicyChat() {
         throw new Error(`HTTP ${res.status}`);
       }
 
-      const data = await res.json();
-      pollForResult(data.job_id);
+      const reader = res.body?.getReader();
+      if (!reader) throw new Error("No response body");
+
+      const decoder = new TextDecoder();
+      let fullContent = "";
+
+      // Update to streaming status
+      setMessages((prev) => {
+        const newMessages = [...prev];
+        const lastIndex = newMessages.length - 1;
+        if (newMessages[lastIndex]?.role === "assistant") {
+          newMessages[lastIndex] = {
+            ...newMessages[lastIndex],
+            status: "streaming",
+          };
+        }
+        return newMessages;
+      });
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        const chunk = decoder.decode(value, { stream: true });
+        const lines = chunk.split("\n");
+
+        for (const line of lines) {
+          if (line.startsWith("data: ")) {
+            try {
+              const data = JSON.parse(line.slice(6));
+
+              if (data.type === "output") {
+                fullContent += data.content;
+                setMessages((prev) => {
+                  const newMessages = [...prev];
+                  const lastIndex = newMessages.length - 1;
+                  if (newMessages[lastIndex]?.role === "assistant") {
+                    newMessages[lastIndex] = {
+                      role: "assistant",
+                      content: fullContent,
+                      status: "streaming",
+                    };
+                  }
+                  return newMessages;
+                });
+              } else if (data.type === "error") {
+                setMessages((prev) => {
+                  const newMessages = [...prev];
+                  const lastIndex = newMessages.length - 1;
+                  if (newMessages[lastIndex]?.role === "assistant") {
+                    newMessages[lastIndex] = {
+                      role: "assistant",
+                      content: `Error: ${data.content}`,
+                      status: "failed",
+                    };
+                  }
+                  return newMessages;
+                });
+              } else if (data.type === "done") {
+                setMessages((prev) => {
+                  const newMessages = [...prev];
+                  const lastIndex = newMessages.length - 1;
+                  if (newMessages[lastIndex]?.role === "assistant") {
+                    newMessages[lastIndex] = {
+                      ...newMessages[lastIndex],
+                      status: data.returncode === 0 ? "completed" : "failed",
+                    };
+                  }
+                  return newMessages;
+                });
+              }
+            } catch (parseErr) {
+              // Ignore parse errors for incomplete chunks
+            }
+          }
+        }
+      }
+
+      setIsLoading(false);
     } catch (err) {
       setMessages((prev) => {
         const newMessages = [...prev];
@@ -164,6 +162,9 @@ export function PolicyChat() {
           <div className="w-2 h-2 rounded-full bg-[var(--color-pe-green)] animate-pulse" />
           <span className="text-sm font-medium text-[var(--color-text-primary)]">
             Policy analyst
+          </span>
+          <span className="text-xs text-[var(--color-text-muted)] ml-auto">
+            Powered by Claude Code
           </span>
         </div>
         <p className="text-xs text-[var(--color-text-muted)] mt-1">
@@ -204,19 +205,25 @@ export function PolicyChat() {
                   : "bg-[var(--color-surface-sunken)] text-[var(--color-text-primary)]"
               }`}
             >
-              {message.role === "assistant" && message.status && message.status !== "completed" ? (
+              {message.role === "assistant" && message.status === "pending" ? (
                 <div className="flex items-center gap-2">
                   <div className="w-3 h-3 border-2 border-[var(--color-pe-green)] border-t-transparent rounded-full animate-spin" />
-                  <span className="text-sm">{message.content}</span>
+                  <span className="text-sm">Starting Claude Code...</span>
+                </div>
+              ) : message.role === "assistant" && message.status === "streaming" ? (
+                <div>
+                  <pre className="text-sm whitespace-pre-wrap font-mono text-xs leading-relaxed">
+                    {message.content || "Thinking..."}
+                  </pre>
+                  <div className="mt-2 flex items-center gap-2 text-xs text-[var(--color-text-muted)]">
+                    <div className="w-2 h-2 border border-[var(--color-pe-green)] border-t-transparent rounded-full animate-spin" />
+                    Running...
+                  </div>
                 </div>
               ) : (
-                <div className="prose prose-sm max-w-none">
-                  {message.content.split("\n").map((line, j) => (
-                    <p key={j} className="mb-2 last:mb-0 text-sm whitespace-pre-wrap">
-                      {line}
-                    </p>
-                  ))}
-                </div>
+                <pre className="text-sm whitespace-pre-wrap font-mono text-xs leading-relaxed">
+                  {message.content}
+                </pre>
               )}
             </div>
           </div>

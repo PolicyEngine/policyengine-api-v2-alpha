@@ -32,6 +32,11 @@ class Settings(BaseSettings):
     # Seeding
     limit_seed_parameters: bool = False
 
+    # Demo agent
+    anthropic_api_key: str = ""
+    demo_use_modal: bool = False
+    policyengine_api_url: str = "https://v2.api.policyengine.org"
+
     @property
     def database_url(self) -> str:
         """Get database URL from Supabase."""

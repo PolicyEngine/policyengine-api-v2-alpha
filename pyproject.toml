@@ -52,3 +52,9 @@ ignore = ["E501"]  # Tool descriptions need to be long
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
+asyncio_mode = "auto"
+
+[dependency-groups]
+dev = [
+    "pytest-asyncio>=1.3.0",
+]
