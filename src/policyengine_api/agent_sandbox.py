@@ -7,6 +7,7 @@ to the PolicyEngine API via MCP. Outputs are streamed back in real-time.
 import json
 
 import modal
+from modal.stream_type import StreamType
 
 # Sandbox image with Bun and Claude Code CLI (v3 - with stdbuf for unbuffered output)
 sandbox_image = (
@@ -98,7 +99,15 @@ async def run_claude_code_in_sandbox_async(
         escaped_question_len=len(escaped_question),
     )
     # Use async exec for proper streaming
-    process = await sb.exec.aio("sh", "-c", cmd, text=True, bufsize=1)
+    # stdout=StreamType.STDOUT prints to Modal logs as it comes in
+    process = await sb.exec.aio(
+        "sh",
+        "-c",
+        cmd,
+        text=True,
+        bufsize=1,
+        stdout=StreamType.STDOUT,  # Print to Modal logs for debugging
+    )
     logfire.info("run_claude_code_in_sandbox: claude CLI process started, returning")
 
     return sb, process
