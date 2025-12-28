@@ -1,13 +1,22 @@
 # PolicyEngine API v2
 
-FastAPI backend for tax-benefit policy microsimulations using PolicyEngine's UK and US models. Provides endpoints for running simulations, comparing policy reforms, and aggregating results.
+FastAPI backend for tax-benefit policy microsimulations using PolicyEngine's UK and US models.
+
+## How it works
+
+1. Client submits calculation request to FastAPI (Cloud Run)
+2. API creates a job record in Supabase and triggers Modal.com function
+3. Modal function runs calculation with pre-loaded PolicyEngine models (sub-1s cold start)
+4. Modal writes results directly to Supabase
+5. Client polls API until job status = "completed"
 
 ## Tech stack
 
 - **Framework:** FastAPI with async endpoints
-- **Database:** Supabase (Postgres) with SQLModel ORM
-- **Package manager:** UV (not pip)
-- **Formatting:** Ruff (not black)
+- **Database:** Supabase (Postgres) via SQLModel
+- **Compute:** Modal.com serverless functions
+- **Package manager:** UV
+- **Formatting:** Ruff
 - **Testing:** Pytest with pytest-asyncio
 - **Deployment:** Terraform on GCP Cloud Run
 
@@ -23,40 +32,26 @@ make lint             # ruff linting with auto-fix
 make modal-deploy     # deploy Modal.com serverless functions
 ```
 
-Local development uses docker compose with a local Supabase instance. Copy `.env.example` to `.env` for local config.
-
 ## Project structure
 
-- `src/policyengine_api/api/` - FastAPI routers (14 endpoint groups)
+- `src/policyengine_api/api/` - FastAPI routers
 - `src/policyengine_api/models/` - SQLModel database models
 - `src/policyengine_api/services/` - database and storage services
 - `src/policyengine_api/modal_app.py` - Modal.com serverless functions
-- `supabase/migrations/` - SQL migrations for RLS and Postgres features
+- `supabase/migrations/` - SQL migrations
 - `terraform/` - GCP Cloud Run infrastructure
-- `docs/` - Next.js documentation site
+- `docs/` - Next.js documentation site (bundled into API image at /docs)
 
 ## Key patterns
 
-SQLModel defines all database schemas. Use Pydantic BaseModel for request/response schemas and BaseSettings for configuration. All API endpoints should be async functions.
-
-Modal.com serverless functions handle compute-intensive simulations with sub-1s cold starts. Clients poll simulation status until complete.
-
-MCP server exposes all endpoints as Claude tools via streamable HTTP transport.
-
-## Testing
-
-Run `make test` before committing. Unit tests use in-memory SQLite fixtures for speed. Integration tests require a running Supabase instance.
+SQLModel for database schemas, Pydantic BaseModel for request/response schemas. All calculation endpoints are async (submit job → poll for results). Modal functions use Supabase connection pooler for IPv4 compatibility.
 
 ## Deployment
 
-Never commit directly to main. Use PRs with passing tests. GitHub Actions runs tests on PRs, then deploys to Cloud Run on merge to main via Terraform.
+Never commit directly to main. PRs trigger tests; merging to main deploys to Cloud Run via Terraform.
 
-Use `gh` CLI for GitHub operations (not `git`) to ensure Actions run correctly.
+Use `gh` CLI for GitHub operations to ensure Actions run correctly.
 
 ## Database
 
-Use `make init` to reset and create tables/storage. Use `make seed` to populate UK/US models with variables, parameters, and datasets. Production reset requires explicit confirmation.
-
-## Observability
-
-Logfire provides automatic instrumentation. Add tracing to complex async flows.
+`make init` resets tables and storage. `make seed` populates UK/US models with variables, parameters, and datasets.
