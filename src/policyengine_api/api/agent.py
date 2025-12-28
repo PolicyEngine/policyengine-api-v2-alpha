@@ -171,6 +171,8 @@ async def _stream_modal_sandbox(question: str, api_base_url: str):
 
             async for line in process.stdout:
                 lines_received += 1
+                # Print to Cloud Run logs for debugging
+                print(f"[CLAUDE] {line[:300]}", flush=True)
                 logfire.info(
                     "raw_line",
                     line_num=lines_received,
