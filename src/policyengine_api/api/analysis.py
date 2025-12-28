@@ -24,16 +24,6 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from sqlmodel import Session, select
 
-
-def _safe_float(value: float | None) -> float | None:
-    """Convert NaN/inf to None for JSON serialization."""
-    if value is None:
-        return None
-    if math.isnan(value) or math.isinf(value):
-        return None
-    return value
-
-
 from policyengine_api.models import (
     Dataset,
     DecileImpact,
@@ -48,6 +38,15 @@ from policyengine_api.models import (
     TaxBenefitModelVersion,
 )
 from policyengine_api.services.database import get_session
+
+
+def _safe_float(value: float | None) -> float | None:
+    """Convert NaN/inf to None for JSON serialization."""
+    if value is None:
+        return None
+    if math.isnan(value) or math.isinf(value):
+        return None
+    return value
 
 # Namespace for deterministic UUIDs
 SIMULATION_NAMESPACE = UUID("a1b2c3d4-e5f6-7890-abcd-ef1234567890")
