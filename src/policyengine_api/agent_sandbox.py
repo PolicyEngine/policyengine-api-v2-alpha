@@ -18,6 +18,10 @@ sandbox_image = (
         "export BUN_INSTALL=/root/.bun && export PATH=$BUN_INSTALL/bin:$PATH && "
         "ln -s $BUN_INSTALL/bin/bun /usr/local/bin/node && "
         "bun install -g @anthropic-ai/claude-code",
+        # Pre-accept ToS and configure for non-interactive use
+        "mkdir -p /root/.claude && "
+        'echo \'{"hasCompletedOnboarding": true, "hasAcknowledgedCostThreshold": true}\' '
+        "> /root/.claude/settings.json",
     )
     .env(
         {
@@ -43,8 +47,6 @@ def run_claude_code_in_sandbox(
     Returns the sandbox and process handle for streaming output.
     """
     import logfire
-
-    from policyengine_api.config import settings
 
     print("[SANDBOX] run_claude_code_in_sandbox starting", flush=True)
     logfire.info(
@@ -82,44 +84,6 @@ def run_claude_code_in_sandbox(
     print("[SANDBOX] sandbox created", flush=True)
     logfire.info("run_claude_code_in_sandbox: sandbox created")
 
-    # Log from inside the sandbox via Python
-    logfire.info("run_claude_code_in_sandbox: logging from inside sandbox")
-    escaped_question = question[:50].replace("'", "\\'").replace('"', '\\"')
-    sandbox_log = sb.exec(
-        "python",
-        "-c",
-        f"""
-import logfire
-logfire.configure(token='{settings.logfire_token}', service_name='modal-sandbox-inner')
-logfire.info('Inside Modal sandbox', question='{escaped_question}')
-print('Logfire configured inside sandbox')
-""",
-    )
-    sandbox_log.wait()
-    logfire.info(
-        "run_claude_code_in_sandbox: sandbox inner log result",
-        stdout=sandbox_log.stdout.read()[:200],
-        stderr=sandbox_log.stderr.read()[:200],
-        returncode=sandbox_log.returncode,
-    )
-
-    # Check environment inside sandbox
-    logfire.info("run_claude_code_in_sandbox: checking sandbox environment")
-    env_check = sb.exec(
-        "sh",
-        "-c",
-        "which claude && echo PATH=$PATH && echo ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:0:10}...",
-    )
-    env_check.wait()
-    env_stdout = env_check.stdout.read()
-    env_stderr = env_check.stderr.read()
-    logfire.info(
-        "run_claude_code_in_sandbox: env check",
-        stdout=env_stdout[:500] if env_stdout else None,
-        stderr=env_stderr[:500] if env_stderr else None,
-        returncode=env_check.returncode,
-    )
-
     # Write MCP config
     logfire.info("run_claude_code_in_sandbox: writing MCP config")
     sb.exec("mkdir", "-p", "/root/.claude")
@@ -130,53 +94,6 @@ print('Logfire configured inside sandbox')
     logfire.info(
         "run_claude_code_in_sandbox: MCP config written",
         returncode=config_process.returncode,
-    )
-
-    # Verify config was written
-    verify_process = sb.exec("cat", "/root/.claude/mcp_servers.json")
-    verify_process.wait()
-    logfire.info(
-        "run_claude_code_in_sandbox: MCP config contents",
-        config=verify_process.stdout.read()[:500],
-    )
-
-    # Test Claude CLI works at all
-    print("[SANDBOX] Testing claude --version", flush=True)
-    logfire.info("run_claude_code_in_sandbox: testing claude --version")
-    version_check = sb.exec("claude", "--version")
-    version_check.wait()
-    version_stdout = version_check.stdout.read()
-    version_stderr = version_check.stderr.read()
-    print(f"[SANDBOX] claude --version: stdout={version_stdout}, stderr={version_stderr}, rc={version_check.returncode}", flush=True)
-    logfire.info(
-        "run_claude_code_in_sandbox: claude --version result",
-        stdout=version_stdout[:200] if version_stdout else None,
-        stderr=version_stderr[:500] if version_stderr else None,
-        returncode=version_check.returncode,
-    )
-
-    # Quick test: run Claude with a simple query WITHOUT MCP to verify it works
-    print("[SANDBOX] Testing simple claude query (no MCP)", flush=True)
-    logfire.info("run_claude_code_in_sandbox: testing simple query without MCP")
-    simple_test = sb.exec(
-        "claude",
-        "-p",
-        "Say hello in one word",
-        "--output-format",
-        "text",
-        "--dangerously-skip-permissions",
-        "--max-turns",
-        "1",
-    )
-    simple_test.wait()
-    simple_stdout = simple_test.stdout.read()
-    simple_stderr = simple_test.stderr.read()
-    print(f"[SANDBOX] Simple test result: stdout={simple_stdout[:200] if simple_stdout else 'empty'}, stderr={simple_stderr[:200] if simple_stderr else 'empty'}, rc={simple_test.returncode}", flush=True)
-    logfire.info(
-        "run_claude_code_in_sandbox: simple test result",
-        stdout=simple_stdout[:500] if simple_stdout else None,
-        stderr=simple_stderr[:500] if simple_stderr else None,
-        returncode=simple_test.returncode,
     )
 
     # Run Claude Code with the question
@@ -242,6 +159,9 @@ def run_policy_analysis(
                 "claude",
                 "-p",
                 question,
+                "--dangerously-skip-permissions",
+                "--max-turns",
+                "10",
                 "--allowedTools",
                 "mcp__policyengine__*,Bash,Read,Grep,Glob,Write,Edit",
             ],
