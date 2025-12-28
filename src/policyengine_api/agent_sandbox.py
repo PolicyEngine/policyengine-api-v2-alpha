@@ -6,7 +6,7 @@ to the PolicyEngine API via MCP. Outputs are streamed back in real-time.
 
 import modal
 
-# Sandbox image with Bun and Claude Code CLI
+# Sandbox image with Bun and Claude Code CLI (v2 - with ToS pre-accept)
 sandbox_image = (
     modal.Image.debian_slim(python_version="3.12")
     .apt_install("curl", "git", "unzip")
@@ -18,15 +18,16 @@ sandbox_image = (
         "export BUN_INSTALL=/root/.bun && export PATH=$BUN_INSTALL/bin:$PATH && "
         "ln -s $BUN_INSTALL/bin/bun /usr/local/bin/node && "
         "bun install -g @anthropic-ai/claude-code",
-        # Pre-accept ToS and configure for non-interactive use
+        # Pre-accept ToS and configure for non-interactive use (v2)
         "mkdir -p /root/.claude && "
         'echo \'{"hasCompletedOnboarding": true, "hasAcknowledgedCostThreshold": true}\' '
-        "> /root/.claude/settings.json",
+        "> /root/.claude/settings.json && cat /root/.claude/settings.json",
     )
     .env(
         {
             "BUN_INSTALL": "/root/.bun",
             "PATH": "/root/.bun/bin:/usr/local/bin:/usr/bin:/bin",
+            "CLAUDE_CODE_SKIP_ONBOARDING": "1",  # Cache bust + extra safety
         }
     )
 )
@@ -97,7 +98,7 @@ def run_claude_code_in_sandbox(
     )
 
     # Run Claude Code with the question
-    # --dangerously-skip-permissions: auto-accept permission prompts (required for non-interactive)
+    # Note: Can't use --dangerously-skip-permissions as root (Modal runs as root)
     # --max-turns: limit execution to prevent runaway
     print("[SANDBOX] Starting claude CLI with question", flush=True)
     logfire.info("run_claude_code_in_sandbox: starting claude CLI")
@@ -108,7 +109,6 @@ def run_claude_code_in_sandbox(
         "--output-format",
         "stream-json",
         "--verbose",
-        "--dangerously-skip-permissions",
         "--max-turns",
         "10",
         "--allowedTools",
@@ -153,13 +153,12 @@ def run_policy_analysis(
 
         logfire.info("Starting Claude Code", question=question[:100])
 
-        # Run Claude Code
+        # Run Claude Code (no --dangerously-skip-permissions since we run as root)
         result = subprocess.run(
             [
                 "claude",
                 "-p",
                 question,
-                "--dangerously-skip-permissions",
                 "--max-turns",
                 "10",
                 "--allowedTools",
