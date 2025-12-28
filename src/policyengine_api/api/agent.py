@@ -85,59 +85,107 @@ async def _stream_claude_code(question: str, api_base_url: str):
     yield f"data: {json.dumps({'type': 'done', 'returncode': process.returncode})}\n\n"
 
 
+def _parse_claude_stream_event(line: str) -> dict | None:
+    """Parse a Claude Code stream-json event and extract useful content.
+
+    Returns a dict with 'type' and 'content' for streaming to client,
+    or None if the event should be skipped.
+    """
+    if not line or not line.strip():
+        return None
+
+    try:
+        event = json.loads(line)
+    except json.JSONDecodeError:
+        # Not JSON, pass through as raw output
+        return {"type": "raw", "content": line}
+
+    event_type = event.get("type")
+
+    # Assistant text output (the main response)
+    if event_type == "assistant":
+        message = event.get("message", {})
+        content_blocks = message.get("content", [])
+        text_parts = []
+        for block in content_blocks:
+            if block.get("type") == "text":
+                text_parts.append(block.get("text", ""))
+            elif block.get("type") == "tool_use":
+                tool_name = block.get("name", "unknown")
+                text_parts.append(f"[Using tool: {tool_name}]")
+        if text_parts:
+            return {"type": "assistant", "content": "".join(text_parts)}
+
+    # Content block delta (streaming text chunks)
+    elif event_type == "content_block_delta":
+        delta = event.get("delta", {})
+        if delta.get("type") == "text_delta":
+            text = delta.get("text", "")
+            if text:
+                return {"type": "text", "content": text}
+
+    # Tool use events
+    elif event_type == "tool_use":
+        tool_name = event.get("name", "unknown")
+        return {"type": "tool", "content": f"Using tool: {tool_name}"}
+
+    # Tool result
+    elif event_type == "tool_result":
+        content = event.get("content", "")
+        if isinstance(content, str) and content:
+            # Truncate long tool results
+            preview = content[:500] + "..." if len(content) > 500 else content
+            return {"type": "tool_result", "content": preview}
+
+    # Result/completion
+    elif event_type == "result":
+        result_text = event.get("result", "")
+        if result_text:
+            return {"type": "result", "content": result_text}
+
+    # System messages
+    elif event_type == "system":
+        msg = event.get("message", "")
+        if msg:
+            return {"type": "system", "content": msg}
+
+    return None
+
+
 async def _stream_modal_sandbox(question: str, api_base_url: str):
     """Stream output from Claude Code running in Modal Sandbox."""
+    import queue
+    import threading
     from concurrent.futures import ThreadPoolExecutor
 
-    # Immediate log
-    print("[AGENT] _stream_modal_sandbox started", flush=True)
-    logfire.info("_stream_modal_sandbox: started", question=question[:100])
+    logfire.info("stream_modal_sandbox: starting", question=question[:100])
 
     sb = None
     executor = ThreadPoolExecutor(max_workers=1)
     try:
         from policyengine_api.agent_sandbox import run_claude_code_in_sandbox
 
-        print("[AGENT] creating sandbox", flush=True)
         logfire.info(
-            "_stream_modal_sandbox: creating sandbox", api_base_url=api_base_url
+            "stream_modal_sandbox: creating sandbox", api_base_url=api_base_url
         )
 
-        # Run blocking Modal SDK calls in thread pool to avoid blocking event loop
         loop = asyncio.get_event_loop()
         sb, process = await loop.run_in_executor(
             executor, run_claude_code_in_sandbox, question, api_base_url
         )
-        print("[AGENT] sandbox created", flush=True)
-        logfire.info("_stream_modal_sandbox: sandbox created")
-
-        # Poll for lines with timeout to allow other async tasks
-        import queue
-        import threading
+        logfire.info("stream_modal_sandbox: sandbox created")
 
         line_queue = queue.Queue()
 
         def stream_reader():
             try:
-                logfire.info("stream_reader: starting to read stdout")
-                line_count = 0
                 for line in process.stdout:
-                    line_count += 1
-                    logfire.info(
-                        "stream_reader: got line",
-                        line_num=line_count,
-                        line_preview=line[:200] if line else None,
-                    )
                     line_queue.put(("line", line))
-                logfire.info("stream_reader: stdout exhausted, waiting for process")
                 process.wait()
-                logfire.info(
-                    "stream_reader: process finished", returncode=process.returncode
-                )
                 if process.returncode != 0:
                     stderr = process.stderr.read()
                     logfire.error(
-                        "stream_reader: process failed",
+                        "claude_code_failed",
                         returncode=process.returncode,
                         stderr=stderr[:500] if stderr else None,
                     )
@@ -145,48 +193,49 @@ async def _stream_modal_sandbox(question: str, api_base_url: str):
                 else:
                     line_queue.put(("done", process.returncode))
             except Exception as e:
-                logfire.exception("stream_reader: exception", error=str(e))
+                logfire.exception("stream_reader_error", error=str(e))
                 line_queue.put(("exception", str(e)))
 
-        logfire.info("_stream_modal_sandbox: starting reader thread")
         reader_thread = threading.Thread(target=stream_reader, daemon=True)
         reader_thread.start()
-        logfire.info("_stream_modal_sandbox: reader thread started, entering main loop")
 
         while True:
             try:
-                # Non-blocking check with short timeout
                 item = await loop.run_in_executor(
                     executor, lambda: line_queue.get(timeout=0.1)
                 )
                 event_type, data = item
 
                 if event_type == "line":
-                    yield f"data: {json.dumps({'type': 'output', 'content': data})}\n\n"
+                    parsed = _parse_claude_stream_event(data)
+                    if parsed:
+                        logfire.info(
+                            "stream_event",
+                            event_type=parsed["type"],
+                            content_preview=parsed["content"][:100]
+                            if parsed["content"]
+                            else None,
+                        )
+                        yield f"data: {json.dumps(parsed)}\n\n"
                 elif event_type == "error":
                     returncode, stderr = data
-                    logfire.error(
-                        "Claude Code failed in sandbox",
-                        returncode=returncode,
-                        stderr=stderr[:500],
-                    )
                     yield f"data: {json.dumps({'type': 'error', 'content': stderr})}\n\n"
                     yield f"data: {json.dumps({'type': 'done', 'returncode': returncode})}\n\n"
                     break
                 elif event_type == "done":
+                    logfire.info("stream_complete", returncode=data)
                     yield f"data: {json.dumps({'type': 'done', 'returncode': data})}\n\n"
                     break
                 elif event_type == "exception":
                     raise Exception(data)
             except Exception as e:
                 if "Empty" in type(e).__name__:
-                    # Queue timeout, continue polling
                     await asyncio.sleep(0)
                     continue
                 raise
 
     except Exception as e:
-        logfire.exception("_stream_modal_sandbox: failed", error=str(e))
+        logfire.exception("stream_modal_sandbox_failed", error=str(e))
         yield f"data: {json.dumps({'type': 'error', 'content': f'Sandbox error: {str(e)}'})}\n\n"
         yield f"data: {json.dumps({'type': 'done', 'returncode': 1})}\n\n"
     finally:
