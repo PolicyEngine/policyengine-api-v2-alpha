@@ -97,12 +97,14 @@ def run_claude_code_in_sandbox(
     # Escape the question and config for shell
     escaped_question = question.replace("'", "'\"'\"'")
     escaped_mcp_config = mcp_config_json.replace("'", "'\"'\"'")
-    # Run claude directly (no shell wrapper) - Modal handles stdin/stdout properly
+    # CRITICAL: < /dev/null closes stdin (otherwise Claude hangs waiting for input)
+    # 2>&1 merges stderr into stdout for unified streaming
     cmd = (
         f"claude -p '{escaped_question}' "
         f"--mcp-config '{escaped_mcp_config}' "
         "--output-format stream-json --verbose --max-turns 10 "
-        "--allowedTools 'mcp__policyengine__*,Bash,Read,Grep,Glob,Write,Edit'"
+        "--allowedTools 'mcp__policyengine__*,Bash,Read,Grep,Glob,Write,Edit' "
+        "< /dev/null 2>&1"
     )
     logfire.info(
         "run_claude_code_in_sandbox: executing",
@@ -111,15 +113,7 @@ def run_claude_code_in_sandbox(
         escaped_question_len=len(escaped_question),
     )
     # text=True, bufsize=1 enables line-buffered streaming
-    # stderr=modal.Sandbox.STDOUT merges stderr into stdout
-    process = sb.exec(
-        "sh",
-        "-c",
-        cmd,
-        text=True,
-        bufsize=1,
-        stderr=modal.Sandbox.STDOUT,
-    )
+    process = sb.exec("sh", "-c", cmd, text=True, bufsize=1)
     print("[SANDBOX] claude CLI process started", flush=True)
     logfire.info("run_claude_code_in_sandbox: claude CLI process started, returning")
 
