@@ -85,8 +85,9 @@ async def run_claude_code_in_sandbox_async(
     escaped_mcp_config = mcp_config_json.replace("'", "'\"'\"'")
     # CRITICAL: < /dev/null closes stdin (otherwise Claude hangs waiting for input)
     # 2>&1 merges stderr into stdout for unified streaming
+    # stdbuf -oL forces line-buffered stdout to prevent libc buffering
     cmd = (
-        f"claude -p '{escaped_question}' "
+        f"stdbuf -oL claude -p '{escaped_question}' "
         f"--mcp-config '{escaped_mcp_config}' "
         "--output-format stream-json --verbose --max-turns 10 "
         "--allowedTools 'mcp__policyengine__*,Bash,Read,Grep,Glob,Write,Edit' "
@@ -99,14 +100,14 @@ async def run_claude_code_in_sandbox_async(
         escaped_question_len=len(escaped_question),
     )
     # Use async exec for proper streaming
-    # stdout=StreamType.STDOUT prints to Modal logs as it comes in
+    # stdout=StreamType.PIPE allows us to consume the stream (default but explicit)
     process = await sb.exec.aio(
         "sh",
         "-c",
         cmd,
         text=True,
         bufsize=1,
-        stdout=StreamType.STDOUT,  # Print to Modal logs for debugging
+        stdout=StreamType.PIPE,
     )
     logfire.info("run_claude_code_in_sandbox: claude CLI process started, returning")
 
