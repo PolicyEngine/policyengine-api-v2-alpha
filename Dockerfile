@@ -11,9 +11,10 @@ FROM ghcr.io/astral-sh/uv:python3.13-bookworm-slim
 
 WORKDIR /app
 
-# Copy bun from docs stage and install Claude Code CLI
+# Install bun and Claude Code CLI (symlink bun as node for CLI compatibility)
 COPY --from=docs-builder /usr/local/bin/bun /usr/local/bin/bun
-RUN bun install -g @anthropic-ai/claude-code
+RUN ln -s /usr/local/bin/bun /usr/local/bin/node && \
+    bun install -g @anthropic-ai/claude-code
 ENV PATH="/root/.bun/bin:$PATH"
 
 # Copy project files
