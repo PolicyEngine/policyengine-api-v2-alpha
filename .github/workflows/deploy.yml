@@ -103,3 +103,30 @@ jobs:
           echo "API: $API_URL"
           echo "Health: $API_URL/health"
           echo "Docs: $API_URL/docs"
+
+  deploy-modal:
+    name: Deploy Modal functions
+    runs-on: ubuntu-latest
+    needs: test
+    environment: production
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Setup Python
+        run: uv python install 3.13
+
+      - name: Install dependencies
+        run: uv sync
+
+      - name: Deploy Modal app
+        env:
+          MODAL_TOKEN_ID: ${{ secrets.MODAL_TOKEN_ID }}
+          MODAL_TOKEN_SECRET: ${{ secrets.MODAL_TOKEN_SECRET }}
+        run: |
+          uv run modal deploy src/policyengine_api/modal_app.py
+          uv run modal deploy src/policyengine_api/demo_modal.py
