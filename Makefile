@@ -120,6 +120,7 @@ modal-deploy:
 		"DATABASE_URL=$$SUPABASE_POOLER_URL" \
 		"SUPABASE_URL=$$SUPABASE_URL" \
 		"SUPABASE_KEY=$$SUPABASE_KEY" \
+		"STORAGE_BUCKET=$$STORAGE_BUCKET" \
 		--force
 	uv run modal deploy src/policyengine_api/modal_app.py
 

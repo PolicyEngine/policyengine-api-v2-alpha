@@ -76,26 +76,14 @@ variable "api_max_instances" {
   default     = 10
 }
 
-variable "worker_cpu" {
-  description = "CPU for worker service"
+variable "modal_token_id" {
+  description = "Modal.com token ID for serverless compute"
   type        = string
-  default     = "2"
+  sensitive   = true
 }
 
-variable "worker_memory" {
-  description = "Memory for worker service"
+variable "modal_token_secret" {
+  description = "Modal.com token secret for serverless compute"
   type        = string
-  default     = "2Gi"
-}
-
-variable "worker_min_instances" {
-  description = "Minimum number of worker instances"
-  type        = number
-  default     = 1
-}
-
-variable "worker_max_instances" {
-  description = "Maximum number of worker instances"
-  type        = number
-  default     = 5
+  sensitive   = true
 }

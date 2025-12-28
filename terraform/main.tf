@@ -106,76 +106,13 @@ resource "google_cloud_run_v2_service" "api" {
         name  = "DEBUG"
         value = "false"
       }
-    }
-  }
-
-  depends_on = [google_project_service.required_apis]
-
-  lifecycle {
-    ignore_changes = [template[0].containers[0].image]
-  }
-}
-
-# Cloud Run service for worker (always-on, polls for pending work)
-resource "google_cloud_run_v2_service" "worker" {
-  name     = "${var.project_name}-worker"
-  location = var.region
-  ingress  = "INGRESS_TRAFFIC_INTERNAL_ONLY"
-
-  template {
-    service_account = google_service_account.cloudrun.email
-
-    scaling {
-      min_instance_count = 1
-      max_instance_count = 1
-    }
-
-    containers {
-      image   = "${var.region}-docker.pkg.dev/${var.project_id}/${google_artifact_registry_repository.repo.repository_id}/${var.project_name}:latest"
-      command = ["python", "-m", "policyengine_api.tasks.worker"]
-
-      resources {
-        limits = {
-          cpu    = var.worker_cpu
-          memory = var.worker_memory
-        }
-      }
-
-      ports {
-        container_port = 8080
-      }
-
       env {
-        name  = "SUPABASE_URL"
-        value = var.supabase_url
+        name  = "MODAL_TOKEN_ID"
+        value = var.modal_token_id
       }
       env {
-        name  = "SUPABASE_KEY"
-        value = var.supabase_key
-      }
-      env {
-        name  = "SUPABASE_DB_URL"
-        value = var.supabase_db_url
-      }
-      env {
-        name  = "LOGFIRE_TOKEN"
-        value = var.logfire_token
-      }
-      env {
-        name  = "LOGFIRE_ENVIRONMENT"
-        value = var.logfire_environment
-      }
-      env {
-        name  = "STORAGE_BUCKET"
-        value = var.storage_bucket
-      }
-      env {
-        name  = "WORKER_POLL_INTERVAL"
-        value = "10"
-      }
-      env {
-        name  = "WORKER_PORT"
-        value = "8080"
+        name  = "MODAL_TOKEN_SECRET"
+        value = var.modal_token_secret
       }
     }
   }

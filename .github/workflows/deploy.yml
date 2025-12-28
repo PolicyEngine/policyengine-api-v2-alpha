@@ -85,17 +85,13 @@ jobs:
           TF_VAR_supabase_db_url: ${{ secrets.SUPABASE_DB_URL }}
           TF_VAR_logfire_token: ${{ secrets.LOGFIRE_TOKEN }}
           TF_VAR_logfire_environment: prod
+          TF_VAR_modal_token_id: ${{ secrets.MODAL_TOKEN_ID }}
+          TF_VAR_modal_token_secret: ${{ secrets.MODAL_TOKEN_SECRET }}
         run: terraform apply -auto-approve
 
       - name: Deploy API to Cloud Run
         run: |
           gcloud run services update ${{ vars.API_SERVICE_NAME }} \
-            --region=${{ vars.GCP_REGION }} \
-            --image=$IMAGE_URL:${{ github.sha }}
-
-      - name: Deploy worker to Cloud Run
-        run: |
-          gcloud run services update ${{ vars.WORKER_SERVICE_NAME }} \
             --region=${{ vars.GCP_REGION }} \
             --image=$IMAGE_URL:${{ github.sha }}
 
