@@ -1,8 +1,13 @@
 """Modal.com serverless functions for PolicyEngine compute.
 
-This module defines Modal functions for running PolicyEngine simulations
+This module defines Modal functions for running simulations and analyses
 with sub-1s cold starts via memory snapshot restore. The heavy policyengine
 imports happen at image build time, not runtime.
+
+Function naming follows the API hierarchy:
+- simulate_household_*: Single household calculation (/simulate/household)
+- simulate_economy_*: Single economy simulation (/simulate/economy) [future]
+- economy_comparison_*: Full economy comparison analysis (/analysis/compare/economy)
 
 Deploy with: modal deploy src/policyengine_api/modal_app.py
 """
@@ -92,7 +97,7 @@ def download_dataset(
 
 
 @app.function(image=uk_image, secrets=[secrets], memory=4096, timeout=600)
-def calculate_household_uk(
+def simulate_household_uk(
     job_id: str,
     people: list[dict],
     benunit: dict,
@@ -215,7 +220,7 @@ def calculate_household_uk(
 
 
 @app.function(image=us_image, secrets=[secrets], memory=4096, timeout=600)
-def calculate_household_us(
+def simulate_household_us(
     job_id: str,
     people: list[dict],
     marital_unit: dict,
@@ -347,8 +352,8 @@ def calculate_household_us(
 
 
 @app.function(image=uk_image, secrets=[secrets], memory=8192, timeout=1800)
-def run_report_uk(report_id: str) -> None:
-    """Run UK economic impact report and write results to database."""
+def economy_comparison_uk(job_id: str) -> None:
+    """Run UK economy comparison analysis (decile impacts, budget impact, etc)."""
     import os
     from datetime import datetime, timezone
     from uuid import UUID
@@ -357,7 +362,7 @@ def run_report_uk(report_id: str) -> None:
     from sqlmodel import Session, create_engine
 
     console = Console()
-    console.print(f"[bold blue]Running UK report {report_id}[/bold blue]")
+    console.print(f"[bold blue]Running UK economy comparison {job_id}[/bold blue]")
 
     database_url = os.environ["DATABASE_URL"]
     supabase_url = os.environ["SUPABASE_URL"]
@@ -381,9 +386,9 @@ def run_report_uk(report_id: str) -> None:
     try:
         with Session(engine) as session:
             # Load report and related data
-            report = session.get(Report, UUID(report_id))
+            report = session.get(Report, UUID(job_id))
             if not report:
-                raise ValueError(f"Report {report_id} not found")
+                raise ValueError(f"Report {job_id} not found")
 
             baseline_sim = session.get(Simulation, report.baseline_simulation_id)
             reform_sim = session.get(Simulation, report.reform_simulation_id)
@@ -553,12 +558,12 @@ def run_report_uk(report_id: str) -> None:
             session.add(report)
             session.commit()
 
-        console.print(f"[bold green]UK report {report_id} completed[/bold green]")
+        console.print(f"[bold green]UK economy comparison {job_id} completed[/bold green]")
 
     except Exception as e:
-        console.print(f"[bold red]UK report {report_id} failed: {e}[/bold red]")
+        console.print(f"[bold red]UK economy comparison {job_id} failed: {e}[/bold red]")
         with Session(engine) as session:
-            report = session.get(Report, UUID(report_id))
+            report = session.get(Report, UUID(job_id))
             if report:
                 report.status = ReportStatus.FAILED
                 report.error_message = str(e)
@@ -568,8 +573,8 @@ def run_report_uk(report_id: str) -> None:
 
 
 @app.function(image=us_image, secrets=[secrets], memory=8192, timeout=1800)
-def run_report_us(report_id: str) -> None:
-    """Run US economic impact report and write results to database."""
+def economy_comparison_us(job_id: str) -> None:
+    """Run US economy comparison analysis (decile impacts, budget impact, etc)."""
     import os
     from datetime import datetime, timezone
     from uuid import UUID
@@ -578,7 +583,7 @@ def run_report_us(report_id: str) -> None:
     from sqlmodel import Session, create_engine
 
     console = Console()
-    console.print(f"[bold blue]Running US report {report_id}[/bold blue]")
+    console.print(f"[bold blue]Running US economy comparison {job_id}[/bold blue]")
 
     database_url = os.environ["DATABASE_URL"]
     supabase_url = os.environ["SUPABASE_URL"]
@@ -601,9 +606,9 @@ def run_report_us(report_id: str) -> None:
     try:
         with Session(engine) as session:
             # Load report and related data
-            report = session.get(Report, UUID(report_id))
+            report = session.get(Report, UUID(job_id))
             if not report:
-                raise ValueError(f"Report {report_id} not found")
+                raise ValueError(f"Report {job_id} not found")
 
             baseline_sim = session.get(Simulation, report.baseline_simulation_id)
             reform_sim = session.get(Simulation, report.reform_simulation_id)
@@ -762,12 +767,12 @@ def run_report_us(report_id: str) -> None:
             session.add(report)
             session.commit()
 
-        console.print(f"[bold green]US report {report_id} completed[/bold green]")
+        console.print(f"[bold green]US economy comparison {job_id} completed[/bold green]")
 
     except Exception as e:
-        console.print(f"[bold red]US report {report_id} failed: {e}[/bold red]")
+        console.print(f"[bold red]US economy comparison {job_id} failed: {e}[/bold red]")
         with Session(engine) as session:
-            report = session.get(Report, UUID(report_id))
+            report = session.get(Report, UUID(job_id))
             if report:
                 report.status = ReportStatus.FAILED
                 report.error_message = str(e)

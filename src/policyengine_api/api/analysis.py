@@ -286,16 +286,16 @@ def _build_response(
     )
 
 
-def _trigger_modal_report(report_id: str, tax_benefit_model_name: str) -> None:
-    """Trigger Modal function for economic impact report."""
+def _trigger_economy_comparison(job_id: str, tax_benefit_model_name: str) -> None:
+    """Trigger Modal function for economy comparison analysis."""
     import modal
 
     if tax_benefit_model_name == "policyengine_uk":
-        fn = modal.Function.from_name("policyengine", "run_report_uk")
+        fn = modal.Function.from_name("policyengine", "economy_comparison_uk")
     else:
-        fn = modal.Function.from_name("policyengine", "run_report_us")
+        fn = modal.Function.from_name("policyengine", "economy_comparison_us")
 
-    fn.spawn(report_id=report_id)
+    fn.spawn(job_id=job_id)
 
 
 @router.post("/economic-impact", response_model=EconomicImpactResponse)
@@ -348,8 +348,8 @@ def economic_impact(
 
     # Trigger Modal if report is pending
     if report.status == ReportStatus.PENDING:
-        with logfire.span("trigger_modal_report", report_id=str(report.id)):
-            _trigger_modal_report(str(report.id), request.tax_benefit_model_name)
+        with logfire.span("trigger_economy_comparison", job_id=str(report.id)):
+            _trigger_economy_comparison(str(report.id), request.tax_benefit_model_name)
 
     return _build_response(report, baseline_sim, reform_sim, session)
 
