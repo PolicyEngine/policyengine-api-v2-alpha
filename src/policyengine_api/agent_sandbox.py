@@ -44,6 +44,8 @@ def run_claude_code_in_sandbox(
     """
     import logfire
 
+    from policyengine_api.config import settings
+
     logfire.info(
         "run_claude_code_in_sandbox: starting",
         question=question[:100],
@@ -74,6 +76,27 @@ def run_claude_code_in_sandbox(
         workdir="/tmp",
     )
     logfire.info("run_claude_code_in_sandbox: sandbox created")
+
+    # Log from inside the sandbox via Python
+    logfire.info("run_claude_code_in_sandbox: logging from inside sandbox")
+    escaped_question = question[:50].replace("'", "\\'").replace('"', '\\"')
+    sandbox_log = sb.exec(
+        "python",
+        "-c",
+        f"""
+import logfire
+logfire.configure(token='{settings.logfire_token}', service_name='modal-sandbox-inner')
+logfire.info('Inside Modal sandbox', question='{escaped_question}')
+print('Logfire configured inside sandbox')
+""",
+    )
+    sandbox_log.wait()
+    logfire.info(
+        "run_claude_code_in_sandbox: sandbox inner log result",
+        stdout=sandbox_log.stdout.read()[:200],
+        stderr=sandbox_log.stderr.read()[:200],
+        returncode=sandbox_log.returncode,
+    )
 
     # Check environment inside sandbox
     logfire.info("run_claude_code_in_sandbox: checking sandbox environment")
