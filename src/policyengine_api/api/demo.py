@@ -47,22 +47,23 @@ _jobs: dict[str, dict] = {}
 
 async def _stream_claude_code(question: str, api_base_url: str):
     """Stream output from Claude Code running with MCP server."""
-    # Write MCP config for Claude Code
-    claude_dir = os.path.expanduser("~/.claude")
-    os.makedirs(claude_dir, exist_ok=True)
+    # MCP config as JSON string (type: sse for HTTP SSE transport)
+    mcp_config = json.dumps(
+        {"mcpServers": {"policyengine": {"type": "sse", "url": f"{api_base_url}/mcp"}}}
+    )
 
-    mcp_config = {
-        "mcpServers": {"policyengine": {"type": "url", "url": f"{api_base_url}/mcp/"}}
-    }
-    config_path = os.path.join(claude_dir, "mcp_servers.json")
-    with open(config_path, "w") as f:
-        json.dump(mcp_config, f)
-
-    # Run Claude Code with streaming
+    # Run Claude Code with streaming JSON output for realtime updates
     process = await asyncio.create_subprocess_exec(
         "claude",
-        "-p", question,
-        "--allowedTools", "mcp__policyengine__*,Bash,Read,Grep,Glob,Write,Edit",
+        "-p",
+        question,
+        "--output-format",
+        "stream-json",
+        "--verbose",
+        "--mcp-config",
+        mcp_config,
+        "--allowedTools",
+        "mcp__policyengine__*,Bash,Read,Grep,Glob,Write,Edit",
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
         env={**os.environ, "ANTHROPIC_API_KEY": settings.anthropic_api_key},
@@ -172,8 +173,10 @@ async def ask_question(request: AskRequest) -> AskResponse:
                 # Run locally
                 process = await asyncio.create_subprocess_exec(
                     "claude",
-                    "-p", request.question,
-                    "--allowedTools", "mcp__policyengine__*,Bash,Read,Grep,Glob,Write,Edit",
+                    "-p",
+                    request.question,
+                    "--allowedTools",
+                    "mcp__policyengine__*,Bash,Read,Grep,Glob,Write,Edit",
                     stdout=asyncio.subprocess.PIPE,
                     stderr=asyncio.subprocess.PIPE,
                     env={**os.environ, "ANTHROPIC_API_KEY": settings.anthropic_api_key},

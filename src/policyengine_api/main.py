@@ -65,9 +65,9 @@ logfire.instrument_fastapi(app)
 app.include_router(api_router)
 
 # Mount MCP server - exposes all API endpoints as MCP tools at /mcp
-# Using mount_http() for streamable HTTP transport (required by Claude Code)
+# Using mount_sse() for Server-Sent Events transport (required by Claude Code)
 mcp = FastApiMCP(app)
-mcp.mount_http()
+mcp.mount_sse(mount_path="/mcp")
 
 # Mount static docs site at /docs (built from Next.js in docs/out)
 docs_path = Path(__file__).parent.parent.parent / "docs" / "out"

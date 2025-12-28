@@ -38,12 +38,12 @@ def run_claude_code_in_sandbox(
 
     Returns the sandbox and process handle for streaming output.
     """
-    # MCP config for Claude Code
+    # MCP config for Claude Code (type: sse for HTTP SSE transport)
     mcp_config = f"""{{
   "mcpServers": {{
     "policyengine": {{
-      "type": "url",
-      "url": "{api_base_url}/mcp/"
+      "type": "sse",
+      "url": "{api_base_url}/mcp"
     }}
   }}
 }}"""
@@ -65,8 +65,10 @@ def run_claude_code_in_sandbox(
     # Run Claude Code with the question
     process = sb.exec(
         "claude",
-        "-p", question,
-        "--allowedTools", "mcp__policyengine__*,Bash,Read,Grep,Glob,Write,Edit",
+        "-p",
+        question,
+        "--allowedTools",
+        "mcp__policyengine__*,Bash,Read,Grep,Glob,Write,Edit",
     )
 
     return sb, process
@@ -87,7 +89,7 @@ def run_policy_analysis(
     # Write MCP config
     os.makedirs("/root/.claude", exist_ok=True)
     mcp_config = {
-        "mcpServers": {"policyengine": {"type": "url", "url": f"{api_base_url}/mcp/"}}
+        "mcpServers": {"policyengine": {"type": "sse", "url": f"{api_base_url}/mcp"}}
     }
     with open("/root/.claude/mcp_servers.json", "w") as f:
         json.dump(mcp_config, f)
@@ -96,8 +98,10 @@ def run_policy_analysis(
     result = subprocess.run(
         [
             "claude",
-            "-p", question,
-            "--allowedTools", "mcp__policyengine__*,Bash,Read,Grep,Glob,Write,Edit",
+            "-p",
+            question,
+            "--allowedTools",
+            "mcp__policyengine__*,Bash,Read,Grep,Glob,Write,Edit",
         ],
         capture_output=True,
         text=True,

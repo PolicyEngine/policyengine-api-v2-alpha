@@ -12,7 +12,6 @@ from test_fixtures.fixtures_parameters import (
     model_version,  # noqa: F401 - pytest fixture
 )
 
-
 # -----------------------------------------------------------------------------
 # Parameter Endpoint Tests
 # -----------------------------------------------------------------------------
@@ -79,7 +78,9 @@ def test__given_nonexistent_parameter_value_id__then_returns_404(client):
 
 
 def test__given_parameter_id_filter__then_returns_only_matching_values(
-    client, session, model_version  # noqa: F811
+    client,
+    session,
+    model_version,  # noqa: F811
 ):
     """GET /parameter-values?parameter_id=X returns only values for that parameter."""
     # Given
@@ -99,7 +100,9 @@ def test__given_parameter_id_filter__then_returns_only_matching_values(
 
 
 def test__given_policy_id_filter__then_returns_only_matching_values(
-    client, session, model_version  # noqa: F811
+    client,
+    session,
+    model_version,  # noqa: F811
 ):
     """GET /parameter-values?policy_id=X returns only values for that policy."""
     # Given
@@ -120,7 +123,9 @@ def test__given_policy_id_filter__then_returns_only_matching_values(
 
 
 def test__given_both_parameter_and_policy_filters__then_returns_matching_intersection(
-    client, session, model_version  # noqa: F811
+    client,
+    session,
+    model_version,  # noqa: F811
 ):
     """GET /parameter-values?parameter_id=X&policy_id=Y returns intersection."""
     # Given
@@ -156,7 +161,9 @@ def test__given_both_parameter_and_policy_filters__then_returns_matching_interse
 
 
 def test__given_limit_parameter__then_returns_limited_results(
-    client, session, model_version  # noqa: F811
+    client,
+    session,
+    model_version,  # noqa: F811
 ):
     """GET /parameter-values?limit=N returns at most N results."""
     # Given
@@ -174,7 +181,9 @@ def test__given_limit_parameter__then_returns_limited_results(
 
 
 def test__given_skip_parameter__then_skips_specified_results(
-    client, session, model_version  # noqa: F811
+    client,
+    session,
+    model_version,  # noqa: F811
 ):
     """GET /parameter-values?skip=N skips first N results."""
     # Given
