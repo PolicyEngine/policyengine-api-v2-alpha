@@ -22,6 +22,7 @@ dependencies = [
     "fastapi-cache2>=0.2.1",
     "boto3>=1.41.1",
     "fastapi-mcp>=0.4.0",
+    "modal>=0.68.0",
 ]
 
 [project.optional-dependencies]

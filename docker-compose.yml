@@ -23,31 +23,6 @@ services:
       retries: 10
       start_period: 10s
 
-  worker:
-    build: .
-    command: python -m policyengine_api.tasks.worker
-    ports:
-      - "${WORKER_PORT:-8080}:${WORKER_PORT:-8080}"
-    environment:
-      SUPABASE_URL: http://supabase_kong_policyengine-api-v2:8000
-      SUPABASE_KEY: ${SUPABASE_KEY}
-      SUPABASE_SERVICE_KEY: ${SUPABASE_SERVICE_KEY}
-      SUPABASE_DB_URL: postgresql://postgres:postgres@supabase_db_policyengine-api-v2:5432/postgres
-      LOGFIRE_TOKEN: ${LOGFIRE_TOKEN}
-      WORKER_POLL_INTERVAL: ${WORKER_POLL_INTERVAL:-5}
-      WORKER_PORT: ${WORKER_PORT:-8080}
-    volumes:
-      - ./src:/app/src
-      - dataset_cache:/tmp/policyengine_dataset_cache
-    networks:
-      - supabase_network_policyengine-api-v2
-    healthcheck:
-      test: ["CMD", "python", "-c", "import httpx; exit(0 if httpx.get('http://localhost:${WORKER_PORT:-8080}/health', timeout=2).status_code == 200 else 1)"]
-      interval: 10s
-      timeout: 5s
-      retries: 3
-      start_period: 30s
-
   test:
     build: .
     command: pytest tests/ -v
@@ -65,14 +40,9 @@ services:
     depends_on:
       api:
         condition: service_healthy
-      worker:
-        condition: service_started
     profiles:
       - test
 
 networks:
   supabase_network_policyengine-api-v2:
     external: true
-
-volumes:
-  dataset_cache:

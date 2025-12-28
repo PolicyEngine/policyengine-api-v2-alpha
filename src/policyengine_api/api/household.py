@@ -1,4 +1,8 @@
-"""Household calculation endpoints."""
+"""Household calculation endpoints.
+
+These endpoints are async - they create jobs that are processed by Modal functions.
+Poll the status endpoint until the job is complete.
+"""
 
 from typing import Any, Literal
 from uuid import UUID
@@ -8,7 +12,12 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from sqlmodel import Session
 
-from policyengine_api.models import Dynamic, Policy
+from policyengine_api.models import (
+    Dynamic,
+    HouseholdJob,
+    HouseholdJobStatus,
+    Policy,
+)
 from policyengine_api.services.database import get_session
 
 router = APIRouter(prefix="/household", tags=["household"])
@@ -91,6 +100,22 @@ class HouseholdCalculateResponse(BaseModel):
     household: dict[str, Any]
 
 
+class HouseholdJobResponse(BaseModel):
+    """Response from creating a household job."""
+
+    job_id: UUID
+    status: HouseholdJobStatus
+
+
+class HouseholdJobStatusResponse(BaseModel):
+    """Response from polling a household job."""
+
+    job_id: UUID
+    status: HouseholdJobStatus
+    result: HouseholdCalculateResponse | None = None
+    error_message: str | None = None
+
+
 class HouseholdImpactRequest(BaseModel):
     """Request body for household impact comparison.
 
@@ -150,102 +175,116 @@ class HouseholdImpactResponse(BaseModel):
     impact: dict[str, Any]  # Computed differences
 
 
-def _get_pe_policy(policy_id: UUID | None, model_version, session: Session):
-    """Convert database Policy to policyengine Policy."""
+class HouseholdImpactJobStatusResponse(BaseModel):
+    """Response from polling a household impact job."""
+
+    job_id: UUID
+    status: HouseholdJobStatus
+    baseline_result: HouseholdCalculateResponse | None = None
+    reform_result: HouseholdCalculateResponse | None = None
+    impact: dict[str, Any] | None = None
+    error_message: str | None = None
+
+
+def _trigger_modal_household(
+    job_id: str,
+    request: HouseholdCalculateRequest,
+    policy_data: dict | None,
+    dynamic_data: dict | None,
+) -> None:
+    """Trigger Modal function for household calculation."""
+    import modal
+
+    if request.tax_benefit_model_name == "policyengine_uk":
+        fn = modal.Function.from_name("policyengine", "calculate_household_uk")
+        fn.spawn(
+            job_id=job_id,
+            people=request.people,
+            benunit=request.benunit,
+            household=request.household,
+            year=request.year or 2026,
+            policy_data=policy_data,
+            dynamic_data=dynamic_data,
+        )
+    else:
+        fn = modal.Function.from_name("policyengine", "calculate_household_us")
+        fn.spawn(
+            job_id=job_id,
+            people=request.people,
+            marital_unit=request.marital_unit,
+            family=request.family,
+            spm_unit=request.spm_unit,
+            tax_unit=request.tax_unit,
+            household=request.household,
+            year=request.year or 2024,
+            policy_data=policy_data,
+            dynamic_data=dynamic_data,
+        )
+
+
+def _get_policy_data(policy_id: UUID | None, session: Session) -> dict | None:
+    """Get policy data for Modal function."""
     if policy_id is None:
         return None
 
-    with logfire.span("load_policy_from_db", policy_id=str(policy_id)):
-        from policyengine.core.policy import ParameterValue as PEParameterValue
-        from policyengine.core.policy import Policy as PEPolicy
+    db_policy = session.get(Policy, policy_id)
+    if not db_policy:
+        raise HTTPException(status_code=404, detail=f"Policy {policy_id} not found")
 
-        db_policy = session.get(Policy, policy_id)
-        if not db_policy:
-            raise HTTPException(status_code=404, detail=f"Policy {policy_id} not found")
-
-        # Build param lookup from model version
-        with logfire.span("build_param_lookup"):
-            param_lookup = {p.name: p for p in model_version.parameters}
-
-        with logfire.span(
-            "build_policy_param_values", num_values=len(db_policy.parameter_values)
-        ):
-            pe_param_values = []
-            for pv in db_policy.parameter_values:
-                if not pv.parameter:
-                    continue
-                pe_param = param_lookup.get(pv.parameter.name)
-                if not pe_param:
-                    continue
-                pe_pv = PEParameterValue(
-                    parameter=pe_param,
-                    value=pv.value_json.get("value")
-                    if isinstance(pv.value_json, dict)
-                    else pv.value_json,
-                    start_date=pv.start_date,
-                    end_date=pv.end_date,
-                )
-                pe_param_values.append(pe_pv)
-
-        return PEPolicy(
-            name=db_policy.name,
-            description=db_policy.description,
-            parameter_values=pe_param_values,
-        )
+    return {
+        "name": db_policy.name,
+        "description": db_policy.description,
+        "parameter_values": [
+            {
+                "parameter_name": pv.parameter.name if pv.parameter else None,
+                "value": pv.value_json.get("value")
+                if isinstance(pv.value_json, dict)
+                else pv.value_json,
+                "start_date": pv.start_date.isoformat() if pv.start_date else None,
+                "end_date": pv.end_date.isoformat() if pv.end_date else None,
+            }
+            for pv in db_policy.parameter_values
+            if pv.parameter
+        ],
+    }
 
 
-def _get_pe_dynamic(dynamic_id: UUID | None, model_version, session: Session):
-    """Convert database Dynamic to policyengine Dynamic."""
+def _get_dynamic_data(dynamic_id: UUID | None, session: Session) -> dict | None:
+    """Get dynamic data for Modal function."""
     if dynamic_id is None:
         return None
 
-    with logfire.span("load_dynamic_from_db", dynamic_id=str(dynamic_id)):
-        from policyengine.core.dynamic import Dynamic as PEDynamic
-        from policyengine.core.policy import ParameterValue as PEParameterValue
+    db_dynamic = session.get(Dynamic, dynamic_id)
+    if not db_dynamic:
+        raise HTTPException(status_code=404, detail=f"Dynamic {dynamic_id} not found")
 
-        db_dynamic = session.get(Dynamic, dynamic_id)
-        if not db_dynamic:
-            raise HTTPException(
-                status_code=404, detail=f"Dynamic {dynamic_id} not found"
-            )
-
-        # Build param lookup from model version
-        with logfire.span("build_param_lookup"):
-            param_lookup = {p.name: p for p in model_version.parameters}
-
-        with logfire.span(
-            "build_dynamic_param_values", num_values=len(db_dynamic.parameter_values)
-        ):
-            pe_param_values = []
-            for pv in db_dynamic.parameter_values:
-                if not pv.parameter:
-                    continue
-                pe_param = param_lookup.get(pv.parameter.name)
-                if not pe_param:
-                    continue
-                pe_pv = PEParameterValue(
-                    parameter=pe_param,
-                    value=pv.value_json.get("value")
-                    if isinstance(pv.value_json, dict)
-                    else pv.value_json,
-                    start_date=pv.start_date,
-                    end_date=pv.end_date,
-                )
-                pe_param_values.append(pe_pv)
-
-        return PEDynamic(
-            name=db_dynamic.name,
-            description=db_dynamic.description,
-            parameter_values=pe_param_values,
-        )
+    return {
+        "name": db_dynamic.name,
+        "description": db_dynamic.description,
+        "parameter_values": [
+            {
+                "parameter_name": pv.parameter.name if pv.parameter else None,
+                "value": pv.value_json.get("value")
+                if isinstance(pv.value_json, dict)
+                else pv.value_json,
+                "start_date": pv.start_date.isoformat() if pv.start_date else None,
+                "end_date": pv.end_date.isoformat() if pv.end_date else None,
+            }
+            for pv in db_dynamic.parameter_values
+            if pv.parameter
+        ],
+    }
 
 
-@router.post("/calculate", response_model=HouseholdCalculateResponse)
+@router.post("/calculate", response_model=HouseholdJobResponse)
 def calculate_household(
     request: HouseholdCalculateRequest,
     session: Session = Depends(get_session),
-) -> HouseholdCalculateResponse:
-    """Calculate tax and benefit impacts for a household.
+) -> HouseholdJobResponse:
+    """Create a household calculation job.
+
+    This is an async operation. The endpoint returns immediately with a job_id.
+    Poll GET /household/calculate/{job_id} until status is "completed" to get results.
 
     Use flat values for all variables - do NOT use time-period format like {"2024": value}.
     The simulation year is specified via the `year` parameter.
@@ -254,156 +293,136 @@ def calculate_household(
     UK example: people=[{"employment_income": 50000, "age": 30}], year=2026
     """
     with logfire.span(
-        "calculate_household",
+        "create_household_job",
         model=request.tax_benefit_model_name,
         num_people=len(request.people),
         year=request.year,
         has_policy=request.policy_id is not None,
         has_dynamic=request.dynamic_id is not None,
     ):
-        with logfire.span("load_model", model=request.tax_benefit_model_name):
-            if request.tax_benefit_model_name == "policyengine_uk":
-                from policyengine.tax_benefit_models.uk import uk_latest
+        # Get policy and dynamic data for Modal
+        policy_data = _get_policy_data(request.policy_id, session)
+        dynamic_data = _get_dynamic_data(request.dynamic_id, session)
 
-                pe_model_version = uk_latest
-            else:
-                from policyengine.tax_benefit_models.us import us_latest
-
-                pe_model_version = us_latest
-
-        with logfire.span("load_policy_and_dynamic"):
-            policy = _get_pe_policy(request.policy_id, pe_model_version, session)
-            dynamic = _get_pe_dynamic(request.dynamic_id, pe_model_version, session)
-
-        with logfire.span("run_calculation", model=request.tax_benefit_model_name):
-            if request.tax_benefit_model_name == "policyengine_uk":
-                return _calculate_uk(request, policy, dynamic)
-            elif request.tax_benefit_model_name == "policyengine_us":
-                return _calculate_us(request, policy, dynamic)
-            else:
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"Unsupported model: {request.tax_benefit_model_name}",
-                )
-
-
-def _calculate_uk(
-    request: HouseholdCalculateRequest, policy, dynamic
-) -> HouseholdCalculateResponse:
-    """Calculate for UK."""
-    with logfire.span("import_uk_analysis"):
-        from policyengine.tax_benefit_models.uk.analysis import (
-            UKHouseholdInput,
-            calculate_household_impact,
+        # Create job record
+        job = HouseholdJob(
+            tax_benefit_model_name=request.tax_benefit_model_name,
+            request_data={
+                "people": request.people,
+                "benunit": request.benunit,
+                "marital_unit": request.marital_unit,
+                "family": request.family,
+                "spm_unit": request.spm_unit,
+                "tax_unit": request.tax_unit,
+                "household": request.household,
+                "year": request.year,
+            },
+            policy_id=request.policy_id,
+            dynamic_id=request.dynamic_id,
+            status=HouseholdJobStatus.PENDING,
         )
+        session.add(job)
+        session.commit()
+        session.refresh(job)
 
-    with logfire.span("build_uk_input", num_people=len(request.people)):
-        pe_input = UKHouseholdInput(
-            people=request.people,
-            benunit=request.benunit,
-            household=request.household,
-            year=request.year or 2026,
-        )
+        # Trigger Modal function
+        with logfire.span("trigger_modal", job_id=str(job.id)):
+            _trigger_modal_household(
+                str(job.id),
+                request,
+                policy_data,
+                dynamic_data,
+            )
 
-    with logfire.span("calculate_uk_household_impact", has_policy=policy is not None):
-        result = calculate_household_impact(pe_input, policy=policy)
-
-    with logfire.span("build_uk_response"):
-        return HouseholdCalculateResponse(
-            person=result.person,
-            benunit=result.benunit,
-            household=result.household,
+        return HouseholdJobResponse(
+            job_id=job.id,
+            status=job.status,
         )
 
 
-def _calculate_us(
-    request: HouseholdCalculateRequest, policy, dynamic
-) -> HouseholdCalculateResponse:
-    """Calculate for US."""
-    with logfire.span("import_us_analysis"):
-        from policyengine.tax_benefit_models.us.analysis import (
-            USHouseholdInput,
-            calculate_household_impact,
+@router.get("/calculate/{job_id}", response_model=HouseholdJobStatusResponse)
+def get_household_job_status(
+    job_id: UUID,
+    session: Session = Depends(get_session),
+) -> HouseholdJobStatusResponse:
+    """Get the status and result of a household calculation job."""
+    job = session.get(HouseholdJob, job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail=f"Job {job_id} not found")
+
+    result = None
+    if job.status == HouseholdJobStatus.COMPLETED and job.result:
+        result = HouseholdCalculateResponse(
+            person=job.result.get("person", []),
+            benunit=job.result.get("benunit"),
+            marital_unit=job.result.get("marital_unit"),
+            family=job.result.get("family"),
+            spm_unit=job.result.get("spm_unit"),
+            tax_unit=job.result.get("tax_unit"),
+            household=job.result.get("household", {}),
         )
 
-    with logfire.span("build_us_input", num_people=len(request.people)):
-        pe_input = USHouseholdInput(
-            people=request.people,
-            marital_unit=request.marital_unit,
-            family=request.family,
-            spm_unit=request.spm_unit,
-            tax_unit=request.tax_unit,
-            household=request.household,
-            year=request.year or 2024,
-        )
-
-    with logfire.span("calculate_us_household_impact", has_policy=policy is not None):
-        result = calculate_household_impact(pe_input, policy=policy)
-
-    with logfire.span("build_us_response"):
-        return HouseholdCalculateResponse(
-            person=result.person,
-            marital_unit=result.marital_unit,
-            family=result.family,
-            spm_unit=result.spm_unit,
-            tax_unit=result.tax_unit,
-            household=result.household,
-        )
+    return HouseholdJobStatusResponse(
+        job_id=job.id,
+        status=job.status,
+        result=result,
+        error_message=job.error_message,
+    )
 
 
 def _compute_impact(
     baseline: HouseholdCalculateResponse, reform: HouseholdCalculateResponse
 ) -> dict[str, Any]:
     """Compute difference between baseline and reform."""
-    with logfire.span("compute_impact_diff", num_people=len(baseline.person)):
-        impact = {}
+    impact = {}
 
-        # Compute household-level differences
-        with logfire.span("compute_household_diff"):
-            hh_impact = {}
-            for key in baseline.household:
-                if key in reform.household:
-                    baseline_val = baseline.household[key]
-                    reform_val = reform.household[key]
-                    if isinstance(baseline_val, (int, float)) and isinstance(
-                        reform_val, (int, float)
-                    ):
-                        hh_impact[key] = {
-                            "baseline": baseline_val,
-                            "reform": reform_val,
-                            "change": reform_val - baseline_val,
-                        }
-            impact["household"] = hh_impact
+    # Compute household-level differences
+    hh_impact = {}
+    for key in baseline.household:
+        if key in reform.household:
+            baseline_val = baseline.household[key]
+            reform_val = reform.household[key]
+            if isinstance(baseline_val, (int, float)) and isinstance(
+                reform_val, (int, float)
+            ):
+                hh_impact[key] = {
+                    "baseline": baseline_val,
+                    "reform": reform_val,
+                    "change": reform_val - baseline_val,
+                }
+    impact["household"] = hh_impact
 
-        # Compute person-level differences
-        with logfire.span("compute_person_diff"):
-            person_impact = []
-            for i, (bp, rp) in enumerate(zip(baseline.person, reform.person)):
-                person_diff = {}
-                for key in bp:
-                    if key in rp:
-                        baseline_val = bp[key]
-                        reform_val = rp[key]
-                        if isinstance(baseline_val, (int, float)) and isinstance(
-                            reform_val, (int, float)
-                        ):
-                            person_diff[key] = {
-                                "baseline": baseline_val,
-                                "reform": reform_val,
-                                "change": reform_val - baseline_val,
-                            }
-                person_impact.append(person_diff)
-            impact["person"] = person_impact
+    # Compute person-level differences
+    person_impact = []
+    for i, (bp, rp) in enumerate(zip(baseline.person, reform.person)):
+        person_diff = {}
+        for key in bp:
+            if key in rp:
+                baseline_val = bp[key]
+                reform_val = rp[key]
+                if isinstance(baseline_val, (int, float)) and isinstance(
+                    reform_val, (int, float)
+                ):
+                    person_diff[key] = {
+                        "baseline": baseline_val,
+                        "reform": reform_val,
+                        "change": reform_val - baseline_val,
+                    }
+        person_impact.append(person_diff)
+    impact["person"] = person_impact
 
-        return impact
+    return impact
 
 
-@router.post("/impact", response_model=HouseholdImpactResponse)
+@router.post("/impact", response_model=HouseholdJobResponse)
 def calculate_household_impact_comparison(
     request: HouseholdImpactRequest,
     session: Session = Depends(get_session),
-) -> HouseholdImpactResponse:
-    """Calculate the impact of a policy reform on a household.
+) -> HouseholdJobResponse:
+    """Create a household impact comparison job.
+
+    This is an async operation. The endpoint returns immediately with a job_id.
+    Poll GET /household/impact/{job_id} until status is "completed" to get results.
 
     Compares the household under baseline (current law) vs reform (policy_id).
     Returns both calculations plus computed differences.
@@ -411,57 +430,186 @@ def calculate_household_impact_comparison(
     Use flat values for all variables - do NOT use time-period format like {"2024": value}.
     """
     with logfire.span(
-        "calculate_household_impact_comparison",
+        "create_household_impact_job",
         model=request.tax_benefit_model_name,
         num_people=len(request.people),
         year=request.year,
         has_policy=request.policy_id is not None,
     ):
-        with logfire.span("build_baseline_request"):
-            # Build baseline request (no policy)
-            baseline_request = HouseholdCalculateRequest(
-                tax_benefit_model_name=request.tax_benefit_model_name,
-                people=request.people,
-                benunit=request.benunit,
-                marital_unit=request.marital_unit,
-                family=request.family,
-                spm_unit=request.spm_unit,
-                tax_unit=request.tax_unit,
-                household=request.household,
-                year=request.year,
-                policy_id=None,
-                dynamic_id=request.dynamic_id,
+        # Get policy and dynamic data
+        policy_data = _get_policy_data(request.policy_id, session)
+        dynamic_data = _get_dynamic_data(request.dynamic_id, session)
+
+        # Create baseline job (no policy)
+        baseline_job = HouseholdJob(
+            tax_benefit_model_name=request.tax_benefit_model_name,
+            request_data={
+                "people": request.people,
+                "benunit": request.benunit,
+                "marital_unit": request.marital_unit,
+                "family": request.family,
+                "spm_unit": request.spm_unit,
+                "tax_unit": request.tax_unit,
+                "household": request.household,
+                "year": request.year,
+                "is_impact_baseline": True,
+            },
+            policy_id=None,
+            dynamic_id=request.dynamic_id,
+            status=HouseholdJobStatus.PENDING,
+        )
+        session.add(baseline_job)
+
+        # Create reform job (with policy)
+        reform_job = HouseholdJob(
+            tax_benefit_model_name=request.tax_benefit_model_name,
+            request_data={
+                "people": request.people,
+                "benunit": request.benunit,
+                "marital_unit": request.marital_unit,
+                "family": request.family,
+                "spm_unit": request.spm_unit,
+                "tax_unit": request.tax_unit,
+                "household": request.household,
+                "year": request.year,
+                "is_impact_reform": True,
+                "baseline_job_id": None,  # Will update after commit
+            },
+            policy_id=request.policy_id,
+            dynamic_id=request.dynamic_id,
+            status=HouseholdJobStatus.PENDING,
+        )
+        session.add(reform_job)
+        session.commit()
+        session.refresh(baseline_job)
+        session.refresh(reform_job)
+
+        # Update reform job with baseline reference
+        reform_job.request_data["baseline_job_id"] = str(baseline_job.id)
+        session.add(reform_job)
+        session.commit()
+
+        # Trigger Modal functions for both
+        baseline_request = HouseholdCalculateRequest(
+            tax_benefit_model_name=request.tax_benefit_model_name,
+            people=request.people,
+            benunit=request.benunit,
+            marital_unit=request.marital_unit,
+            family=request.family,
+            spm_unit=request.spm_unit,
+            tax_unit=request.tax_unit,
+            household=request.household,
+            year=request.year,
+            policy_id=None,
+            dynamic_id=request.dynamic_id,
+        )
+        reform_request = HouseholdCalculateRequest(
+            tax_benefit_model_name=request.tax_benefit_model_name,
+            people=request.people,
+            benunit=request.benunit,
+            marital_unit=request.marital_unit,
+            family=request.family,
+            spm_unit=request.spm_unit,
+            tax_unit=request.tax_unit,
+            household=request.household,
+            year=request.year,
+            policy_id=request.policy_id,
+            dynamic_id=request.dynamic_id,
+        )
+
+        with logfire.span("trigger_modal_baseline", job_id=str(baseline_job.id)):
+            _trigger_modal_household(
+                str(baseline_job.id), baseline_request, None, dynamic_data
             )
 
-        with logfire.span("build_reform_request"):
-            # Build reform request (with policy)
-            reform_request = HouseholdCalculateRequest(
-                tax_benefit_model_name=request.tax_benefit_model_name,
-                people=request.people,
-                benunit=request.benunit,
-                marital_unit=request.marital_unit,
-                family=request.family,
-                spm_unit=request.spm_unit,
-                tax_unit=request.tax_unit,
-                household=request.household,
-                year=request.year,
-                policy_id=request.policy_id,
-                dynamic_id=request.dynamic_id,
+        with logfire.span("trigger_modal_reform", job_id=str(reform_job.id)):
+            _trigger_modal_household(
+                str(reform_job.id), reform_request, policy_data, dynamic_data
             )
 
-        # Calculate both
-        with logfire.span("calculate_baseline"):
-            baseline = calculate_household(baseline_request, session)
+        # Return the reform job id (client polls this)
+        return HouseholdJobResponse(
+            job_id=reform_job.id,
+            status=reform_job.status,
+        )
 
-        with logfire.span("calculate_reform"):
-            reform = calculate_household(reform_request, session)
 
-        # Compute impact
-        impact = _compute_impact(baseline, reform)
+@router.get("/impact/{job_id}", response_model=HouseholdImpactJobStatusResponse)
+def get_household_impact_job_status(
+    job_id: UUID,
+    session: Session = Depends(get_session),
+) -> HouseholdImpactJobStatusResponse:
+    """Get the status and result of a household impact comparison job."""
+    reform_job = session.get(HouseholdJob, job_id)
+    if not reform_job:
+        raise HTTPException(status_code=404, detail=f"Job {job_id} not found")
 
-        with logfire.span("build_impact_response"):
-            return HouseholdImpactResponse(
-                baseline=baseline,
-                reform=reform,
-                impact=impact,
-            )
+    # Get baseline job id from request data
+    baseline_job_id = reform_job.request_data.get("baseline_job_id")
+    if not baseline_job_id:
+        # This is not an impact job, just a regular calculation
+        raise HTTPException(
+            status_code=400,
+            detail="This is not an impact job. Use GET /household/calculate/{job_id} instead.",
+        )
+
+    baseline_job = session.get(HouseholdJob, UUID(baseline_job_id))
+    if not baseline_job:
+        raise HTTPException(status_code=500, detail="Baseline job not found")
+
+    # Determine overall status
+    if baseline_job.status == HouseholdJobStatus.FAILED:
+        overall_status = HouseholdJobStatus.FAILED
+        error_message = f"Baseline calculation failed: {baseline_job.error_message}"
+    elif reform_job.status == HouseholdJobStatus.FAILED:
+        overall_status = HouseholdJobStatus.FAILED
+        error_message = f"Reform calculation failed: {reform_job.error_message}"
+    elif (
+        baseline_job.status == HouseholdJobStatus.COMPLETED
+        and reform_job.status == HouseholdJobStatus.COMPLETED
+    ):
+        overall_status = HouseholdJobStatus.COMPLETED
+        error_message = None
+    elif (
+        baseline_job.status == HouseholdJobStatus.RUNNING
+        or reform_job.status == HouseholdJobStatus.RUNNING
+    ):
+        overall_status = HouseholdJobStatus.RUNNING
+        error_message = None
+    else:
+        overall_status = HouseholdJobStatus.PENDING
+        error_message = None
+
+    baseline_result = None
+    reform_result = None
+    impact = None
+
+    if overall_status == HouseholdJobStatus.COMPLETED:
+        baseline_result = HouseholdCalculateResponse(
+            person=baseline_job.result.get("person", []),
+            benunit=baseline_job.result.get("benunit"),
+            marital_unit=baseline_job.result.get("marital_unit"),
+            family=baseline_job.result.get("family"),
+            spm_unit=baseline_job.result.get("spm_unit"),
+            tax_unit=baseline_job.result.get("tax_unit"),
+            household=baseline_job.result.get("household", {}),
+        )
+        reform_result = HouseholdCalculateResponse(
+            person=reform_job.result.get("person", []),
+            benunit=reform_job.result.get("benunit"),
+            marital_unit=reform_job.result.get("marital_unit"),
+            family=reform_job.result.get("family"),
+            spm_unit=reform_job.result.get("spm_unit"),
+            tax_unit=reform_job.result.get("tax_unit"),
+            household=reform_job.result.get("household", {}),
+        )
+        impact = _compute_impact(baseline_result, reform_result)
+
+    return HouseholdImpactJobStatusResponse(
+        job_id=reform_job.id,
+        status=overall_status,
+        baseline_result=baseline_result,
+        reform_result=reform_result,
+        impact=impact,
+        error_message=error_message,
+    )

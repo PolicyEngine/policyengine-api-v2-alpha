@@ -19,6 +19,7 @@ import math
 from typing import Literal
 from uuid import UUID, uuid5
 
+import logfire
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from sqlmodel import Session, select
@@ -285,6 +286,18 @@ def _build_response(
     )
 
 
+def _trigger_modal_report(report_id: str, tax_benefit_model_name: str) -> None:
+    """Trigger Modal function for economic impact report."""
+    import modal
+
+    if tax_benefit_model_name == "policyengine_uk":
+        fn = modal.Function.from_name("policyengine", "run_report_uk")
+    else:
+        fn = modal.Function.from_name("policyengine", "run_report_us")
+
+    fn.spawn(report_id=report_id)
+
+
 @router.post("/economic-impact", response_model=EconomicImpactResponse)
 def economic_impact(
     request: EconomicImpactRequest,
@@ -332,6 +345,11 @@ def economic_impact(
         label += f" (policy {request.policy_id})"
 
     report = _get_or_create_report(baseline_sim.id, reform_sim.id, label, session)
+
+    # Trigger Modal if report is pending
+    if report.status == ReportStatus.PENDING:
+        with logfire.span("trigger_modal_report", report_id=str(report.id)):
+            _trigger_modal_report(str(report.id), request.tax_benefit_model_name)
 
     return _build_response(report, baseline_sim, reform_sim, session)
 

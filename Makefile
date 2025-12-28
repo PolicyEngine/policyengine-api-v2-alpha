@@ -1,4 +1,4 @@
-.PHONY: install dev format lint test integration-test clean seed up down logs start-supabase stop-supabase reset rebuild create-state-bucket deploy-local init db-reset-prod
+.PHONY: install dev format lint test integration-test clean seed up down logs start-supabase stop-supabase reset rebuild create-state-bucket deploy-local init db-reset-prod modal-deploy modal-serve
 
 # AWS Configuration
 AWS_REGION ?= us-east-1
@@ -112,3 +112,11 @@ db-reset-prod:
 		echo "Aborted."; \
 		exit 1; \
 	fi
+
+modal-deploy:
+	@echo "Deploying Modal functions..."
+	uv run modal deploy src/policyengine_api/modal_app.py
+
+modal-serve:
+	@echo "Running Modal functions locally..."
+	uv run modal serve src/policyengine_api/modal_app.py

@@ -10,6 +10,12 @@ from .dataset import Dataset, DatasetCreate, DatasetRead
 from .dataset_version import DatasetVersion, DatasetVersionCreate, DatasetVersionRead
 from .decile_impact import DecileImpact, DecileImpactCreate, DecileImpactRead
 from .dynamic import Dynamic, DynamicCreate, DynamicRead
+from .household_job import (
+    HouseholdJob,
+    HouseholdJobCreate,
+    HouseholdJobRead,
+    HouseholdJobStatus,
+)
 from .output import (
     AggregateOutput,
     AggregateOutputCreate,
@@ -60,6 +66,10 @@ __all__ = [
     "Dynamic",
     "DynamicCreate",
     "DynamicRead",
+    "HouseholdJob",
+    "HouseholdJobCreate",
+    "HouseholdJobRead",
+    "HouseholdJobStatus",
     "Parameter",
     "ParameterCreate",
     "ParameterRead",
