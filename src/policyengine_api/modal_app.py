@@ -24,24 +24,31 @@ base_image = (
     )
 )
 
-# UK image - pre-imports policyengine-uk at build time
+
+def _import_uk():
+    """Import UK model at build time to snapshot in memory."""
+    from policyengine.tax_benefit_models.uk import uk_latest  # noqa: F401
+    print("UK model loaded and snapshotted")
+
+
+def _import_us():
+    """Import US model at build time to snapshot in memory."""
+    from policyengine.tax_benefit_models.us import us_latest  # noqa: F401
+    print("US model loaded and snapshotted")
+
+
+# UK image - uses run_function to snapshot imported modules in memory
 uk_image = (
     base_image
     .run_commands("uv pip install --system policyengine-uk>=2.0.0")
-    .run_commands(
-        "python -c 'from policyengine.tax_benefit_models.uk import uk_latest; "
-        "print(\"UK model loaded\")'"
-    )
+    .run_function(_import_uk)
 )
 
-# US image - pre-imports policyengine-us at build time
+# US image - uses run_function to snapshot imported modules in memory
 us_image = (
     base_image
     .run_commands("uv pip install --system policyengine-us>=1.0.0")
-    .run_commands(
-        "python -c 'from policyengine.tax_benefit_models.us import us_latest; "
-        "print(\"US model loaded\")'"
-    )
+    .run_function(_import_us)
 )
 
 app = modal.App("policyengine")
