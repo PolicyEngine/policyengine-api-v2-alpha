@@ -136,6 +136,7 @@ print('Logfire configured inside sandbox')
     )
 
     # Run Claude Code with the question
+    # --dangerously-skip-permissions: auto-accept permission prompts (required for non-interactive)
     logfire.info("run_claude_code_in_sandbox: starting claude CLI")
     process = sb.exec(
         "claude",
@@ -144,6 +145,7 @@ print('Logfire configured inside sandbox')
         "--output-format",
         "stream-json",
         "--verbose",
+        "--dangerously-skip-permissions",
         "--allowedTools",
         "mcp__policyengine__*,Bash,Read,Grep,Glob,Write,Edit",
     )
