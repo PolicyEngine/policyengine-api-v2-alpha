@@ -140,8 +140,25 @@ print('Logfire configured inside sandbox')
         config=verify_process.stdout.read()[:500],
     )
 
+    # Test Claude CLI works at all
+    print("[SANDBOX] Testing claude --version", flush=True)
+    logfire.info("run_claude_code_in_sandbox: testing claude --version")
+    version_check = sb.exec("claude", "--version")
+    version_check.wait()
+    version_stdout = version_check.stdout.read()
+    version_stderr = version_check.stderr.read()
+    print(f"[SANDBOX] claude --version: stdout={version_stdout}, stderr={version_stderr}, rc={version_check.returncode}", flush=True)
+    logfire.info(
+        "run_claude_code_in_sandbox: claude --version result",
+        stdout=version_stdout[:200] if version_stdout else None,
+        stderr=version_stderr[:500] if version_stderr else None,
+        returncode=version_check.returncode,
+    )
+
     # Run Claude Code with the question
     # --dangerously-skip-permissions: auto-accept permission prompts (required for non-interactive)
+    # --max-turns: limit execution to prevent runaway
+    print("[SANDBOX] Starting claude CLI with question", flush=True)
     logfire.info("run_claude_code_in_sandbox: starting claude CLI")
     process = sb.exec(
         "claude",
@@ -151,9 +168,12 @@ print('Logfire configured inside sandbox')
         "stream-json",
         "--verbose",
         "--dangerously-skip-permissions",
+        "--max-turns",
+        "10",
         "--allowedTools",
         "mcp__policyengine__*,Bash,Read,Grep,Glob,Write,Edit",
     )
+    print("[SANDBOX] claude CLI process started", flush=True)
     logfire.info("run_claude_code_in_sandbox: claude CLI process started, returning")
 
     return sb, process
