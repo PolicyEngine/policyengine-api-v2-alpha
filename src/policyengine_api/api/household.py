@@ -725,12 +725,20 @@ def calculate_household_impact_comparison(
 
         with logfire.span("trigger_baseline", job_id=str(baseline_job.id)):
             _trigger_modal_household(
-                str(baseline_job.id), baseline_request, None, dynamic_data, session=session
+                str(baseline_job.id),
+                baseline_request,
+                None,
+                dynamic_data,
+                session=session,
             )
 
         with logfire.span("trigger_reform", job_id=str(reform_job.id)):
             _trigger_modal_household(
-                str(reform_job.id), reform_request, policy_data, dynamic_data, session=session
+                str(reform_job.id),
+                reform_request,
+                policy_data,
+                dynamic_data,
+                session=session,
             )
 
         # Return the reform job id (client polls this)

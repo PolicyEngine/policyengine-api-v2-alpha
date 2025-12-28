@@ -286,16 +286,262 @@ def _build_response(
     )
 
 
-def _trigger_economy_comparison(job_id: str, tax_benefit_model_name: str) -> None:
-    """Trigger Modal function for economy comparison analysis."""
-    import modal
+def _download_dataset_local(filepath: str) -> str:
+    """Download dataset from Supabase storage for local compute."""
+    from pathlib import Path
 
-    if tax_benefit_model_name == "policyengine_uk":
-        fn = modal.Function.from_name("policyengine", "economy_comparison_uk")
+    from policyengine_api.config import settings
+    from supabase import create_client
+
+    cache_dir = Path("/tmp/policyengine_dataset_cache")
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    cache_path = cache_dir / filepath
+
+    if cache_path.exists():
+        return str(cache_path)
+
+    client = create_client(settings.supabase_url, settings.supabase_service_key)
+    data = client.storage.from_("datasets").download(filepath)
+
+    cache_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(cache_path, "wb") as f:
+        f.write(data)
+
+    return str(cache_path)
+
+
+def _run_local_economy_comparison_uk(job_id: str, session: Session) -> None:
+    """Run UK economy comparison analysis locally."""
+    from datetime import datetime, timezone
+    from uuid import UUID
+
+    from policyengine.core import Simulation as PESimulation
+    from policyengine.core.dynamic import Dynamic as PEDynamic
+    from policyengine.core.policy import ParameterValue as PEParameterValue
+    from policyengine.core.policy import Policy as PEPolicy
+    from policyengine.outputs import DecileImpact as PEDecileImpact
+    from policyengine.tax_benefit_models.uk import uk_latest
+    from policyengine.tax_benefit_models.uk.datasets import PolicyEngineUKDataset
+    from policyengine.tax_benefit_models.uk.outputs import (
+        ProgrammeStatistics as PEProgrammeStats,
+    )
+
+    from policyengine_api.models import Policy as DBPolicy
+
+    # Load report and simulations
+    report = session.get(Report, UUID(job_id))
+    if not report:
+        raise ValueError(f"Report {job_id} not found")
+
+    baseline_sim = session.get(Simulation, report.baseline_simulation_id)
+    reform_sim = session.get(Simulation, report.reform_simulation_id)
+
+    if not baseline_sim or not reform_sim:
+        raise ValueError("Simulations not found")
+
+    # Update status to running
+    report.status = ReportStatus.RUNNING
+    session.add(report)
+    session.commit()
+
+    # Get dataset
+    dataset = session.get(Dataset, baseline_sim.dataset_id)
+    if not dataset:
+        raise ValueError(f"Dataset {baseline_sim.dataset_id} not found")
+
+    pe_model_version = uk_latest
+    param_lookup = {p.name: p for p in pe_model_version.parameters}
+
+    def build_policy(policy_id):
+        if not policy_id:
+            return None
+        db_policy = session.get(DBPolicy, policy_id)
+        if not db_policy:
+            return None
+        pe_param_values = []
+        for pv in db_policy.parameter_values:
+            if not pv.parameter:
+                continue
+            pe_param = param_lookup.get(pv.parameter.name)
+            if not pe_param:
+                continue
+            pe_pv = PEParameterValue(
+                parameter=pe_param,
+                value=pv.value_json.get("value")
+                if isinstance(pv.value_json, dict)
+                else pv.value_json,
+                start_date=pv.start_date,
+                end_date=pv.end_date,
+            )
+            pe_param_values.append(pe_pv)
+        return PEPolicy(
+            name=db_policy.name,
+            description=db_policy.description,
+            parameter_values=pe_param_values,
+        )
+
+    def build_dynamic(dynamic_id):
+        if not dynamic_id:
+            return None
+        from policyengine_api.models import Dynamic as DBDynamic
+
+        db_dynamic = session.get(DBDynamic, dynamic_id)
+        if not db_dynamic:
+            return None
+        pe_param_values = []
+        for pv in db_dynamic.parameter_values:
+            if not pv.parameter:
+                continue
+            pe_param = param_lookup.get(pv.parameter.name)
+            if not pe_param:
+                continue
+            pe_pv = PEParameterValue(
+                parameter=pe_param,
+                value=pv.value_json.get("value")
+                if isinstance(pv.value_json, dict)
+                else pv.value_json,
+                start_date=pv.start_date,
+                end_date=pv.end_date,
+            )
+            pe_param_values.append(pe_pv)
+        return PEDynamic(
+            name=db_dynamic.name,
+            description=db_dynamic.description,
+            parameter_values=pe_param_values,
+        )
+
+    baseline_policy = build_policy(baseline_sim.policy_id)
+    reform_policy = build_policy(reform_sim.policy_id)
+    baseline_dynamic = build_dynamic(baseline_sim.dynamic_id)
+    reform_dynamic = build_dynamic(reform_sim.dynamic_id)
+
+    # Download dataset
+    local_path = _download_dataset_local(dataset.filepath)
+    pe_dataset = PolicyEngineUKDataset(
+        name=dataset.name,
+        description=dataset.description or "",
+        filepath=local_path,
+        year=dataset.year,
+    )
+
+    # Run simulations
+    pe_baseline_sim = PESimulation(
+        dataset=pe_dataset,
+        tax_benefit_model_version=pe_model_version,
+        policy=baseline_policy,
+        dynamic=baseline_dynamic,
+    )
+    pe_baseline_sim.ensure()
+
+    pe_reform_sim = PESimulation(
+        dataset=pe_dataset,
+        tax_benefit_model_version=pe_model_version,
+        policy=reform_policy,
+        dynamic=reform_dynamic,
+    )
+    pe_reform_sim.ensure()
+
+    # Calculate decile impacts
+    for decile_num in range(1, 11):
+        di = PEDecileImpact(
+            baseline_simulation=pe_baseline_sim,
+            reform_simulation=pe_reform_sim,
+            decile=decile_num,
+        )
+        di.run()
+        decile_impact = DecileImpact(
+            baseline_simulation_id=baseline_sim.id,
+            reform_simulation_id=reform_sim.id,
+            report_id=report.id,
+            income_variable=di.income_variable,
+            entity=di.entity,
+            decile=di.decile,
+            quantiles=di.quantiles,
+            baseline_mean=di.baseline_mean,
+            reform_mean=di.reform_mean,
+            absolute_change=di.absolute_change,
+            relative_change=di.relative_change,
+            count_better_off=di.count_better_off,
+            count_worse_off=di.count_worse_off,
+            count_no_change=di.count_no_change,
+        )
+        session.add(decile_impact)
+
+    # Calculate program statistics
+    PEProgrammeStats.model_rebuild(_types_namespace={"Simulation": PESimulation})
+    programmes = {
+        "income_tax": {"entity": "person", "is_tax": True},
+        "national_insurance": {"entity": "person", "is_tax": True},
+        "universal_credit": {"entity": "person", "is_tax": False},
+        "child_benefit": {"entity": "person", "is_tax": False},
+    }
+    for prog_name, prog_info in programmes.items():
+        try:
+            ps = PEProgrammeStats(
+                baseline_simulation=pe_baseline_sim,
+                reform_simulation=pe_reform_sim,
+                programme_name=prog_name,
+                entity=prog_info["entity"],
+                is_tax=prog_info["is_tax"],
+            )
+            ps.run()
+            program_stat = ProgramStatistics(
+                baseline_simulation_id=baseline_sim.id,
+                reform_simulation_id=reform_sim.id,
+                report_id=report.id,
+                program_name=prog_name,
+                entity=prog_info["entity"],
+                is_tax=prog_info["is_tax"],
+                baseline_total=ps.baseline_total,
+                reform_total=ps.reform_total,
+                change=ps.change,
+                baseline_count=ps.baseline_count,
+                reform_count=ps.reform_count,
+                winners=ps.winners,
+                losers=ps.losers,
+            )
+            session.add(program_stat)
+        except KeyError:
+            pass  # Variable not found in model
+
+    # Mark completed
+    baseline_sim.status = SimulationStatus.COMPLETED
+    baseline_sim.completed_at = datetime.now(timezone.utc)
+    reform_sim.status = SimulationStatus.COMPLETED
+    reform_sim.completed_at = datetime.now(timezone.utc)
+    report.status = ReportStatus.COMPLETED
+    session.add(baseline_sim)
+    session.add(reform_sim)
+    session.add(report)
+    session.commit()
+
+
+def _trigger_economy_comparison(
+    job_id: str, tax_benefit_model_name: str, session: Session | None = None
+) -> None:
+    """Trigger economy comparison analysis (local or Modal)."""
+    from policyengine_api.config import settings
+
+    if not settings.demo_use_modal and session is not None:
+        # Run locally
+        if tax_benefit_model_name == "policyengine_uk":
+            _run_local_economy_comparison_uk(job_id, session)
+        else:
+            # US not implemented for local yet - fall back to Modal
+            import modal
+
+            fn = modal.Function.from_name("policyengine", "economy_comparison_us")
+            fn.spawn(job_id=job_id)
     else:
-        fn = modal.Function.from_name("policyengine", "economy_comparison_us")
+        # Use Modal
+        import modal
 
-    fn.spawn(job_id=job_id)
+        if tax_benefit_model_name == "policyengine_uk":
+            fn = modal.Function.from_name("policyengine", "economy_comparison_uk")
+        else:
+            fn = modal.Function.from_name("policyengine", "economy_comparison_us")
+
+        fn.spawn(job_id=job_id)
 
 
 @router.post("/economic-impact", response_model=EconomicImpactResponse)
@@ -346,10 +592,12 @@ def economic_impact(
 
     report = _get_or_create_report(baseline_sim.id, reform_sim.id, label, session)
 
-    # Trigger Modal if report is pending
+    # Trigger computation if report is pending
     if report.status == ReportStatus.PENDING:
         with logfire.span("trigger_economy_comparison", job_id=str(report.id)):
-            _trigger_economy_comparison(str(report.id), request.tax_benefit_model_name)
+            _trigger_economy_comparison(
+                str(report.id), request.tax_benefit_model_name, session
+            )
 
     return _build_response(report, baseline_sim, reform_sim, session)
 
