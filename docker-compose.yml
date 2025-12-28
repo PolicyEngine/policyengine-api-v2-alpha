@@ -14,7 +14,7 @@ services:
       API_PORT: ${API_PORT:-8000}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
       POLICYENGINE_API_URL: http://localhost:${API_PORT:-8000}
-      DEMO_USE_MODAL: "false"
+      AGENT_USE_MODAL: "false"
     volumes:
       - ./src:/app/src
       - ./docs/out:/app/docs/out

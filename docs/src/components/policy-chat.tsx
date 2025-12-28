@@ -93,7 +93,7 @@ export function PolicyChat() {
     ]);
 
     try {
-      const res = await fetch(`${baseUrl}/demo/stream`, {
+      const res = await fetch(`${baseUrl}/agent/stream`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ question: userMessage }),

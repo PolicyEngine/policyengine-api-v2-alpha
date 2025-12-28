@@ -1,4 +1,4 @@
-"""Demo endpoint for AI-powered policy analysis.
+"""Agent endpoint for AI-powered policy analysis.
 
 This endpoint lets users ask natural language questions about tax/benefit policy
 and get AI-generated reports using Claude Code connected to the PolicyEngine MCP server.
@@ -16,7 +16,7 @@ from pydantic import BaseModel
 
 from policyengine_api.config import settings
 
-router = APIRouter(prefix="/demo", tags=["demo"])
+router = APIRouter(prefix="/agent", tags=["agent"])
 
 
 class AskRequest(BaseModel):
@@ -33,7 +33,7 @@ class AskResponse(BaseModel):
 
 
 class JobStatusResponse(BaseModel):
-    """Status of a demo job."""
+    """Status of an agent job."""
 
     job_id: str
     status: str
@@ -87,7 +87,7 @@ async def _stream_claude_code(question: str, api_base_url: str):
 async def _stream_modal_sandbox(question: str, api_base_url: str):
     """Stream output from Claude Code running in Modal Sandbox."""
 
-    from policyengine_api.demo_sandbox import run_claude_code_in_sandbox
+    from policyengine_api.agent_sandbox import run_claude_code_in_sandbox
 
     sb, process = run_claude_code_in_sandbox(question, api_base_url)
 
@@ -129,7 +129,7 @@ async def stream_analysis(request: AskRequest):
     """
     api_base_url = settings.policyengine_api_url
 
-    if settings.demo_use_modal:
+    if settings.agent_use_modal:
         return StreamingResponse(
             _stream_modal_sandbox(request.question, api_base_url),
             media_type="text/event-stream",
@@ -145,8 +145,8 @@ async def stream_analysis(request: AskRequest):
 async def ask_question(request: AskRequest) -> AskResponse:
     """Ask a policy question (non-streaming).
 
-    Starts the analysis in the background. Poll GET /demo/status/{job_id} for results.
-    For real-time streaming, use POST /demo/stream instead.
+    Starts the analysis in the background. Poll GET /agent/status/{job_id} for results.
+    For real-time streaming, use POST /agent/stream instead.
     """
     job_id = str(uuid4())
     api_base_url = settings.policyengine_api_url
@@ -162,7 +162,7 @@ async def ask_question(request: AskRequest) -> AskResponse:
     async def run_job():
         _jobs[job_id]["status"] = "running"
         try:
-            if settings.demo_use_modal:
+            if settings.agent_use_modal:
                 import modal
 
                 run_policy_analysis = modal.Function.lookup(
@@ -203,7 +203,7 @@ async def ask_question(request: AskRequest) -> AskResponse:
 
 @router.get("/status/{job_id}", response_model=JobStatusResponse)
 async def get_job_status(job_id: str) -> JobStatusResponse:
-    """Get the status of a demo job."""
+    """Get the status of an agent job."""
     if job_id not in _jobs:
         raise HTTPException(status_code=404, detail="Job not found")
 

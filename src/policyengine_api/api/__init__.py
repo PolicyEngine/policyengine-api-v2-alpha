@@ -3,10 +3,10 @@
 from fastapi import APIRouter
 
 from . import (
+    agent,
     analysis,
     change_aggregates,
     datasets,
-    demo,
     dynamics,
     household,
     outputs,
@@ -34,6 +34,6 @@ api_router.include_router(tax_benefit_model_versions.router)
 api_router.include_router(change_aggregates.router)
 api_router.include_router(household.router)
 api_router.include_router(analysis.router)
-api_router.include_router(demo.router)
+api_router.include_router(agent.router)
 
 __all__ = ["api_router"]

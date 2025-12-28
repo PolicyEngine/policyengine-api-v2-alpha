@@ -371,7 +371,7 @@ def _trigger_modal_household(
     """Trigger household simulation - Modal or local based on settings."""
     from policyengine_api.config import settings
 
-    if not settings.demo_use_modal and session is not None:
+    if not settings.agent_use_modal and session is not None:
         # Run locally
         if request.tax_benefit_model_name == "policyengine_uk":
             _run_local_household_uk(

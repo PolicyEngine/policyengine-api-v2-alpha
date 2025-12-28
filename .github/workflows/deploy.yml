@@ -119,4 +119,4 @@ jobs:
           MODAL_TOKEN_SECRET: ${{ secrets.MODAL_TOKEN_SECRET }}
         run: |
           uv run modal deploy src/policyengine_api/modal_app.py
-          uv run modal deploy src/policyengine_api/demo_sandbox.py
+          uv run modal deploy src/policyengine_api/agent_sandbox.py

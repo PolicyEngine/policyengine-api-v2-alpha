@@ -522,7 +522,7 @@ def _trigger_economy_comparison(
     """Trigger economy comparison analysis (local or Modal)."""
     from policyengine_api.config import settings
 
-    if not settings.demo_use_modal and session is not None:
+    if not settings.agent_use_modal and session is not None:
         # Run locally
         if tax_benefit_model_name == "policyengine_uk":
             _run_local_economy_comparison_uk(job_id, session)
