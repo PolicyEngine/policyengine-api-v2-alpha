@@ -76,3 +76,28 @@ Use `gh` CLI for GitHub operations to ensure Actions run correctly.
 ## Database
 
 `make init` resets tables and storage. `make seed` populates UK/US models with variables, parameters, and datasets.
+
+## Modal sandbox + Claude Code CLI gotchas
+
+The agent endpoint (`/agent/stream`) runs Claude Code CLI inside a Modal sandbox. Hard-won lessons:
+
+1. **Modal secrets must explicitly set env var names.** When creating: `modal secret create anthropic-api-key ANTHROPIC_API_KEY=sk-ant-...`. Just having a secret named "anthropic-api-key" doesn't automatically set `ANTHROPIC_API_KEY`.
+
+2. **`--dangerously-skip-permissions` doesn't work as root.** Modal containers run as root. Claude Code blocks this flag for security. Don't use it.
+
+3. **`sb.exec()` doesn't close stdin.** This causes Claude to hang waiting for input. Wrap in shell: `sb.exec("sh", "-c", "claude ... < /dev/null 2>&1")`.
+
+4. **Claude Code has first-run onboarding.** Pre-accept during image build:
+   ```python
+   .run_commands(
+       "mkdir -p /root/.claude && "
+       'echo \'{"hasCompletedOnboarding": true, "hasAcknowledgedCostThreshold": true}\' '
+       "> /root/.claude/settings.json",
+   )
+   ```
+
+5. **`--output-format stream-json` requires `--verbose`.** Otherwise you get an error.
+
+6. **Modal image caching.** Changes to `.run_commands()` may not rebuild if earlier layers are cached. Add a cache-busting change (new env var, modified command) to force rebuild.
+
+7. **Test locally before deploying.** Use `modal.Sandbox.create()` directly in a Python script to debug without waiting for Cloud Run deploys.
