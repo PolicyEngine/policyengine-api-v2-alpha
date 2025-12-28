@@ -8,10 +8,10 @@ import json
 
 import modal
 
-# Sandbox image with Bun and Claude Code CLI (v2 - with ToS pre-accept)
+# Sandbox image with Bun and Claude Code CLI (v3 - with stdbuf for unbuffered output)
 sandbox_image = (
     modal.Image.debian_slim(python_version="3.12")
-    .apt_install("curl", "git", "unzip")
+    .apt_install("curl", "git", "unzip", "coreutils")  # coreutils provides stdbuf
     .pip_install("logfire")
     .run_commands(
         # Install Bun
@@ -97,13 +97,15 @@ def run_claude_code_in_sandbox(
     # Escape the question and config for shell
     escaped_question = question.replace("'", "'\"'\"'")
     escaped_mcp_config = mcp_config_json.replace("'", "'\"'\"'")
+    # Use stdbuf -oL to force line-buffered stdout (prevents buffering issues)
     cmd = (
-        f"claude -p '{escaped_question}' "
+        f"stdbuf -oL claude -p '{escaped_question}' "
         f"--mcp-config '{escaped_mcp_config}' "
         "--output-format stream-json --verbose --max-turns 10 "
         "--allowedTools 'mcp__policyengine__*,Bash,Read,Grep,Glob,Write,Edit' "
         "< /dev/null 2>&1"
     )
+    logfire.info("run_claude_code_in_sandbox: executing", cmd=cmd[:200])
     process = sb.exec("sh", "-c", cmd)
     print("[SANDBOX] claude CLI process started", flush=True)
     logfire.info("run_claude_code_in_sandbox: claude CLI process started, returning")

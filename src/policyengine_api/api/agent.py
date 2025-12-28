@@ -158,93 +158,111 @@ async def _stream_modal_sandbox(question: str, api_base_url: str):
     import threading
     from concurrent.futures import ThreadPoolExecutor
 
-    logfire.info("stream_modal_sandbox: starting", question=question[:100])
+    with logfire.span(
+        "agent_stream", question=question[:100], api_base_url=api_base_url
+    ):
+        sb = None
+        executor = ThreadPoolExecutor(max_workers=1)
+        try:
+            from policyengine_api.agent_sandbox import run_claude_code_in_sandbox
 
-    sb = None
-    executor = ThreadPoolExecutor(max_workers=1)
-    try:
-        from policyengine_api.agent_sandbox import run_claude_code_in_sandbox
+            logfire.info("creating_sandbox")
 
-        logfire.info(
-            "stream_modal_sandbox: creating sandbox", api_base_url=api_base_url
-        )
+            loop = asyncio.get_event_loop()
+            sb, process = await loop.run_in_executor(
+                executor, run_claude_code_in_sandbox, question, api_base_url
+            )
+            logfire.info("sandbox_created")
 
-        loop = asyncio.get_event_loop()
-        sb, process = await loop.run_in_executor(
-            executor, run_claude_code_in_sandbox, question, api_base_url
-        )
-        logfire.info("stream_modal_sandbox: sandbox created")
+            line_queue = queue.Queue()
+            lines_received = 0
 
-        line_queue = queue.Queue()
-
-        def stream_reader():
-            try:
-                for line in process.stdout:
-                    line_queue.put(("line", line))
-                process.wait()
-                if process.returncode != 0:
-                    stderr = process.stderr.read()
-                    logfire.error(
-                        "claude_code_failed",
-                        returncode=process.returncode,
-                        stderr=stderr[:500] if stderr else None,
-                    )
-                    line_queue.put(("error", (process.returncode, stderr)))
-                else:
-                    line_queue.put(("done", process.returncode))
-            except Exception as e:
-                logfire.exception("stream_reader_error", error=str(e))
-                line_queue.put(("exception", str(e)))
-
-        reader_thread = threading.Thread(target=stream_reader, daemon=True)
-        reader_thread.start()
-
-        while True:
-            try:
-                item = await loop.run_in_executor(
-                    executor, lambda: line_queue.get(timeout=0.1)
-                )
-                event_type, data = item
-
-                if event_type == "line":
-                    parsed = _parse_claude_stream_event(data)
-                    if parsed:
-                        logfire.info(
-                            "stream_event",
-                            event_type=parsed["type"],
-                            content_preview=parsed["content"][:100]
-                            if parsed["content"]
-                            else None,
+            def stream_reader():
+                nonlocal lines_received
+                try:
+                    logfire.info("reader_started")
+                    for line in process.stdout:
+                        lines_received += 1
+                        logfire.debug(
+                            "raw_line",
+                            line_num=lines_received,
+                            line=line[:300] if line else None,
                         )
-                        yield f"data: {json.dumps(parsed)}\n\n"
-                elif event_type == "error":
-                    returncode, stderr = data
-                    yield f"data: {json.dumps({'type': 'error', 'content': stderr})}\n\n"
-                    yield f"data: {json.dumps({'type': 'done', 'returncode': returncode})}\n\n"
-                    break
-                elif event_type == "done":
-                    logfire.info("stream_complete", returncode=data)
-                    yield f"data: {json.dumps({'type': 'done', 'returncode': data})}\n\n"
-                    break
-                elif event_type == "exception":
-                    raise Exception(data)
-            except Exception as e:
-                if "Empty" in type(e).__name__:
-                    await asyncio.sleep(0)
-                    continue
-                raise
+                        line_queue.put(("line", line))
+                    logfire.info("stdout_exhausted", total_lines=lines_received)
+                    process.wait()
+                    logfire.info("process_exited", returncode=process.returncode)
+                    if process.returncode != 0:
+                        stderr = process.stderr.read()
+                        logfire.error(
+                            "process_failed",
+                            returncode=process.returncode,
+                            stderr=stderr[:500] if stderr else None,
+                        )
+                        line_queue.put(("error", (process.returncode, stderr)))
+                    else:
+                        line_queue.put(("done", process.returncode))
+                except Exception as e:
+                    logfire.exception("reader_error", error=str(e))
+                    line_queue.put(("exception", str(e)))
 
-    except Exception as e:
-        logfire.exception("stream_modal_sandbox_failed", error=str(e))
-        yield f"data: {json.dumps({'type': 'error', 'content': f'Sandbox error: {str(e)}'})}\n\n"
-        yield f"data: {json.dumps({'type': 'done', 'returncode': 1})}\n\n"
-    finally:
-        if sb is not None:
-            try:
-                await loop.run_in_executor(executor, sb.terminate)
-            except Exception:
-                pass
-        executor.shutdown(wait=False)
+            reader_thread = threading.Thread(target=stream_reader, daemon=True)
+            reader_thread.start()
+
+            events_sent = 0
+            while True:
+                try:
+                    item = await loop.run_in_executor(
+                        executor, lambda: line_queue.get(timeout=0.1)
+                    )
+                    event_type, data = item
+
+                    if event_type == "line":
+                        parsed = _parse_claude_stream_event(data)
+                        if parsed:
+                            events_sent += 1
+                            logfire.info(
+                                "event",
+                                num=events_sent,
+                                type=parsed["type"],
+                                content=parsed["content"][:200]
+                                if parsed["content"]
+                                else None,
+                            )
+                            yield f"data: {json.dumps(parsed)}\n\n"
+                    elif event_type == "error":
+                        returncode, stderr = data
+                        yield f"data: {json.dumps({'type': 'error', 'content': stderr})}\n\n"
+                        yield f"data: {json.dumps({'type': 'done', 'returncode': returncode})}\n\n"
+                        break
+                    elif event_type == "done":
+                        logfire.info(
+                            "complete",
+                            returncode=data,
+                            events_sent=events_sent,
+                            lines_received=lines_received,
+                        )
+                        yield f"data: {json.dumps({'type': 'done', 'returncode': data})}\n\n"
+                        break
+                    elif event_type == "exception":
+                        raise Exception(data)
+                except Exception as e:
+                    if "Empty" in type(e).__name__:
+                        await asyncio.sleep(0)
+                        continue
+                    raise
+
+        except Exception as e:
+            logfire.exception("failed", error=str(e))
+            yield f"data: {json.dumps({'type': 'error', 'content': f'Sandbox error: {str(e)}'})}\n\n"
+            yield f"data: {json.dumps({'type': 'done', 'returncode': 1})}\n\n"
+        finally:
+            if sb is not None:
+                try:
+                    await loop.run_in_executor(executor, sb.terminate)
+                except Exception:
+                    pass
+            executor.shutdown(wait=False)
 
 
 @router.post("/stream")
