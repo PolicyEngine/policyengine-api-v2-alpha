@@ -41,17 +41,17 @@ anthropic_secret = modal.Secret.from_name("anthropic-api-key")
 logfire_secret = modal.Secret.from_name("logfire-token")
 
 
-def run_claude_code_in_sandbox(
+async def run_claude_code_in_sandbox_async(
     question: str,
     api_base_url: str = "https://v2.api.policyengine.org",
 ) -> tuple[modal.Sandbox, any]:
     """Create a sandbox running Claude Code with MCP server configured.
 
     Returns the sandbox and process handle for streaming output.
+    Uses Modal's async API for proper streaming support.
     """
     import logfire
 
-    print("[SANDBOX] run_claude_code_in_sandbox starting", flush=True)
     logfire.info(
         "run_claude_code_in_sandbox: starting",
         question=question[:100],
@@ -65,34 +65,19 @@ def run_claude_code_in_sandbox(
     mcp_config_json = json.dumps(mcp_config)
 
     # Get reference to deployed app (required when calling from outside Modal)
-    print("[SANDBOX] looking up Modal app", flush=True)
     logfire.info("run_claude_code_in_sandbox: looking up Modal app")
     sandbox_app = modal.App.lookup("policyengine-sandbox", create_if_missing=True)
-    print("[SANDBOX] Modal app found", flush=True)
     logfire.info("run_claude_code_in_sandbox: Modal app found")
 
-    print("[SANDBOX] creating sandbox", flush=True)
     logfire.info("run_claude_code_in_sandbox: creating sandbox")
-    sb = modal.Sandbox.create(
+    sb = await modal.Sandbox.create.aio(
         app=sandbox_app,
         image=sandbox_image,
         secrets=[anthropic_secret, logfire_secret],
         timeout=600,
         workdir="/tmp",
     )
-    print("[SANDBOX] sandbox created", flush=True)
     logfire.info("run_claude_code_in_sandbox: sandbox created")
-
-    # Run Claude Code with the question
-    # Note: Can't use --dangerously-skip-permissions as root (Modal runs as root)
-    # Use shell wrapper with </dev/null to properly close stdin (prevents hanging)
-    # --max-turns: limit execution to prevent runaway
-    # Use --mcp-config to pass MCP config directly (more reliable than config file)
-    print("[SANDBOX] Starting claude CLI with question", flush=True)
-    logfire.info(
-        "run_claude_code_in_sandbox: starting claude CLI",
-        mcp_url=f"{api_base_url}/mcp",
-    )
 
     # Escape the question and config for shell
     escaped_question = question.replace("'", "'\"'\"'")
@@ -112,9 +97,8 @@ def run_claude_code_in_sandbox(
         question_len=len(question),
         escaped_question_len=len(escaped_question),
     )
-    # text=True, bufsize=1 enables line-buffered streaming
-    process = sb.exec("sh", "-c", cmd, text=True, bufsize=1)
-    print("[SANDBOX] claude CLI process started", flush=True)
+    # Use async exec for proper streaming
+    process = await sb.exec.aio("sh", "-c", cmd, text=True, bufsize=1)
     logfire.info("run_claude_code_in_sandbox: claude CLI process started, returning")
 
     return sb, process

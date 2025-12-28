@@ -154,58 +154,38 @@ def _parse_claude_stream_event(line: str) -> dict | None:
 
 async def _stream_modal_sandbox(question: str, api_base_url: str):
     """Stream output from Claude Code running in Modal Sandbox."""
-    from concurrent.futures import ThreadPoolExecutor
-
     with logfire.span(
         "agent_stream", question=question[:100], api_base_url=api_base_url
     ):
         sb = None
-        executor = ThreadPoolExecutor(max_workers=2)
         try:
-            from policyengine_api.agent_sandbox import run_claude_code_in_sandbox
+            from policyengine_api.agent_sandbox import run_claude_code_in_sandbox_async
 
             logfire.info("creating_sandbox")
-
-            loop = asyncio.get_event_loop()
-            sb, process = await loop.run_in_executor(
-                executor, run_claude_code_in_sandbox, question, api_base_url
-            )
+            sb, process = await run_claude_code_in_sandbox_async(question, api_base_url)
             logfire.info("sandbox_created")
 
-            # Read stdout synchronously in executor, yield lines as we get them
-            def read_next_line(stdout_iter):
-                try:
-                    return next(stdout_iter)
-                except StopIteration:
-                    return None
-
-            stdout_iter = iter(process.stdout)
+            # Use Modal's async iteration for stdout
             lines_received = 0
             events_sent = 0
 
-            while True:
-                line = await loop.run_in_executor(executor, read_next_line, stdout_iter)
-
-                if line is None:
-                    # stdout exhausted
-                    logfire.info("stdout_exhausted", total_lines=lines_received)
-                    break
-
+            async for line in process.stdout:
                 lines_received += 1
                 logfire.info(
                     "raw_line",
                     line_num=lines_received,
-                    line_len=len(line),
-                    line_preview=line[:300].replace("session", "sess1on"),
+                    line_len=len(line) if line else 0,
+                    line_preview=line[:300].replace("session", "sess1on")
+                    if line
+                    else None,
                 )
-
                 parsed = _parse_claude_stream_event(line)
                 if parsed:
                     events_sent += 1
                     yield f"data: {json.dumps(parsed)}\n\n"
 
-            # Wait for process to finish
-            returncode = await loop.run_in_executor(executor, process.wait)
+            # Wait for process using async API
+            returncode = await process.wait.aio()
             logfire.info(
                 "complete",
                 returncode=returncode,
@@ -221,10 +201,9 @@ async def _stream_modal_sandbox(question: str, api_base_url: str):
         finally:
             if sb is not None:
                 try:
-                    await loop.run_in_executor(executor, sb.terminate)
+                    await sb.terminate.aio()
                 except Exception:
                     pass
-            executor.shutdown(wait=False)
 
 
 @router.post("/stream")
