@@ -1,15 +1,34 @@
 # PolicyEngine API v2
 
-FastAPI service for PolicyEngine microsimulations with Supabase backend and object storage.
+FastAPI service for UK and US tax-benefit microsimulations. Uses Supabase for storage and Modal.com for serverless compute with sub-1s cold starts.
 
-## Features
+## Architecture
 
-- RESTful API for tax-benefit microsimulations
-- Supabase for PostgreSQL database and object storage
-- Modal.com serverless compute with sub-1s cold starts
-- SQLModel for type-safe database models
-- Logfire observability and monitoring
-- Terraform deployment to GCP Cloud Run
+```
+┌─────────────────────────────────────────────────────────────┐
+│  Level 2: Reports (future)                                  │
+│  AI-generated documents, orchestrating multiple jobs        │
+├─────────────────────────────────────────────────────────────┤
+│  Level 1: Analyses                                          │
+│  Operations on simulations (comparisons, aggregations)      │
+│  /analysis/economic-impact → economy_comparison_*           │
+├─────────────────────────────────────────────────────────────┤
+│  Level 0: Simulations                                       │
+│  Single world-state calculations                            │
+│  /household/calculate → simulate_household_*                │
+└─────────────────────────────────────────────────────────────┘
+        │
+        ▼
+┌──────────────────────────┐
+│      Modal.com           │
+│  simulate_household_uk   │
+│  simulate_household_us   │
+│  economy_comparison_uk   │──▶ Supabase
+│  economy_comparison_us   │
+└──────────────────────────┘
+```
+
+All compute runs on Modal.com serverless functions. The API triggers these functions and clients poll for results. See [docs/DESIGN.md](docs/DESIGN.md) for the full API hierarchy design.
 
 ## Quick start
 
@@ -17,194 +36,179 @@ FastAPI service for PolicyEngine microsimulations with Supabase backend and obje
 
 - [Supabase CLI](https://supabase.com/docs/guides/cli)
 - Docker and Docker Compose
-- Python 3.13+ with uv
-
-### Local development
-
-1. **Set up environment**
-
-```bash
-cp .env.example .env
-```
-
-The defaults in `.env.example` work with local Supabase. Key settings:
-
-```bash
-SUPABASE_URL=http://127.0.0.1:54321
-SUPABASE_DB_URL=postgresql://postgres:postgres@127.0.0.1:54322/postgres
-STORAGE_BUCKET=datasets
-```
-
-2. **Start Supabase**
-
-```bash
-supabase start
-```
-
-Creates a local instance with PostgreSQL (port 54322), Storage API, and Studio dashboard at `http://localhost:54323`.
-
-3. **Initialise database**
-
-```bash
-make init
-```
-
-This resets the database, creates tables, storage bucket, and RLS policies.
-
-4. **Seed data**
-
-```bash
-make seed
-```
-
-Seeds UK and US tax-benefit models with variables, parameters, and datasets.
-
-5. **Start the API**
-
-```bash
-docker compose up
-```
-
-API available at `http://localhost:8000`. Visit `http://localhost:8000/docs` for interactive documentation.
-
-## API endpoints
-
-Base URL: `http://localhost:8000`
-
-### Core resources
-
-```
-GET  /health                           → Health check
-GET  /datasets                         → List datasets
-POST /datasets                         → Create dataset
-GET  /policies                         → List policies
-POST /policies                         → Create policy
-GET  /dynamics                         → List dynamics
-POST /dynamics                         → Create dynamic
-GET  /simulations                      → List simulations
-POST /simulations                      → Create simulation
-GET  /simulations/{id}                 → Get simulation status
-```
-
-### Model metadata
-
-```
-GET  /variables                        → List variables
-GET  /parameters                       → List parameters
-GET  /parameter-values                 → List parameter values
-GET  /tax-benefit-models               → List models
-GET  /tax-benefit-model-versions       → List model versions
-```
-
-### Aggregates and analysis
-
-```
-GET  /aggregates                       → List aggregates
-POST /aggregates                       → Create aggregate
-GET  /aggregates/{id}                  → Get aggregate
-GET  /change-aggregates                → List change aggregates
-POST /change-aggregates                → Create change aggregate
-GET  /change-aggregates/{id}           → Get change aggregate
-DELETE /change-aggregates/{id}         → Delete change aggregate
-```
-
-## Typical workflow
-
-1. Create simulation: `POST /simulations` with dataset and policy
-2. Poll status: `GET /simulations/{id}` until status is "completed"
-3. Request aggregates: `POST /aggregates` with simulation_id and variable
-4. Compare reforms: `POST /change-aggregates` with baseline and reform simulation IDs
-
-## Database management
+- Python 3.13+ with [uv](https://docs.astral.sh/uv/)
+- [Modal.com](https://modal.com) account
 
 ### Local development
 
 ```bash
-make init             # Reset and initialise Supabase (tables, buckets, permissions)
-make seed             # Seed UK/US models only
-make integration-test # Full setup: init, seeding, tests
-make reset            # Reset Supabase database (supabase db reset)
+make install                  # install dependencies
+cp .env.example .env          # create env file
+supabase start                # start local supabase (copy anon/service keys to .env)
+make init                     # create tables, storage bucket, RLS policies
+make seed                     # seed UK/US models with variables, parameters, datasets
+docker compose up             # start API at http://localhost:8000
 ```
 
-### Production
+To run simulations, deploy Modal functions:
 
 ```bash
-make db-reset-prod    # Reset production database (requires confirmation)
+modal token set --token-id <id> --token-secret <secret>
+make modal-deploy
 ```
 
-**Warning:** `db-reset-prod` drops all tables and storage, recreates everything, and reseeds data. Requires typing "yes" to confirm.
+## API reference
+
+All simulation and analysis endpoints are async: submit a request, get a job ID, poll until complete.
+
+### Household simulations
+
+Calculate taxes and benefits for a single household.
+
+**Submit (UK):**
+```bash
+curl -X POST http://localhost:8000/household/calculate \
+  -H "Content-Type: application/json" \
+  -d '{
+    "tax_benefit_model_name": "policyengine_uk",
+    "people": [{"age": 30, "employment_income": 50000}],
+    "year": 2026
+  }'
+```
+
+**Submit (US):**
+```bash
+curl -X POST http://localhost:8000/household/calculate \
+  -H "Content-Type: application/json" \
+  -d '{
+    "tax_benefit_model_name": "policyengine_us",
+    "people": [{"age": 40, "employment_income": 70000}],
+    "tax_unit": {"state_code": "CA"},
+    "year": 2024
+  }'
+```
+
+**Poll:**
+```bash
+curl http://localhost:8000/household/calculate/{job_id}
+```
+
+Response (when complete):
+```json
+{
+  "job_id": "...",
+  "status": "completed",
+  "result": {
+    "person": [{"income_tax": 7500, "national_insurance": 4500, ...}],
+    "household": {"household_net_income": 38000, ...}
+  }
+}
+```
+
+### Economy comparison analysis
+
+Compare baseline vs reform across a population dataset. Returns decile impacts, budget impacts, and winners/losers.
+
+**Submit:**
+```bash
+curl -X POST http://localhost:8000/analysis/economic-impact \
+  -H "Content-Type: application/json" \
+  -d '{
+    "tax_benefit_model_name": "policyengine_uk",
+    "dataset_id": "...",
+    "policy_id": "..."
+  }'
+```
+
+**Poll:**
+```bash
+curl http://localhost:8000/analysis/economic-impact/{job_id}
+```
+
+Response (when complete):
+```json
+{
+  "report_id": "...",
+  "status": "completed",
+  "decile_impacts": [...],
+  "program_statistics": [...]
+}
+```
+
+### Policies
+
+Create policy reforms by specifying parameter changes.
+
+```bash
+# Search for parameters
+curl "http://localhost:8000/parameters?search=basic_rate"
+
+# Create policy
+curl -X POST http://localhost:8000/policies \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Lower basic rate to 16p",
+    "parameter_values": [{
+      "parameter_id": "...",
+      "value_json": 0.16,
+      "start_date": "2026-01-01T00:00:00Z"
+    }]
+  }'
+```
+
+### Other endpoints
+
+```
+GET  /datasets                List population datasets
+GET  /parameters?search=...   Search parameters
+POST /dynamics                Create behavioural response
+GET  /variables               List variables
+GET  /health                  Health check
+```
 
 ## Development
 
-### Code quality
-
 ```bash
-make format          # Format code with ruff
-make lint            # Lint and fix with ruff
-make test            # Run unit tests
+make format           # ruff formatting
+make lint             # ruff linting with auto-fix
+make test             # unit tests
+make integration-test # full integration tests
 ```
 
-### Database schema
+## Deployment
 
-Schema is defined in two parts:
-
-**SQLModel tables** (`src/policyengine_api/models/`): All table definitions use SQLModel for type safety and single source of truth.
-
-**SQL migrations** (`supabase/migrations/`): Row-level security policies, storage buckets, and Postgres-specific features.
-
-To reset and recreate everything:
+### Modal.com (compute)
 
 ```bash
-uv run python scripts/init.py
+make modal-deploy     # deploy serverless functions
 ```
 
-This drops all tables, deletes the storage bucket, then recreates tables from SQLModel and applies RLS policies.
+### Cloud Run (API)
 
-## Observability
+Automated via GitHub Actions on merge to main. The Docker build compiles the Next.js docs site and bundles it into the API image, served at `/docs`.
 
-[Logfire](https://logfire.pydantic.dev/) instruments HTTP requests, database queries, and performance metrics. View traces at the [Logfire dashboard](https://logfire.pydantic.dev).
+Required GitHub secrets:
+- `SUPABASE_URL`, `SUPABASE_KEY`, `SUPABASE_DB_URL`
+- `MODAL_TOKEN_ID`, `MODAL_TOKEN_SECRET`
+- `LOGFIRE_TOKEN`
+- GCP workload identity federation
 
-## Architecture
-
-### Components
-
-- **API server**: FastAPI application (port 8000)
-- **Database**: Supabase PostgreSQL
-- **Storage**: Supabase object storage for .h5 dataset files
-- **Compute**: Modal.com serverless functions for simulations
-
-### Data models
-
-- **Datasets**: Microdata files in Supabase storage
-- **DatasetVersions**: Versioned dataset snapshots
-- **Policies**: Parameter reforms
-- **Dynamics**: Dynamic behavioural responses
-- **Simulations**: Tax-benefit calculations
-- **Variables**: Model outputs (income_tax, universal_credit)
-- **Parameters**: System settings (personal_allowance, benefit_rates)
-- **ParameterValues**: Time-bound parameter values
-- **Aggregates**: Statistics from simulations
-- **ChangeAggregates**: Reform impact analysis
-
-### Project structure
+## Project structure
 
 ```
 policyengine-api-v2/
 ├── src/policyengine_api/
 │   ├── api/              # FastAPI routers
-│   ├── config/           # Settings
 │   ├── models/           # SQLModel database models
 │   ├── services/         # Database, storage
-│   ├── modal_app.py      # Modal.com serverless functions
+│   ├── modal_app.py      # Modal serverless functions
 │   └── main.py           # FastAPI app
-├── supabase/
-│   └── migrations/       # RLS policies and storage
+├── supabase/migrations/  # RLS policies
+├── terraform/            # Cloud Run infrastructure
 ├── scripts/              # Database init and seeding
-├── terraform/            # GCP Cloud Run deployment
-├── tests/                # Test suite
-└── docker-compose.yml    # Local services
+└── docs/                 # Next.js docs site + DESIGN.md
 ```
 
-## License
+## Licence
 
 AGPL-3.0

@@ -192,11 +192,11 @@ def _trigger_modal_household(
     policy_data: dict | None,
     dynamic_data: dict | None,
 ) -> None:
-    """Trigger Modal function for household calculation."""
+    """Trigger Modal function for household simulation."""
     import modal
 
     if request.tax_benefit_model_name == "policyengine_uk":
-        fn = modal.Function.from_name("policyengine", "calculate_household_uk")
+        fn = modal.Function.from_name("policyengine", "simulate_household_uk")
         fn.spawn(
             job_id=job_id,
             people=request.people,
@@ -207,7 +207,7 @@ def _trigger_modal_household(
             dynamic_data=dynamic_data,
         )
     else:
-        fn = modal.Function.from_name("policyengine", "calculate_household_us")
+        fn = modal.Function.from_name("policyengine", "simulate_household_us")
         fn.spawn(
             job_id=job_id,
             people=request.people,
