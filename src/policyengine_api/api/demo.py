@@ -61,10 +61,8 @@ async def _stream_claude_code(question: str, api_base_url: str):
     # Run Claude Code with streaming
     process = await asyncio.create_subprocess_exec(
         "claude",
-        "--print",
-        "--allowedTools",
-        "mcp__policyengine__*,Bash,Read,Grep,Glob,Write,Edit",
-        question,
+        "-p", question,
+        "--allowedTools", "mcp__policyengine__*,Bash,Read,Grep,Glob,Write,Edit",
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
         env={**os.environ, "ANTHROPIC_API_KEY": settings.anthropic_api_key},
@@ -174,10 +172,8 @@ async def ask_question(request: AskRequest) -> AskResponse:
                 # Run locally
                 process = await asyncio.create_subprocess_exec(
                     "claude",
-                    "--print",
-                    "--allowedTools",
-                    "mcp__policyengine__*,Bash,Read,Grep,Glob,Write,Edit",
-                    request.question,
+                    "-p", request.question,
+                    "--allowedTools", "mcp__policyengine__*,Bash,Read,Grep,Glob,Write,Edit",
                     stdout=asyncio.subprocess.PIPE,
                     stderr=asyncio.subprocess.PIPE,
                     env={**os.environ, "ANTHROPIC_API_KEY": settings.anthropic_api_key},

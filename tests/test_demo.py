@@ -88,18 +88,19 @@ class TestClaudeCodeInvocation:
         assert len(captured_args) == 1
         args = captured_args[0]
 
-        # Check command
+        # Check command structure: claude -p <question> --allowedTools <tools>
         assert args[0] == "claude"
-        assert "--print" in args
+        assert "-p" in args
         assert "--allowedTools" in args
+
+        # Check question is passed after -p
+        p_idx = args.index("-p")
+        assert args[p_idx + 1] == "Test question"
 
         # Check MCP tools are allowed
         allowed_tools_idx = args.index("--allowedTools") + 1
         allowed_tools = args[allowed_tools_idx]
         assert "mcp__policyengine__*" in allowed_tools
-
-        # Check question is passed
-        assert "Test question" in args
 
     @pytest.mark.asyncio
     async def test_stream_claude_code_yields_sse_events(self):

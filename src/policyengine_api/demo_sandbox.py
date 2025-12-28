@@ -63,13 +63,10 @@ def run_claude_code_in_sandbox(
     config_process.wait()
 
     # Run Claude Code with the question
-    # Use --print to get output without interactive mode
     process = sb.exec(
         "claude",
-        "--print",
-        "--allowedTools",
-        "mcp__policyengine__*,Bash,Read,Grep,Glob,Write,Edit",
-        question,
+        "-p", question,
+        "--allowedTools", "mcp__policyengine__*,Bash,Read,Grep,Glob,Write,Edit",
     )
 
     return sb, process
@@ -99,10 +96,8 @@ def run_policy_analysis(
     result = subprocess.run(
         [
             "claude",
-            "--print",
-            "--allowedTools",
-            "mcp__policyengine__*,Bash,Read,Grep,Glob,Write,Edit",
-            question,
+            "-p", question,
+            "--allowedTools", "mcp__policyengine__*,Bash,Read,Grep,Glob,Write,Edit",
         ],
         capture_output=True,
         text=True,
