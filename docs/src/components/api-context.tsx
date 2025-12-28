@@ -7,13 +7,15 @@ interface ApiContextType {
   setBaseUrl: (url: string) => void;
 }
 
+const defaultBaseUrl = process.env.NEXT_PUBLIC_API_URL || "https://v2.api.policyengine.org";
+
 const ApiContext = createContext<ApiContextType>({
-  baseUrl: "https://v2.api.policyengine.org",
+  baseUrl: defaultBaseUrl,
   setBaseUrl: () => {},
 });
 
 export function ApiProvider({ children }: { children: ReactNode }) {
-  const [baseUrl, setBaseUrl] = useState("https://v2.api.policyengine.org");
+  const [baseUrl, setBaseUrl] = useState(defaultBaseUrl);
 
   return (
     <ApiContext.Provider value={{ baseUrl, setBaseUrl }}>

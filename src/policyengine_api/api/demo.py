@@ -41,17 +41,24 @@ _jobs: dict[str, dict] = {}
 
 
 def _run_agent_task(job_id: str, question: str, api_base_url: str) -> None:
-    """Background task to run the agent via Modal."""
-    import modal
-
+    """Background task to run the agent."""
     try:
         _jobs[job_id]["status"] = "running"
 
-        # Call the Modal function
-        run_policy_agent = modal.Function.lookup(
-            "policyengine-demo", "run_policy_agent"
-        )
-        result = run_policy_agent.remote(question, api_base_url)
+        use_modal = os.environ.get("DEMO_USE_MODAL", "false").lower() == "true"
+
+        if use_modal:
+            import modal
+
+            run_policy_agent = modal.Function.lookup(
+                "policyengine-demo", "run_policy_agent"
+            )
+            result = run_policy_agent.remote(question, api_base_url)
+        else:
+            from policyengine_api.demo_agent import run_agent
+
+            report = run_agent(question, api_base_url)
+            result = {"status": "completed", "report": report}
 
         _jobs[job_id]["status"] = result.get("status", "completed")
         _jobs[job_id]["report"] = result.get("report")
