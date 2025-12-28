@@ -155,6 +155,30 @@ print('Logfire configured inside sandbox')
         returncode=version_check.returncode,
     )
 
+    # Quick test: run Claude with a simple query WITHOUT MCP to verify it works
+    print("[SANDBOX] Testing simple claude query (no MCP)", flush=True)
+    logfire.info("run_claude_code_in_sandbox: testing simple query without MCP")
+    simple_test = sb.exec(
+        "claude",
+        "-p",
+        "Say hello in one word",
+        "--output-format",
+        "text",
+        "--dangerously-skip-permissions",
+        "--max-turns",
+        "1",
+    )
+    simple_test.wait()
+    simple_stdout = simple_test.stdout.read()
+    simple_stderr = simple_test.stderr.read()
+    print(f"[SANDBOX] Simple test result: stdout={simple_stdout[:200] if simple_stdout else 'empty'}, stderr={simple_stderr[:200] if simple_stderr else 'empty'}, rc={simple_test.returncode}", flush=True)
+    logfire.info(
+        "run_claude_code_in_sandbox: simple test result",
+        stdout=simple_stdout[:500] if simple_stdout else None,
+        stderr=simple_stderr[:500] if simple_stderr else None,
+        returncode=simple_test.returncode,
+    )
+
     # Run Claude Code with the question
     # --dangerously-skip-permissions: auto-accept permission prompts (required for non-interactive)
     # --max-turns: limit execution to prevent runaway
