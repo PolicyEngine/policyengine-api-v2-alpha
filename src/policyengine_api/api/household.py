@@ -186,40 +186,245 @@ class HouseholdImpactJobStatusResponse(BaseModel):
     error_message: str | None = None
 
 
+def _run_local_household_uk(
+    job_id: str,
+    people: list[dict],
+    benunit: dict,
+    household: dict,
+    year: int,
+    policy_data: dict | None,
+    session: Session,
+) -> None:
+    """Run UK household calculation locally."""
+    from datetime import datetime, timezone
+
+    from policyengine.tax_benefit_models.uk import uk_latest
+    from policyengine.tax_benefit_models.uk.analysis import (
+        UKHouseholdInput,
+        calculate_household_impact,
+    )
+
+    try:
+        # Build policy if provided
+        policy = None
+        if policy_data:
+            from policyengine.core.policy import ParameterValue as PEParameterValue
+            from policyengine.core.policy import Policy as PEPolicy
+
+            pe_param_values = []
+            param_lookup = {p.name: p for p in uk_latest.parameters}
+            for pv in policy_data.get("parameter_values", []):
+                pe_param = param_lookup.get(pv["parameter_name"])
+                if pe_param:
+                    pe_pv = PEParameterValue(
+                        parameter=pe_param,
+                        value=pv["value"],
+                        start_date=datetime.fromisoformat(pv["start_date"])
+                        if pv.get("start_date")
+                        else None,
+                        end_date=datetime.fromisoformat(pv["end_date"])
+                        if pv.get("end_date")
+                        else None,
+                    )
+                    pe_param_values.append(pe_pv)
+            policy = PEPolicy(
+                name=policy_data.get("name", ""),
+                description=policy_data.get("description", ""),
+                parameter_values=pe_param_values,
+            )
+
+        pe_input = UKHouseholdInput(
+            people=people,
+            benunit=benunit,
+            household=household,
+            year=year,
+        )
+
+        result = calculate_household_impact(pe_input, policy=policy)
+
+        # Update job with result
+        job = session.get(HouseholdJob, job_id)
+        if job:
+            job.status = HouseholdJobStatus.COMPLETED
+            job.result = {
+                "person": result.person,
+                "benunit": result.benunit,
+                "household": result.household,
+            }
+            job.completed_at = datetime.now(timezone.utc)
+            session.add(job)
+            session.commit()
+
+    except Exception as e:
+        from datetime import datetime, timezone
+
+        # Update job with error
+        job = session.get(HouseholdJob, job_id)
+        if job:
+            job.status = HouseholdJobStatus.FAILED
+            job.error_message = str(e)
+            job.completed_at = datetime.now(timezone.utc)
+            session.add(job)
+            session.commit()
+        raise
+
+
+def _run_local_household_us(
+    job_id: str,
+    people: list[dict],
+    marital_unit: dict,
+    family: dict,
+    spm_unit: dict,
+    tax_unit: dict,
+    household: dict,
+    year: int,
+    policy_data: dict | None,
+    session: Session,
+) -> None:
+    """Run US household calculation locally."""
+    from datetime import datetime, timezone
+
+    from policyengine.tax_benefit_models.us import us_latest
+    from policyengine.tax_benefit_models.us.analysis import (
+        USHouseholdInput,
+        calculate_household_impact,
+    )
+
+    try:
+        # Build policy if provided
+        policy = None
+        if policy_data:
+            from policyengine.core.policy import ParameterValue as PEParameterValue
+            from policyengine.core.policy import Policy as PEPolicy
+
+            pe_param_values = []
+            param_lookup = {p.name: p for p in us_latest.parameters}
+            for pv in policy_data.get("parameter_values", []):
+                pe_param = param_lookup.get(pv["parameter_name"])
+                if pe_param:
+                    pe_pv = PEParameterValue(
+                        parameter=pe_param,
+                        value=pv["value"],
+                        start_date=datetime.fromisoformat(pv["start_date"])
+                        if pv.get("start_date")
+                        else None,
+                        end_date=datetime.fromisoformat(pv["end_date"])
+                        if pv.get("end_date")
+                        else None,
+                    )
+                    pe_param_values.append(pe_pv)
+            policy = PEPolicy(
+                name=policy_data.get("name", ""),
+                description=policy_data.get("description", ""),
+                parameter_values=pe_param_values,
+            )
+
+        pe_input = USHouseholdInput(
+            people=people,
+            marital_unit=marital_unit,
+            family=family,
+            spm_unit=spm_unit,
+            tax_unit=tax_unit,
+            household=household,
+            year=year,
+        )
+
+        result = calculate_household_impact(pe_input, policy=policy)
+
+        # Update job with result
+        job = session.get(HouseholdJob, job_id)
+        if job:
+            job.status = HouseholdJobStatus.COMPLETED
+            job.result = {
+                "person": result.person,
+                "marital_unit": result.marital_unit,
+                "family": result.family,
+                "spm_unit": result.spm_unit,
+                "tax_unit": result.tax_unit,
+                "household": result.household,
+            }
+            job.completed_at = datetime.now(timezone.utc)
+            session.add(job)
+            session.commit()
+
+    except Exception as e:
+        from datetime import datetime, timezone
+
+        # Update job with error
+        job = session.get(HouseholdJob, job_id)
+        if job:
+            job.status = HouseholdJobStatus.FAILED
+            job.error_message = str(e)
+            job.completed_at = datetime.now(timezone.utc)
+            session.add(job)
+            session.commit()
+        raise
+
+
 def _trigger_modal_household(
     job_id: str,
     request: HouseholdCalculateRequest,
     policy_data: dict | None,
     dynamic_data: dict | None,
+    session: Session | None = None,
 ) -> None:
-    """Trigger Modal function for household simulation."""
-    import modal
+    """Trigger household simulation - Modal or local based on settings."""
+    from policyengine_api.config import settings
 
-    if request.tax_benefit_model_name == "policyengine_uk":
-        fn = modal.Function.from_name("policyengine", "simulate_household_uk")
-        fn.spawn(
-            job_id=job_id,
-            people=request.people,
-            benunit=request.benunit,
-            household=request.household,
-            year=request.year or 2026,
-            policy_data=policy_data,
-            dynamic_data=dynamic_data,
-        )
+    if not settings.demo_use_modal and session is not None:
+        # Run locally
+        if request.tax_benefit_model_name == "policyengine_uk":
+            _run_local_household_uk(
+                job_id=job_id,
+                people=request.people,
+                benunit=request.benunit,
+                household=request.household,
+                year=request.year or 2026,
+                policy_data=policy_data,
+                session=session,
+            )
+        else:
+            _run_local_household_us(
+                job_id=job_id,
+                people=request.people,
+                marital_unit=request.marital_unit,
+                family=request.family,
+                spm_unit=request.spm_unit,
+                tax_unit=request.tax_unit,
+                household=request.household,
+                year=request.year or 2024,
+                policy_data=policy_data,
+                session=session,
+            )
     else:
-        fn = modal.Function.from_name("policyengine", "simulate_household_us")
-        fn.spawn(
-            job_id=job_id,
-            people=request.people,
-            marital_unit=request.marital_unit,
-            family=request.family,
-            spm_unit=request.spm_unit,
-            tax_unit=request.tax_unit,
-            household=request.household,
-            year=request.year or 2024,
-            policy_data=policy_data,
-            dynamic_data=dynamic_data,
-        )
+        # Use Modal
+        import modal
+
+        if request.tax_benefit_model_name == "policyengine_uk":
+            fn = modal.Function.from_name("policyengine", "simulate_household_uk")
+            fn.spawn(
+                job_id=job_id,
+                people=request.people,
+                benunit=request.benunit,
+                household=request.household,
+                year=request.year or 2026,
+                policy_data=policy_data,
+                dynamic_data=dynamic_data,
+            )
+        else:
+            fn = modal.Function.from_name("policyengine", "simulate_household_us")
+            fn.spawn(
+                job_id=job_id,
+                people=request.people,
+                marital_unit=request.marital_unit,
+                family=request.family,
+                spm_unit=request.spm_unit,
+                tax_unit=request.tax_unit,
+                household=request.household,
+                year=request.year or 2024,
+                policy_data=policy_data,
+                dynamic_data=dynamic_data,
+            )
 
 
 def _get_policy_data(policy_id: UUID | None, session: Session) -> dict | None:
@@ -325,13 +530,14 @@ def calculate_household(
         session.commit()
         session.refresh(job)
 
-        # Trigger Modal function
-        with logfire.span("trigger_modal", job_id=str(job.id)):
+        # Trigger calculation (Modal or local based on settings)
+        with logfire.span("trigger_calculation", job_id=str(job.id)):
             _trigger_modal_household(
                 str(job.id),
                 request,
                 policy_data,
                 dynamic_data,
+                session=session,
             )
 
         return HouseholdJobResponse(
@@ -517,14 +723,14 @@ def calculate_household_impact_comparison(
             dynamic_id=request.dynamic_id,
         )
 
-        with logfire.span("trigger_modal_baseline", job_id=str(baseline_job.id)):
+        with logfire.span("trigger_baseline", job_id=str(baseline_job.id)):
             _trigger_modal_household(
-                str(baseline_job.id), baseline_request, None, dynamic_data
+                str(baseline_job.id), baseline_request, None, dynamic_data, session=session
             )
 
-        with logfire.span("trigger_modal_reform", job_id=str(reform_job.id)):
+        with logfire.span("trigger_reform", job_id=str(reform_job.id)):
             _trigger_modal_household(
-                str(reform_job.id), reform_request, policy_data, dynamic_data
+                str(reform_job.id), reform_request, policy_data, dynamic_data, session=session
             )
 
         # Return the reform job id (client polls this)
