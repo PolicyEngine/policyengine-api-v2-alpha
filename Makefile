@@ -1,4 +1,4 @@
-.PHONY: install dev format lint test integration-test clean seed up down logs start-supabase stop-supabase reset rebuild create-state-bucket deploy-local init db-reset-prod modal-deploy modal-serve
+.PHONY: install dev format lint test integration-test clean seed up down logs start-supabase stop-supabase reset rebuild create-state-bucket deploy-local init db-reset-prod modal-deploy modal-serve docs
 
 # AWS Configuration
 AWS_REGION ?= us-east-1
@@ -127,3 +127,8 @@ modal-deploy:
 modal-serve:
 	@echo "Running Modal functions locally..."
 	uv run modal serve src/policyengine_api/modal_app.py
+
+docs:
+	@echo "Building docs site..."
+	cd docs && bun install && bun run build
+	@echo "✓ Docs built to docs/out/"
