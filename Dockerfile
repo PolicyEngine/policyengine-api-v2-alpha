@@ -1,5 +1,5 @@
-# Build docs
-FROM oven/bun:1 AS docs-builder
+# Build docs (pin Bun version - 1.3.5 has segfault bugs with Next.js)
+FROM oven/bun:1.1.42 AS docs-builder
 WORKDIR /docs
 COPY docs/package.json docs/bun.lock ./
 RUN bun install
