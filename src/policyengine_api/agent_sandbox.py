@@ -6,14 +6,24 @@ to the PolicyEngine API via MCP. Outputs are streamed back in real-time.
 
 import modal
 
-# Sandbox image with Node.js and Claude Code CLI
+# Sandbox image with Bun and Claude Code CLI
 sandbox_image = (
     modal.Image.debian_slim(python_version="3.12")
-    .apt_install("curl", "git", "unzip", "nodejs", "npm")
+    .apt_install("curl", "git", "unzip")
     .pip_install("logfire")
     .run_commands(
-        # Install Claude Code CLI globally via npm
-        "npm install -g @anthropic-ai/claude-code",
+        # Install Bun
+        "curl -fsSL https://bun.sh/install | bash",
+        # Add bun to PATH, create node symlink (Claude CLI needs it), install Claude Code
+        "export BUN_INSTALL=/root/.bun && export PATH=$BUN_INSTALL/bin:$PATH && "
+        "ln -s $BUN_INSTALL/bin/bun /usr/local/bin/node && "
+        "bun install -g @anthropic-ai/claude-code",
+    )
+    .env(
+        {
+            "BUN_INSTALL": "/root/.bun",
+            "PATH": "/root/.bun/bin:/usr/local/bin:/usr/bin:/bin",
+        }
     )
 )
 
