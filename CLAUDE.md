@@ -101,3 +101,5 @@ The agent endpoint (`/agent/stream`) runs Claude Code CLI inside a Modal sandbox
 6. **Modal image caching.** Changes to `.run_commands()` may not rebuild if earlier layers are cached. Add a cache-busting change (new env var, modified command) to force rebuild.
 
 7. **Test locally before deploying.** Use `modal.Sandbox.create()` directly in a Python script to debug without waiting for Cloud Run deploys.
+
+8. **MCP SSE doesn't work in Modal containers.** Claude Code with MCP works locally but exits immediately after init in Modal (both sandbox and function). Without MCP, Claude works fine in Modal. This appears to be a Claude Code bug or incompatibility with the Modal container environment. Workaround: run Claude without MCP and have it use direct API calls, or run on a different platform (e.g., Cloud Run directly).

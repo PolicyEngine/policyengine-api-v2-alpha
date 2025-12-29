@@ -114,6 +114,56 @@ async def run_claude_code_in_sandbox_async(
     return sb, process
 
 
+@app.function(image=sandbox_image, secrets=[anthropic_secret], timeout=600)
+def stream_policy_analysis(
+    question: str, api_base_url: str = "https://v2.api.policyengine.org"
+):
+    """Stream Claude Code output line by line.
+
+    This is a generator function that yields each line of output in real-time.
+    Use this for streaming responses back to clients.
+    """
+    import subprocess
+
+    mcp_config = {
+        "mcpServers": {"policyengine": {"type": "sse", "url": f"{api_base_url}/mcp"}}
+    }
+    mcp_config_json = json.dumps(mcp_config)
+
+    print(f"[MODAL] Starting Claude Code (streaming) for question: {question[:100]}")
+
+    # Use Popen for streaming output
+    process = subprocess.Popen(
+        [
+            "claude",
+            "-p",
+            question,
+            "--mcp-config",
+            mcp_config_json,
+            "--output-format",
+            "stream-json",
+            "--verbose",
+            "--max-turns",
+            "10",
+            "--allowedTools",
+            "mcp__policyengine__*,Bash,Read,Grep,Glob,Write,Edit",
+        ],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        bufsize=1,  # Line buffered
+    )
+
+    # Yield each line as it comes
+    for line in process.stdout:
+        if line.strip():
+            print(f"[MODAL] Claude output: {line[:100]}")
+            yield line
+
+    process.wait()
+    print(f"[MODAL] Claude Code finished with returncode: {process.returncode}")
+
+
 @app.function(
     image=sandbox_image, secrets=[anthropic_secret, logfire_secret], timeout=600
 )
@@ -124,11 +174,17 @@ def run_policy_analysis(
 
     This is the non-streaming version that returns the full result.
     """
+    import os
     import subprocess
 
     import logfire
 
-    logfire.configure(service_name="policyengine-agent-sandbox")
+    # Only configure logfire if token is available
+    if os.environ.get("LOGFIRE_TOKEN"):
+        logfire.configure(
+            service_name="policyengine-agent-sandbox",
+            token=os.environ["LOGFIRE_TOKEN"],
+        )
 
     with logfire.span(
         "run_policy_analysis", question=question[:100], api_base_url=api_base_url

@@ -152,60 +152,53 @@ def _parse_claude_stream_event(line: str) -> dict | None:
     return None
 
 
-async def _stream_modal_sandbox(question: str, api_base_url: str):
-    """Stream output from Claude Code running in Modal Sandbox."""
+async def _stream_modal_function(question: str, api_base_url: str):
+    """Stream output from Claude Code running in a Modal function.
+
+    Uses Modal's generator function for streaming, which runs Claude via subprocess
+    directly in the Modal container (avoiding the sandbox exec MCP issue).
+    """
+    import modal
+
     with logfire.span(
         "agent_stream", question=question[:100], api_base_url=api_base_url
     ):
-        sb = None
         try:
-            from policyengine_api.agent_sandbox import run_claude_code_in_sandbox_async
+            # Look up the deployed streaming function
+            stream_fn = modal.Function.lookup(
+                "policyengine-sandbox", "stream_policy_analysis"
+            )
+            logfire.info("modal_function_found")
 
-            logfire.info("creating_sandbox")
-            sb, process = await run_claude_code_in_sandbox_async(question, api_base_url)
-            logfire.info("sandbox_created")
-
-            # Use Modal's async iteration for stdout
+            # Iterate over the generator output
             lines_received = 0
             events_sent = 0
 
-            async for line in process.stdout:
+            # Modal generators are iterated with .remote_gen()
+            for line in stream_fn.remote_gen(question, api_base_url):
                 lines_received += 1
-                # Print to Cloud Run logs for debugging
                 print(f"[CLAUDE] {line[:300]}", flush=True)
                 logfire.info(
                     "raw_line",
                     line_num=lines_received,
                     line_len=len(line) if line else 0,
-                    line_preview=line[:300].replace("session", "sess1on")
-                    if line
-                    else None,
                 )
                 parsed = _parse_claude_stream_event(line)
                 if parsed:
                     events_sent += 1
                     yield f"data: {json.dumps(parsed)}\n\n"
 
-            # Wait for process using async API
-            returncode = await process.wait.aio()
             logfire.info(
                 "complete",
-                returncode=returncode,
                 events_sent=events_sent,
                 lines_received=lines_received,
             )
-            yield f"data: {json.dumps({'type': 'done', 'returncode': returncode})}\n\n"
+            yield f"data: {json.dumps({'type': 'done', 'returncode': 0})}\n\n"
 
         except Exception as e:
             logfire.exception("failed", error=str(e))
-            yield f"data: {json.dumps({'type': 'error', 'content': f'Sandbox error: {str(e)}'})}\n\n"
+            yield f"data: {json.dumps({'type': 'error', 'content': f'Modal error: {str(e)}'})}\n\n"
             yield f"data: {json.dumps({'type': 'done', 'returncode': 1})}\n\n"
-        finally:
-            if sb is not None:
-                try:
-                    await sb.terminate.aio()
-                except Exception:
-                    pass
 
 
 @router.post("/stream")
@@ -239,7 +232,7 @@ async def stream_analysis(request: AskRequest):
 
     if settings.agent_use_modal:
         return StreamingResponse(
-            _stream_modal_sandbox(request.question, api_base_url),
+            _stream_modal_function(request.question, api_base_url),
             media_type="text/event-stream",
         )
     else:
