@@ -174,8 +174,8 @@ async def _stream_modal_function(question: str, api_base_url: str):
             lines_received = 0
             events_sent = 0
 
-            # Modal generators are iterated with .remote_gen()
-            for line in stream_fn.remote_gen(question, api_base_url):
+            # Use Modal's async generator API to avoid blocking the event loop
+            async for line in stream_fn.remote_gen.aio(question, api_base_url):
                 lines_received += 1
                 print(f"[CLAUDE] {line[:300]}", flush=True)
                 logfire.info(
@@ -230,15 +230,24 @@ async def stream_analysis(request: AskRequest):
         api_base_url=api_base_url,
     )
 
+    # SSE headers to prevent buffering by proxies (nginx, Cloud Run)
+    sse_headers = {
+        "Cache-Control": "no-cache",
+        "Connection": "keep-alive",
+        "X-Accel-Buffering": "no",  # Disable nginx buffering
+    }
+
     if settings.agent_use_modal:
         return StreamingResponse(
             _stream_modal_function(request.question, api_base_url),
             media_type="text/event-stream",
+            headers=sse_headers,
         )
     else:
         return StreamingResponse(
             _stream_claude_code(request.question, api_base_url),
             media_type="text/event-stream",
+            headers=sse_headers,
         )
 
 
