@@ -165,7 +165,7 @@ export function PolicyChat() {
                       // Add to stream lines
                       setStreamLines((prev) => [
                         ...prev,
-                        { type: "text", content: item.text, timestamp: Date.now() },
+                        { type: "text", content: item.text!, timestamp: Date.now() },
                       ]);
                       setMessages((prev) => {
                         const newMessages = [...prev];
@@ -189,7 +189,7 @@ export function PolicyChat() {
                       // Add tool use to stream lines
                       setStreamLines((prev) => [
                         ...prev,
-                        { type: "tool", content: item.name, timestamp: Date.now() },
+                        { type: "tool", content: item.name!, timestamp: Date.now() },
                       ]);
                     }
                   }
