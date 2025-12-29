@@ -109,7 +109,7 @@ async def run_claude_code_in_sandbox_async(
         bufsize=1,
         stdout=StreamType.PIPE,
     )
-    logfire.info("run_claude_code_in_sandbox: claude CLI process started, returning")
+    logfire.info("run_claude_code_in_sandbox: claude CLI process started, returning.")
 
     return sb, process
 
