@@ -165,7 +165,7 @@ async def _stream_modal_function(question: str, api_base_url: str):
     ):
         try:
             # Look up the deployed streaming function
-            stream_fn = modal.Function.lookup(
+            stream_fn = modal.Function.from_name(
                 "policyengine-sandbox", "stream_policy_analysis"
             )
             logfire.info("modal_function_found")
