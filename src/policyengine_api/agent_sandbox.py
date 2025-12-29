@@ -114,39 +114,80 @@ async def run_claude_code_in_sandbox_async(
     return sb, process
 
 
+def _get_api_system_prompt(api_base_url: str) -> str:
+    """Generate system prompt with PolicyEngine API documentation."""
+    return f"""You are a PolicyEngine policy analyst. Answer questions about tax and benefit policy using the PolicyEngine API.
+
+## PolicyEngine API ({api_base_url})
+
+Use curl or WebFetch to call these endpoints. All responses are JSON.
+
+### Key endpoints:
+
+**Variables** (tax/benefit concepts):
+- GET /variables - list all variables
+- GET /variables/{{variable_id}} - get variable details (e.g. income_tax, universal_credit)
+
+**Parameters** (policy levers):
+- GET /parameters - list all parameters
+- GET /parameters/{{parameter_id}} - get parameter details (e.g. gov.hmrc.income_tax.rates.uk)
+
+**Household calculations**:
+- POST /household/calculate - calculate a household's taxes/benefits
+  Body: {{"country": "uk"|"us", "household": {{...}}, "policy": {{...}}}}
+  Returns: job_id to poll
+- GET /household/calculate/{{job_id}} - poll for results
+
+**Economic impact** (macro analysis):
+- POST /economic-impact - run economy-wide simulation
+  Body: {{"country": "uk"|"us", "policy": {{...}}, "dataset": "enhanced_cps"|"enhanced_frs"}}
+  Returns: report_id to poll
+- GET /analysis/economic-impact/{{report_id}} - poll for results
+
+### Example workflow:
+
+1. Find relevant parameter: curl {api_base_url}/parameters?search=basic_rate
+2. Create reform policy with new value
+3. Submit calculation: curl -X POST {api_base_url}/household/calculate -d '{{...}}'
+4. Poll for results: curl {api_base_url}/household/calculate/{{job_id}}
+
+### Tips:
+- UK uses "enhanced_frs" dataset, US uses "enhanced_cps"
+- Poll endpoints until status="completed"
+- Household structure uses person/household/family entities
+- Policy reforms specify parameter paths and new values by date"""
+
+
 @app.function(image=sandbox_image, secrets=[anthropic_secret], timeout=600)
 def stream_policy_analysis(
     question: str, api_base_url: str = "https://v2.api.policyengine.org"
 ):
     """Stream Claude Code output line by line.
 
-    This is a generator function that yields each line of output in real-time.
-    Use this for streaming responses back to clients.
+    Uses direct API calls instead of MCP (MCP doesn't work in Modal containers).
+    Claude is given a system prompt explaining how to use the PolicyEngine API.
     """
     import subprocess
 
-    mcp_config = {
-        "mcpServers": {"policyengine": {"type": "sse", "url": f"{api_base_url}/mcp"}}
-    }
-    mcp_config_json = json.dumps(mcp_config)
+    system_prompt = _get_api_system_prompt(api_base_url)
 
     print(f"[MODAL] Starting Claude Code (streaming) for question: {question[:100]}")
 
-    # Use Popen for streaming output
+    # Use Popen for streaming output - no MCP, use system prompt instead
     process = subprocess.Popen(
         [
             "claude",
             "-p",
             question,
-            "--mcp-config",
-            mcp_config_json,
+            "--system-prompt",
+            system_prompt,
             "--output-format",
             "stream-json",
             "--verbose",
             "--max-turns",
             "10",
             "--allowedTools",
-            "mcp__policyengine__*,Bash,Read,Grep,Glob,Write,Edit",
+            "Bash,WebFetch,Read,Write,Edit",
         ],
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
