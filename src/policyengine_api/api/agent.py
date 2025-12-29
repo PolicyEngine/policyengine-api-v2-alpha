@@ -183,10 +183,11 @@ async def _stream_modal_function(question: str, api_base_url: str):
                     line_num=lines_received,
                     line_len=len(line) if line else 0,
                 )
-                parsed = _parse_claude_stream_event(line)
-                if parsed:
+                # Send raw Claude Code output wrapped in 'output' event
+                # The frontend expects this format to parse the stream-json
+                if line and line.strip():
                     events_sent += 1
-                    yield f"data: {json.dumps(parsed)}\n\n"
+                    yield f"data: {json.dumps({'type': 'output', 'content': line})}\n\n"
 
             logfire.info(
                 "complete",
