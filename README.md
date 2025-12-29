@@ -166,6 +166,27 @@ GET  /variables               List variables
 GET  /health                  Health check
 ```
 
+## Environment variables
+
+Copy `.env.example` to `.env` and configure. All variables are documented in `.env.example`.
+
+| Variable | Description |
+|----------|-------------|
+| `SUPABASE_URL` | Supabase API URL (https://...) |
+| `SUPABASE_KEY` | Supabase anon/public key |
+| `SUPABASE_SERVICE_KEY` | Supabase service role key |
+| `SUPABASE_DB_URL` | PostgreSQL connection string |
+| `STORAGE_BUCKET` | Supabase storage bucket name |
+| `LOGFIRE_TOKEN` | Logfire observability token |
+| `ANTHROPIC_API_KEY` | Anthropic API key for agent |
+| `AGENT_USE_MODAL` | Use Modal for agent (true/false) |
+
+For production Modal deployment, secrets are managed via Modal CLI (not .env):
+```bash
+modal secret create policyengine-db DATABASE_URL='...' SUPABASE_URL='...' ...
+modal secret create anthropic-api-key ANTHROPIC_API_KEY='...'
+```
+
 ## Development
 
 ```bash
