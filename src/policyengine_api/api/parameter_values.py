@@ -41,6 +41,9 @@ def list_parameter_values(
     if policy_id:
         query = query.where(ParameterValue.policy_id == policy_id)
 
+    # Order by start_date ascending so historical/current values come first
+    query = query.order_by(ParameterValue.start_date.asc())
+
     parameter_values = session.exec(query.offset(skip).limit(limit)).all()
     return parameter_values
 

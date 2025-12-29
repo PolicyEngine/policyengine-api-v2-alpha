@@ -267,10 +267,12 @@ def execute_api_tool(
 
         try:
             data = resp.json()
-            # Truncate large responses
-            result = json.dumps(data, indent=2)
-            if len(result) > 4000:
-                result = result[:4000] + "\n... (truncated)"
+            # For lists, summarize if too long but keep key info
+            if isinstance(data, list) and len(data) > 50:
+                result = json.dumps(data[:50], indent=2)
+                result += f"\n... ({len(data) - 50} more items)"
+            else:
+                result = json.dumps(data, indent=2)
             return result
         except json.JSONDecodeError:
             return resp.text[:1000]
