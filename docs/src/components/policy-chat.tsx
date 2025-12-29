@@ -150,16 +150,16 @@ function ToolCard({ step }: { step: ParsedStep }) {
 
   if (step.type === "tool_use") {
     return (
-      <div className="py-1.5 animate-fadeIn">
+      <div className="py-1 animate-fadeIn">
         <button
           onClick={() => setIsExpanded(!isExpanded)}
-          className="flex items-center gap-2 text-sm hover:text-[var(--color-pe-green)] transition-colors"
+          className="flex items-center gap-2 hover:text-[var(--color-pe-green)] transition-colors"
         >
-          <span className="w-1.5 h-1.5 rounded-full bg-[var(--color-pe-green)]" />
-          <span className="text-[var(--color-text-secondary)] capitalize">{step.title}</span>
+          <span className="w-1.5 h-1.5 rounded-full bg-[var(--color-pe-green)] shrink-0" />
+          <span className="text-sm text-[var(--color-text-secondary)]">{step.title}</span>
           {step.params && Object.keys(step.params).length > 0 && (
             <svg
-              className={`w-3 h-3 text-[var(--color-text-muted)] transition-transform ${isExpanded ? "rotate-90" : ""}`}
+              className={`w-3.5 h-3.5 text-[var(--color-text-muted)] transition-transform shrink-0 ${isExpanded ? "rotate-90" : ""}`}
               fill="none"
               viewBox="0 0 24 24"
               stroke="currentColor"
@@ -169,12 +169,13 @@ function ToolCard({ step }: { step: ParsedStep }) {
           )}
         </button>
         {isExpanded && step.params && Object.keys(step.params).length > 0 && (
-          <div className="ml-3.5 mt-1 font-mono text-xs text-[var(--color-text-muted)] bg-[var(--color-surface)] rounded px-2 py-1.5">
+          <div className="ml-3.5 mt-1.5 text-sm text-[var(--color-text-muted)] bg-[var(--color-surface)] rounded-lg px-3 py-2">
             {Object.entries(step.params).map(([key, value]) => (
-              <div key={key}>
-                <span className="text-[var(--color-pe-green)]">{key}</span>
-                <span className="text-[var(--color-text-muted)]">: </span>
-                <span>{typeof value === "string" ? `"${value}"` : JSON.stringify(value)}</span>
+              <div key={key} className="flex gap-1">
+                <span className="text-[var(--color-pe-green)] font-medium">{key}:</span>
+                <span className="text-[var(--color-text-secondary)]">
+                  {typeof value === "string" ? value : JSON.stringify(value)}
+                </span>
               </div>
             ))}
           </div>
@@ -193,9 +194,9 @@ function ToolCard({ step }: { step: ParsedStep }) {
       <div className="py-1 ml-3.5 animate-fadeIn">
         <button
           onClick={() => setIsExpanded(!isExpanded)}
-          className="flex items-center gap-1.5 text-xs text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)]"
+          className="flex items-center gap-1.5 text-sm text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)]"
         >
-          <svg className={`w-3 h-3 transition-transform ${isExpanded ? "rotate-90" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <svg className={`w-3.5 h-3.5 transition-transform ${isExpanded ? "rotate-90" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
           </svg>
           <span>Result</span>
@@ -239,9 +240,9 @@ function ProgressIndicator({ logs }: { logs: LogEntry[] }) {
   if (logs.length === 0) return null;
 
   return (
-    <div className="flex items-center gap-2 mb-3 text-xs text-[var(--color-text-muted)]">
+    <div className="flex items-center gap-2 mb-3 text-sm text-[var(--color-text-muted)]">
       {stage !== "Complete" && (
-        <div className="w-3 h-3 border-2 border-[var(--color-pe-green)] border-t-transparent rounded-full animate-spin" />
+        <div className="w-3.5 h-3.5 border-2 border-[var(--color-pe-green)] border-t-transparent rounded-full animate-spin" />
       )}
       <span>{stage}</span>
     </div>
@@ -487,8 +488,8 @@ export function PolicyChat() {
                         {/* Collapsible steps summary */}
                         {parsedSteps.length > 0 && (
                           <details className="group">
-                            <summary className="cursor-pointer list-none flex items-center gap-2 text-xs text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)]">
-                              <svg className="w-3 h-3 group-open:rotate-90 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <summary className="cursor-pointer list-none flex items-center gap-2 text-sm text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)]">
+                              <svg className="w-3.5 h-3.5 group-open:rotate-90 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                               </svg>
                               <span>{parsedSteps.filter(s => s.type === "tool_use").length} tool calls executed</span>
