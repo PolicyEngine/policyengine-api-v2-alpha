@@ -6,6 +6,8 @@ on:
       - main
     paths:
       - "src/**"
+      - "docs/**"
+      - ".github/workflows/deploy.yml"
       - "terraform/**"
       - "Dockerfile"
       - "pyproject.toml"
