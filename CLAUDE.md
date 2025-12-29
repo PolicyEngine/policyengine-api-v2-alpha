@@ -103,3 +103,5 @@ The agent endpoint (`/agent/stream`) runs Claude Code CLI inside a Modal sandbox
 7. **Test locally before deploying.** Use `modal.Sandbox.create()` directly in a Python script to debug without waiting for Cloud Run deploys.
 
 8. **MCP SSE doesn't work in Modal containers.** Claude Code with MCP works locally but exits immediately after init in Modal (both sandbox and function). Workaround implemented: `stream_policy_analysis` uses a system prompt with API documentation instead of MCP, and Claude makes direct HTTP calls via Bash/curl.
+
+9. **`subprocess.Popen` needs `stdin=DEVNULL`.** Same issue as the sandbox - if stdin is left as a pipe (the default), Claude hangs waiting for input. Always use `stdin=subprocess.DEVNULL`.

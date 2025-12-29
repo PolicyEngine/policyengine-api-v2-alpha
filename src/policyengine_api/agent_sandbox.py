@@ -174,6 +174,7 @@ def stream_policy_analysis(
     print(f"[MODAL] Starting Claude Code (streaming) for question: {question[:100]}")
 
     # Use Popen for streaming output - no MCP, use system prompt instead
+    # stdin=DEVNULL prevents Claude from waiting for input (critical!)
     process = subprocess.Popen(
         [
             "claude",
@@ -189,6 +190,7 @@ def stream_policy_analysis(
             "--allowedTools",
             "Bash,WebFetch,Read,Write,Edit",
         ],
+        stdin=subprocess.DEVNULL,
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
         text=True,
