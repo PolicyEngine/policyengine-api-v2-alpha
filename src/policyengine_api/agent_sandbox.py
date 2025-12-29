@@ -336,6 +336,8 @@ def _run_agent_impl(
     claude_tools = [
         {k: v for k, v in t.items() if k != "_meta"} for t in tools
     ]
+    # Add the sleep tool
+    claude_tools.append(SLEEP_TOOL)
 
     client = anthropic.Anthropic()
     messages = [{"role": "user", "content": question}]
@@ -370,11 +372,18 @@ def _run_agent_impl(
                 assistant_content.append(block)
 
                 # Execute tool
-                tool = tool_lookup.get(block.name)
-                if tool:
-                    result = execute_api_tool(tool, block.input, api_base_url, log)
+                if block.name == "sleep":
+                    # Handle sleep tool specially
+                    seconds = min(max(block.input.get("seconds", 5), 1), 60)
+                    log(f"[SLEEP] Waiting {seconds} seconds...")
+                    time.sleep(seconds)
+                    result = f"Slept for {seconds} seconds"
                 else:
-                    result = f"Unknown tool: {block.name}"
+                    tool = tool_lookup.get(block.name)
+                    if tool:
+                        result = execute_api_tool(tool, block.input, api_base_url, log)
+                    else:
+                        result = f"Unknown tool: {block.name}"
 
                 log(f"[TOOL_RESULT] {result[:300]}")
 
