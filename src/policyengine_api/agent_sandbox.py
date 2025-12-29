@@ -305,7 +305,7 @@ def _run_agent_impl(
     question: str,
     api_base_url: str = "https://v2.api.policyengine.org",
     call_id: str = "",
-    max_turns: int = 15,
+    max_turns: int = 30,
 ) -> dict:
     """Core agent implementation."""
 
@@ -421,12 +421,12 @@ def _run_agent_impl(
     return result
 
 
-@app.function(image=image, secrets=[anthropic_secret], timeout=300)
+@app.function(image=image, secrets=[anthropic_secret], timeout=600)
 def run_agent(
     question: str,
     api_base_url: str = "https://v2.api.policyengine.org",
     call_id: str = "",
-    max_turns: int = 15,
+    max_turns: int = 30,
 ) -> dict:
     """Run agentic loop to answer a policy question (Modal wrapper)."""
     return _run_agent_impl(question, api_base_url, call_id, max_turns)
