@@ -2,6 +2,7 @@
 
 import json
 import re
+import time
 from typing import Any, Callable
 
 import anthropic
@@ -34,7 +35,26 @@ When answering questions:
 3. Be concise but thorough
 4. For UK, amounts are in GBP. For US, amounts are in USD.
 5. Poll async endpoints until status is "completed"
+
+IMPORTANT: When polling async endpoints, ALWAYS use the sleep tool to wait 5-10 seconds between requests.
+Do not poll in a tight loop - this wastes resources and may hit rate limits.
 """
+
+# Sleep tool for polling delays
+SLEEP_TOOL = {
+    "name": "sleep",
+    "description": "Wait for a specified number of seconds. Use this between polling requests to avoid hammering the API.",
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "seconds": {
+                "type": "number",
+                "description": "Number of seconds to sleep (1-60)",
+            }
+        },
+        "required": ["seconds"],
+    },
+}
 
 
 def fetch_openapi_spec(api_base_url: str) -> dict:
