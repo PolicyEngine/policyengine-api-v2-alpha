@@ -1,45 +1,188 @@
-"""Modal Sandbox for running Claude Code with PolicyEngine MCP server.
-
-This runs the Claude Code CLI connected to the PolicyEngine API via MCP.
-Logs are POSTed back to the API for real-time streaming to the UI.
-"""
+"""Modal agent using Claude API directly with PolicyEngine tools."""
 
 import json
-import subprocess
+import os
 
+import anthropic
 import modal
 import requests
 
-# Sandbox image with Bun and Claude Code CLI
-sandbox_image = (
-    modal.Image.debian_slim(python_version="3.12")
-    .apt_install("curl", "git", "unzip")
-    .pip_install("requests")
-    .run_commands(
-        # Install Bun
-        "curl -fsSL https://bun.sh/install | bash",
-        # Add bun to PATH, create node symlink (Claude CLI needs it), install Claude Code
-        "export BUN_INSTALL=/root/.bun && export PATH=$BUN_INSTALL/bin:$PATH && "
-        "ln -s $BUN_INSTALL/bin/bun /usr/local/bin/node && "
-        "bun install -g @anthropic-ai/claude-code",
-        # Pre-accept ToS and configure for non-interactive use
-        "mkdir -p /root/.claude && "
-        'echo \'{"hasCompletedOnboarding": true, "hasAcknowledgedCostThreshold": true}\' '
-        "> /root/.claude/settings.json",
-    )
-    .env(
-        {
-            "BUN_INSTALL": "/root/.bun",
-            "PATH": "/root/.bun/bin:/usr/local/bin:/usr/bin:/bin",
-            "CLAUDE_CODE_SKIP_ONBOARDING": "1",
-        }
-    )
+# Simple image with just what we need
+image = modal.Image.debian_slim(python_version="3.12").pip_install(
+    "anthropic", "requests"
 )
 
 app = modal.App("policyengine-sandbox")
-
-# Secrets
 anthropic_secret = modal.Secret.from_name("anthropic-api-key")
+
+# Core PolicyEngine tools - derived from our API
+TOOLS = [
+    {
+        "name": "calculate_household",
+        "description": "Calculate taxes and benefits for a household. Returns detailed breakdown of income tax, NI, benefits, and net income.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "tax_benefit_model_name": {
+                    "type": "string",
+                    "enum": ["policyengine_uk", "policyengine_us"],
+                    "description": "Which country model to use",
+                },
+                "people": {
+                    "type": "array",
+                    "items": {"type": "object"},
+                    "description": "List of people with flat values, e.g., [{'age': 35, 'employment_income': 35000}]",
+                },
+                "household": {
+                    "type": "object",
+                    "description": "Household-level attributes (usually empty for UK, may include state_fips for US)",
+                    "default": {},
+                },
+                "year": {
+                    "type": "integer",
+                    "description": "Simulation year (2026 for UK, 2024 for US)",
+                    "default": 2026,
+                },
+            },
+            "required": ["tax_benefit_model_name", "people"],
+        },
+    },
+    {
+        "name": "get_parameter",
+        "description": "Get current value of a policy parameter (e.g., income tax rates, benefit amounts, thresholds)",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "country": {"type": "string", "enum": ["uk", "us"]},
+                "parameter": {
+                    "type": "string",
+                    "description": "Parameter path, e.g., 'gov.hmrc.income_tax.rates.uk'",
+                },
+            },
+            "required": ["country", "parameter"],
+        },
+    },
+    {
+        "name": "search_parameters",
+        "description": "Search for policy parameters by keyword",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "country": {"type": "string", "enum": ["uk", "us"]},
+                "query": {"type": "string", "description": "Search term"},
+            },
+            "required": ["country", "query"],
+        },
+    },
+]
+
+SYSTEM_PROMPT = """You are a PolicyEngine assistant that helps users understand tax and benefit policies.
+
+You have access to tools to:
+- Calculate taxes and benefits for specific households
+- Look up policy parameters (rates, thresholds, amounts)
+- Search for parameters by keyword
+
+When answering questions:
+1. Use the tools to get accurate, current data
+2. Show your calculations clearly
+3. Be concise but thorough
+4. For UK, amounts are in GBP. For US, amounts are in USD.
+
+Example calculate_household call:
+{
+  "tax_benefit_model_name": "policyengine_uk",
+  "people": [{"age": 35, "employment_income": 50000}],
+  "year": 2026
+}
+"""
+
+
+def execute_tool(
+    tool_name: str, tool_input: dict, api_base_url: str, log_fn
+) -> str:
+    """Execute a tool and return the result as a string."""
+    import time
+
+    try:
+        if tool_name == "calculate_household":
+            # Call our household calculation endpoint
+            resp = requests.post(
+                f"{api_base_url}/household/calculate",
+                json={
+                    "tax_benefit_model_name": tool_input.get("tax_benefit_model_name", "policyengine_uk"),
+                    "people": tool_input.get("people", []),
+                    "household": tool_input.get("household", {}),
+                    "year": tool_input.get("year"),
+                },
+                timeout=60,
+            )
+            if resp.status_code in (200, 201):
+                data = resp.json()
+                job_id = data.get("job_id")
+                if job_id:
+                    log_fn(f"[TOOL] Job {job_id} started, polling...")
+                    for _ in range(30):
+                        time.sleep(2)
+                        status_resp = requests.get(
+                            f"{api_base_url}/household/calculate/{job_id}",
+                            timeout=30,
+                        )
+                        if status_resp.status_code == 200:
+                            status_data = status_resp.json()
+                            if status_data.get("status") == "completed":
+                                result = status_data.get("result", {})
+                                # Extract key values for readability
+                                summary = {}
+                                if result.get("person"):
+                                    for person in result["person"]:
+                                        for k, v in person.items():
+                                            if isinstance(v, (int, float)) and abs(v) > 0.01:
+                                                summary[k] = round(v, 2)
+                                return json.dumps(summary, indent=2)
+                            elif status_data.get("status") == "failed":
+                                return f"Calculation failed: {status_data.get('error_message', 'Unknown error')}"
+                    return "Calculation timed out"
+                return json.dumps(data, indent=2)
+            return f"Error: {resp.status_code} - {resp.text[:500]}"
+
+        elif tool_name == "get_parameter":
+            country = tool_input.get("country", "uk")
+            param = tool_input.get("parameter", "")
+            # Map country to model version
+            model_id = "1deb6704-8216-4783-9a08-1ae2efc1bbd5" if country == "uk" else "some-us-id"
+            resp = requests.get(
+                f"{api_base_url}/parameters",
+                params={"tax_benefit_model_version_id": model_id, "search": param, "limit": 5},
+                timeout=30,
+            )
+            if resp.status_code == 200:
+                params = resp.json()
+                # Simplify output
+                simplified = [{"name": p.get("name"), "label": p.get("label")} for p in params[:5]]
+                return json.dumps(simplified, indent=2)
+            return f"Error: {resp.status_code}"
+
+        elif tool_name == "search_parameters":
+            country = tool_input.get("country", "uk")
+            query = tool_input.get("query", "")
+            model_id = "1deb6704-8216-4783-9a08-1ae2efc1bbd5" if country == "uk" else "some-us-id"
+            resp = requests.get(
+                f"{api_base_url}/parameters",
+                params={"tax_benefit_model_version_id": model_id, "search": query, "limit": 10},
+                timeout=30,
+            )
+            if resp.status_code == 200:
+                params = resp.json()
+                simplified = [{"name": p.get("name"), "label": p.get("label")} for p in params[:10]]
+                return json.dumps(simplified, indent=2)
+            return f"Error: {resp.status_code}"
+
+        else:
+            return f"Unknown tool: {tool_name}"
+
+    except Exception as e:
+        return f"Tool error: {str(e)}"
 
 
 def post_log(api_base_url: str, call_id: str, message: str) -> None:
@@ -51,7 +194,7 @@ def post_log(api_base_url: str, call_id: str, message: str) -> None:
             timeout=5,
         )
     except Exception:
-        pass  # Don't fail on log errors
+        pass
 
 
 def post_complete(api_base_url: str, call_id: str, result: dict) -> None:
@@ -66,111 +209,95 @@ def post_complete(api_base_url: str, call_id: str, result: dict) -> None:
         pass
 
 
-@app.function(image=sandbox_image, secrets=[anthropic_secret], timeout=600)
+@app.function(image=image, secrets=[anthropic_secret], timeout=300)
 def run_agent(
     question: str,
     api_base_url: str = "https://v2.api.policyengine.org",
     call_id: str = "",
+    max_turns: int = 10,
 ) -> dict:
-    """Run Claude Code with MCP server to answer a policy question.
-
-    Logs are POSTed back to the API for real-time streaming.
-    """
+    """Run agentic loop to answer a policy question."""
 
     def log(msg: str) -> None:
-        print(msg)  # Also print for debugging
+        print(msg)
         if call_id:
             post_log(api_base_url, call_id, msg)
 
-    log(f"[AGENT] Starting analysis for: {question[:200]}")
-    log(f"[AGENT] API URL: {api_base_url}")
-    log(f"[AGENT] MCP endpoint: {api_base_url}/mcp")
+    log(f"[AGENT] Starting: {question[:200]}")
 
-    # MCP config for Claude Code - connects to PolicyEngine API's MCP server
-    mcp_config = {
-        "mcpServers": {"policyengine": {"type": "sse", "url": f"{api_base_url}/mcp"}}
-    }
-    mcp_config_json = json.dumps(mcp_config)
+    client = anthropic.Anthropic()
+    messages = [{"role": "user", "content": question}]
 
-    log(f"[AGENT] MCP config: {mcp_config_json}")
+    final_response = None
+    turns = 0
 
-    # Build command
-    cmd = [
-        "claude",
-        "-p",
-        question,
-        "--mcp-config",
-        mcp_config_json,
-        "--output-format",
-        "stream-json",
-        "--verbose",
-        "--max-turns",
-        "15",
-        "--allowedTools",
-        "mcp__policyengine__*,Bash,WebFetch,Read,Write,Edit",
-    ]
+    while turns < max_turns:
+        turns += 1
+        log(f"[AGENT] Turn {turns}")
 
-    log(f"[AGENT] Running: {' '.join(cmd[:5])}...")
+        response = client.messages.create(
+            model="claude-sonnet-4-20250514",
+            max_tokens=4096,
+            system=SYSTEM_PROMPT,
+            tools=TOOLS,
+            messages=messages,
+        )
 
-    # Run Claude Code - stdin=DEVNULL prevents hanging
-    process = subprocess.Popen(
-        cmd,
-        stdin=subprocess.DEVNULL,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        text=True,
-        bufsize=1,  # Line buffered
-    )
+        log(f"[AGENT] Stop reason: {response.stop_reason}")
 
-    # Stream output
-    full_output = []
-    final_result = None
+        # Collect assistant response
+        assistant_content = []
+        tool_results = []
 
-    for line in process.stdout:
-        line = line.rstrip()
-        if line:
-            log(f"[CLAUDE] {line}")
-            full_output.append(line)
+        for block in response.content:
+            if block.type == "text":
+                log(f"[ASSISTANT] {block.text[:500]}")
+                assistant_content.append(block)
+                final_response = block.text
+            elif block.type == "tool_use":
+                log(f"[TOOL_USE] {block.name}: {json.dumps(block.input)[:200]}")
+                assistant_content.append(block)
 
-            # Try to parse stream-json events
-            try:
-                event = json.loads(line)
-                # Capture the final result
-                if event.get("type") == "result":
-                    final_result = event.get("result", "")
-            except json.JSONDecodeError:
-                pass
+                # Execute tool
+                result = execute_tool(block.name, block.input, api_base_url, log)
+                log(f"[TOOL_RESULT] {result[:300]}")
 
-    process.wait()
-    log(f"[AGENT] Claude exited with code: {process.returncode}")
+                tool_results.append({
+                    "type": "tool_result",
+                    "tool_use_id": block.id,
+                    "content": result,
+                })
+
+        # Add assistant message
+        messages.append({"role": "assistant", "content": assistant_content})
+
+        # If there were tool uses, add results and continue
+        if tool_results:
+            messages.append({"role": "user", "content": tool_results})
+        else:
+            # No tool use, we're done
+            break
+
+    log(f"[AGENT] Completed in {turns} turns")
 
     result = {
-        "status": "completed" if process.returncode == 0 else "failed",
-        "result": final_result,
-        "returncode": process.returncode,
-        "output_lines": len(full_output),
+        "status": "completed",
+        "result": final_response,
+        "turns": turns,
     }
 
-    # Notify API of completion
     if call_id:
         post_complete(api_base_url, call_id, result)
 
     return result
 
 
-# For local testing
 if __name__ == "__main__":
     import sys
 
-    question = (
-        sys.argv[1] if len(sys.argv) > 1 else "What is the UK basic rate of income tax?"
-    )
-
+    question = sys.argv[1] if len(sys.argv) > 1 else "What is the UK basic rate of income tax?"
     print(f"Question: {question}\n")
-    print("=" * 60)
 
-    # Run via Modal
     with modal.enable_local():
         result = run_agent.local(question)
-        print("\n" + "=" * 60)
-        print(f"Result: {result}")
+        print(f"\nResult: {result}")
