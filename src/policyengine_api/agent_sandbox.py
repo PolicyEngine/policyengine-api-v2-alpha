@@ -149,32 +149,56 @@ def execute_tool(
         elif tool_name == "get_parameter":
             country = tool_input.get("country", "uk")
             param = tool_input.get("parameter", "")
-            # Map country to model version
-            model_id = "1deb6704-8216-4783-9a08-1ae2efc1bbd5" if country == "uk" else "some-us-id"
+            # Normalize: replace spaces with underscores for API search
+            search_term = param.replace(" ", "_").lower()
             resp = requests.get(
-                f"{api_base_url}/parameters",
-                params={"tax_benefit_model_version_id": model_id, "search": param, "limit": 5},
+                f"{api_base_url}/parameters/",  # Note trailing slash
+                params={"search": search_term, "limit": 5},
                 timeout=30,
             )
             if resp.status_code == 200:
                 params = resp.json()
-                # Simplify output
-                simplified = [{"name": p.get("name"), "label": p.get("label")} for p in params[:5]]
-                return json.dumps(simplified, indent=2)
+                if not params:
+                    return "No parameters found matching that query"
+                # Get values for first matching parameter
+                results = []
+                for p in params[:3]:
+                    param_id = p.get("id")
+                    if param_id:
+                        val_resp = requests.get(
+                            f"{api_base_url}/parameter-values/",
+                            params={"parameter_id": param_id, "limit": 1},
+                            timeout=10,
+                        )
+                        value = None
+                        if val_resp.status_code == 200:
+                            vals = val_resp.json()
+                            if vals:
+                                value = vals[0].get("value_json")
+                        results.append({
+                            "name": p.get("name"),
+                            "label": p.get("label"),
+                            "value": value,
+                            "unit": p.get("unit"),
+                        })
+                return json.dumps(results, indent=2)
             return f"Error: {resp.status_code}"
 
         elif tool_name == "search_parameters":
             country = tool_input.get("country", "uk")
             query = tool_input.get("query", "")
-            model_id = "1deb6704-8216-4783-9a08-1ae2efc1bbd5" if country == "uk" else "some-us-id"
+            # Normalize: replace spaces with underscores for API search
+            search_term = query.replace(" ", "_").lower()
             resp = requests.get(
-                f"{api_base_url}/parameters",
-                params={"tax_benefit_model_version_id": model_id, "search": query, "limit": 10},
+                f"{api_base_url}/parameters/",  # Note trailing slash
+                params={"search": search_term, "limit": 10},
                 timeout=30,
             )
             if resp.status_code == 200:
                 params = resp.json()
-                simplified = [{"name": p.get("name"), "label": p.get("label")} for p in params[:10]]
+                if not params:
+                    return "No parameters found matching that query"
+                simplified = [{"name": p.get("name"), "label": p.get("label"), "unit": p.get("unit")} for p in params[:10]]
                 return json.dumps(simplified, indent=2)
             return f"Error: {resp.status_code}"
 
