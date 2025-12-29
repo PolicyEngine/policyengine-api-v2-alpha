@@ -133,119 +133,68 @@ function parseLogEntry(message: string): ParsedStep {
   };
 }
 
-function ToolCard({ step, isLast }: { step: ParsedStep; isLast: boolean }) {
+function ToolCard({ step }: { step: ParsedStep }) {
   const [isExpanded, setIsExpanded] = useState(false);
 
   if (step.type === "agent") {
-    return (
-      <div className="flex items-start gap-3 py-2">
-        <div className="w-1.5 h-1.5 mt-2 rounded-full bg-[var(--color-pe-green)] animate-pulse" />
-        <span className="text-sm text-[var(--color-text-secondary)]">{step.content}</span>
-      </div>
-    );
+    return null; // Hide agent messages, they're redundant with progress indicator
   }
 
   if (step.type === "tool_use") {
     return (
-      <div className="relative pl-4 border-l-2 border-[var(--color-pe-green)] py-3 animate-fadeIn">
-        <div className="absolute -left-[7px] top-4 w-3 h-3 rounded-full bg-[var(--color-pe-green)] border-2 border-white" />
-        <div className="bg-white rounded-lg border border-[var(--color-border)] shadow-sm overflow-hidden">
-          <button
-            onClick={() => setIsExpanded(!isExpanded)}
-            className="w-full flex items-center justify-between p-3 hover:bg-[var(--color-surface-sunken)] text-left"
-          >
-            <div className="flex items-center gap-2">
-              <svg className="w-4 h-4 text-[var(--color-pe-green)]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-              </svg>
-              <span className="font-medium text-sm text-[var(--color-text-primary)] capitalize">
-                {step.title}
-              </span>
-            </div>
+      <div className="py-1.5 animate-fadeIn">
+        <button
+          onClick={() => setIsExpanded(!isExpanded)}
+          className="flex items-center gap-2 text-sm hover:text-[var(--color-pe-green)] transition-colors"
+        >
+          <span className="w-1.5 h-1.5 rounded-full bg-[var(--color-pe-green)]" />
+          <span className="text-[var(--color-text-secondary)] capitalize">{step.title}</span>
+          {step.params && Object.keys(step.params).length > 0 && (
             <svg
-              className={`w-4 h-4 text-[var(--color-text-muted)] transition-transform ${isExpanded ? "rotate-180" : ""}`}
+              className={`w-3 h-3 text-[var(--color-text-muted)] transition-transform ${isExpanded ? "rotate-90" : ""}`}
               fill="none"
               viewBox="0 0 24 24"
               stroke="currentColor"
             >
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
             </svg>
-          </button>
-          {isExpanded && step.params && Object.keys(step.params).length > 0 && (
-            <div className="px-3 pb-3 border-t border-[var(--color-border)]">
-              <div className="mt-2 font-mono text-xs bg-[var(--color-surface-sunken)] rounded p-2 overflow-x-auto">
-                {Object.entries(step.params).map(([key, value]) => (
-                  <div key={key} className="flex gap-2">
-                    <span className="text-[var(--color-pe-green)]">{key}:</span>
-                    <span className="text-[var(--color-text-secondary)]">
-                      {typeof value === "string" ? `"${value}"` : JSON.stringify(value)}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
           )}
-        </div>
-        {isLast && (
-          <div className="absolute left-0 top-full h-4 w-0.5 bg-gradient-to-b from-[var(--color-pe-green)] to-transparent -translate-x-[1px]" />
+        </button>
+        {isExpanded && step.params && Object.keys(step.params).length > 0 && (
+          <div className="ml-3.5 mt-1 font-mono text-xs text-[var(--color-text-muted)] bg-[var(--color-surface)] rounded px-2 py-1.5">
+            {Object.entries(step.params).map(([key, value]) => (
+              <div key={key}>
+                <span className="text-[var(--color-pe-green)]">{key}</span>
+                <span className="text-[var(--color-text-muted)]">: </span>
+                <span>{typeof value === "string" ? `"${value}"` : JSON.stringify(value)}</span>
+              </div>
+            ))}
+          </div>
         )}
       </div>
     );
   }
 
-  if (step.type === "api_call" && step.method) {
-    const methodColors: Record<string, string> = {
-      GET: "bg-blue-100 text-blue-700",
-      POST: "bg-green-100 text-green-700",
-      PUT: "bg-amber-100 text-amber-700",
-      DELETE: "bg-red-100 text-red-700",
-    };
-    return (
-      <div className="pl-4 border-l-2 border-[var(--color-border)] py-1 ml-1 animate-fadeIn">
-        <div className="flex items-center gap-2 text-xs">
-          <span className={`px-1.5 py-0.5 rounded font-mono font-medium ${methodColors[step.method] || "bg-gray-100 text-gray-700"}`}>
-            {step.method}
-          </span>
-          <span className="font-mono text-[var(--color-text-muted)] truncate max-w-[300px]">
-            {step.url?.replace("https://v2.api.policyengine.org", "")}
-          </span>
-        </div>
-      </div>
-    );
-  }
-
-  if (step.type === "api_response") {
-    const isSuccess = step.statusCode && step.statusCode < 400;
-    return (
-      <div className="pl-4 border-l-2 border-[var(--color-border)] py-1 ml-1 animate-fadeIn">
-        <div className="flex items-center gap-2 text-xs">
-          <span className={`px-1.5 py-0.5 rounded font-mono font-medium ${isSuccess ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}>
-            {step.statusCode}
-          </span>
-          <span className="text-[var(--color-text-muted)]">
-            {isSuccess ? "Success" : "Error"}
-          </span>
-        </div>
-      </div>
-    );
+  // Hide API details - too noisy
+  if (step.type === "api_call" || step.type === "api_response") {
+    return null;
   }
 
   if (step.type === "tool_result") {
     return (
-      <div className="pl-4 border-l-2 border-[var(--color-border)] py-2 ml-1 animate-fadeIn">
+      <div className="py-1 ml-3.5 animate-fadeIn">
         <button
           onClick={() => setIsExpanded(!isExpanded)}
-          className="flex items-center gap-2 text-xs text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)]"
+          className="flex items-center gap-1.5 text-xs text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)]"
         >
           <svg className={`w-3 h-3 transition-transform ${isExpanded ? "rotate-90" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
           </svg>
-          <span>View result data</span>
+          <span>Result</span>
         </button>
         {isExpanded && (
-          <div className="mt-2 font-mono text-xs bg-[var(--color-code-bg)] text-[var(--color-code-text)] rounded p-3 overflow-x-auto max-h-48 overflow-y-auto">
-            <pre className="whitespace-pre-wrap">{step.content.slice(0, 2000)}{step.content.length > 2000 ? "\n..." : ""}</pre>
+          <div className="mt-1.5 font-mono text-xs bg-[var(--color-code-bg)] text-[var(--color-code-text)] rounded p-2 overflow-x-auto max-h-32 overflow-y-auto">
+            <pre className="whitespace-pre-wrap">{step.content.slice(0, 1500)}{step.content.length > 1500 ? "\n..." : ""}</pre>
           </div>
         )}
       </div>
@@ -254,9 +203,8 @@ function ToolCard({ step, isLast }: { step: ParsedStep; isLast: boolean }) {
 
   if (step.type === "assistant") {
     return (
-      <div className="flex items-start gap-3 py-2 pl-5 animate-fadeIn">
-        <div className="w-1 h-1 mt-2 rounded-full bg-[var(--color-text-muted)]" />
-        <span className="text-sm text-[var(--color-text-muted)] italic">{step.content}</span>
+      <div className="py-1.5 animate-fadeIn">
+        <p className="text-sm text-[var(--color-text-muted)] leading-relaxed">{step.content}</p>
       </div>
     );
   }
@@ -265,72 +213,29 @@ function ToolCard({ step, isLast }: { step: ParsedStep; isLast: boolean }) {
 }
 
 function ProgressIndicator({ logs }: { logs: LogEntry[] }) {
-  const stages = useMemo(() => {
+  const stage = useMemo(() => {
     const hasSearch = logs.some(l => l.message.includes("parameters"));
     const hasPolicy = logs.some(l => l.message.includes("policies"));
     const hasAnalysis = logs.some(l => l.message.includes("analysis") || l.message.includes("economic"));
     const hasHousehold = logs.some(l => l.message.includes("household"));
     const isComplete = logs.some(l => l.message.includes("Completed"));
 
-    if (hasAnalysis) {
-      return [
-        { label: "Search", done: hasSearch },
-        { label: "Create policy", done: hasPolicy },
-        { label: "Run analysis", done: isComplete, active: !isComplete },
-        { label: "Complete", done: isComplete },
-      ];
-    }
-
-    if (hasHousehold) {
-      return [
-        { label: "Build household", done: true },
-        { label: "Calculate", done: isComplete, active: !isComplete },
-        { label: "Complete", done: isComplete },
-      ];
-    }
-
-    return [
-      { label: "Search", done: hasSearch, active: !hasSearch && logs.length > 0 },
-      { label: "Retrieve", done: logs.length > 3, active: hasSearch && logs.length <= 3 },
-      { label: "Complete", done: isComplete },
-    ];
+    if (isComplete) return "Complete";
+    if (hasAnalysis) return "Running analysis...";
+    if (hasPolicy) return "Creating policy...";
+    if (hasHousehold) return "Calculating...";
+    if (hasSearch) return "Searching parameters...";
+    return "Starting...";
   }, [logs]);
 
   if (logs.length === 0) return null;
 
   return (
-    <div className="flex items-center gap-1 mb-4 px-1">
-      {stages.map((stage, i) => (
-        <div key={stage.label} className="flex items-center">
-          <div className="flex items-center gap-1.5">
-            <div
-              className={`w-2 h-2 rounded-full transition-all duration-300 ${
-                stage.done
-                  ? "bg-[var(--color-pe-green)]"
-                  : stage.active
-                  ? "bg-[var(--color-pe-green)] animate-pulse"
-                  : "bg-[var(--color-border)]"
-              }`}
-            />
-            <span
-              className={`text-xs font-medium transition-colors ${
-                stage.done || stage.active
-                  ? "text-[var(--color-text-primary)]"
-                  : "text-[var(--color-text-muted)]"
-              }`}
-            >
-              {stage.label}
-            </span>
-          </div>
-          {i < stages.length - 1 && (
-            <div
-              className={`w-8 h-px mx-2 transition-colors ${
-                stage.done ? "bg-[var(--color-pe-green)]" : "bg-[var(--color-border)]"
-              }`}
-            />
-          )}
-        </div>
-      ))}
+    <div className="flex items-center gap-2 mb-3 text-xs text-[var(--color-text-muted)]">
+      {stage !== "Complete" && (
+        <div className="w-3 h-3 border-2 border-[var(--color-pe-green)] border-t-transparent rounded-full animate-spin" />
+      )}
+      <span>{stage}</span>
     </div>
   );
 }
@@ -559,17 +464,10 @@ export function PolicyChat() {
                             <span className="text-sm text-[var(--color-text-secondary)]">Starting analysis...</span>
                           </div>
                         ) : (
-                          <div className="space-y-1">
-                            {parsedSteps.slice(-15).map((step, j) => (
-                              <ToolCard
-                                key={j}
-                                step={step}
-                                isLast={j === parsedSteps.slice(-15).length - 1 && step.type === "tool_use"}
-                              />
+                          <div className="space-y-0">
+                            {parsedSteps.slice(-10).map((step, j) => (
+                              <ToolCard key={j} step={step} />
                             ))}
-                            <div className="flex items-center gap-2 pt-2 pl-5">
-                              <div className="w-2 h-4 bg-[var(--color-pe-green)] animate-pulse rounded-sm" />
-                            </div>
                           </div>
                         )}
                       </div>
@@ -587,9 +485,9 @@ export function PolicyChat() {
                               </svg>
                               <span>{parsedSteps.filter(s => s.type === "tool_use").length} tool calls executed</span>
                             </summary>
-                            <div className="mt-3 bg-[var(--color-surface-sunken)] rounded-xl p-4 space-y-1">
+                            <div className="mt-3 bg-[var(--color-surface-sunken)] rounded-xl p-4 space-y-0">
                               {parsedSteps.map((step, j) => (
-                                <ToolCard key={j} step={step} isLast={false} />
+                                <ToolCard key={j} step={step} />
                               ))}
                             </div>
                           </details>
@@ -601,7 +499,7 @@ export function PolicyChat() {
                             ? "bg-red-50 border border-red-200"
                             : "bg-white border border-[var(--color-border)]"
                         }`}>
-                          <div className="prose prose-sm max-w-none text-[var(--color-text-primary)] [&_strong]:font-semibold [&_code]:bg-[var(--color-surface-sunken)] [&_code]:px-1.5 [&_code]:py-0.5 [&_code]:rounded [&_code]:text-sm [&_code]:font-mono [&_h1]:text-lg [&_h2]:text-base [&_h3]:text-sm [&_ul]:my-2 [&_li]:my-0.5">
+                          <div className="prose prose-sm max-w-none text-[var(--color-text-primary)] [&_strong]:font-semibold [&_code]:bg-[var(--color-surface-sunken)] [&_code]:px-1.5 [&_code]:py-0.5 [&_code]:rounded [&_code]:text-sm [&_code]:font-mono [&_h1]:text-lg [&_h1]:mt-4 [&_h1]:mb-2 [&_h2]:text-base [&_h2]:mt-3 [&_h2]:mb-2 [&_h3]:text-sm [&_h3]:mt-2 [&_h3]:mb-1 [&_p]:my-3 [&_p]:leading-relaxed [&_ul]:my-3 [&_ul]:space-y-1 [&_ol]:my-3 [&_ol]:space-y-1 [&_li]:my-0 [&_li]:leading-relaxed [&_blockquote]:border-l-2 [&_blockquote]:border-[var(--color-pe-green)] [&_blockquote]:pl-4 [&_blockquote]:my-3 [&_blockquote]:text-[var(--color-text-secondary)]">
                             <ReactMarkdown remarkPlugins={[remarkBreaks]}>
                               {message.content}
                             </ReactMarkdown>
