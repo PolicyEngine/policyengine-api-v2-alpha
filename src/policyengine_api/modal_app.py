@@ -61,6 +61,20 @@ app = modal.App("policyengine")
 secrets = modal.Secret.from_name("policyengine-db")
 
 
+def get_database_url() -> str:
+    """Get and validate database URL from environment."""
+    import os
+
+    url = os.environ.get("DATABASE_URL", "")
+    if not url:
+        raise ValueError("DATABASE_URL environment variable is not set")
+    if not url.startswith(("postgresql://", "postgres://")):
+        raise ValueError(
+            f"DATABASE_URL must start with postgresql:// or postgres://, got: {url[:50]}..."
+        )
+    return url
+
+
 def get_db_session(database_url: str):
     """Create database session."""
     from sqlmodel import Session, create_engine
@@ -115,7 +129,7 @@ def simulate_household_uk(
     console = Console()
     console.print(f"[bold blue]Running UK household job {job_id}[/bold blue]")
 
-    database_url = os.environ["DATABASE_URL"]
+    database_url = get_database_url()
     engine = create_engine(database_url)
 
     try:
@@ -241,7 +255,7 @@ def simulate_household_us(
     console = Console()
     console.print(f"[bold blue]Running US household job {job_id}[/bold blue]")
 
-    database_url = os.environ["DATABASE_URL"]
+    database_url = get_database_url()
     engine = create_engine(database_url)
 
     try:
@@ -364,7 +378,7 @@ def simulate_economy_uk(simulation_id: str) -> None:
         f"[bold blue]Running UK economy simulation {simulation_id}[/bold blue]"
     )
 
-    database_url = os.environ["DATABASE_URL"]
+    database_url = get_database_url()
     supabase_url = os.environ["SUPABASE_URL"]
     supabase_key = os.environ["SUPABASE_KEY"]
     storage_bucket = os.environ.get("STORAGE_BUCKET", "datasets")
@@ -477,7 +491,7 @@ def simulate_economy_us(simulation_id: str) -> None:
         f"[bold blue]Running US economy simulation {simulation_id}[/bold blue]"
     )
 
-    database_url = os.environ["DATABASE_URL"]
+    database_url = get_database_url()
     supabase_url = os.environ["SUPABASE_URL"]
     supabase_key = os.environ["SUPABASE_KEY"]
     storage_bucket = os.environ.get("STORAGE_BUCKET", "datasets")
@@ -588,7 +602,7 @@ def economy_comparison_uk(job_id: str) -> None:
     console = Console()
     console.print(f"[bold blue]Running UK economy comparison {job_id}[/bold blue]")
 
-    database_url = os.environ["DATABASE_URL"]
+    database_url = get_database_url()
     supabase_url = os.environ["SUPABASE_URL"]
     supabase_key = os.environ["SUPABASE_KEY"]
     storage_bucket = os.environ.get("STORAGE_BUCKET", "datasets")
@@ -813,7 +827,7 @@ def economy_comparison_us(job_id: str) -> None:
     console = Console()
     console.print(f"[bold blue]Running US economy comparison {job_id}[/bold blue]")
 
-    database_url = os.environ["DATABASE_URL"]
+    database_url = get_database_url()
     supabase_url = os.environ["SUPABASE_URL"]
     supabase_key = os.environ["SUPABASE_KEY"]
     storage_bucket = os.environ.get("STORAGE_BUCKET", "datasets")
