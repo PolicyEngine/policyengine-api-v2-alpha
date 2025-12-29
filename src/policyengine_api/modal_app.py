@@ -120,7 +120,6 @@ def simulate_household_uk(
 ) -> None:
     """Calculate UK household and write result to database."""
     import json
-    import os
     from datetime import datetime, timezone
 
     from rich.console import Console
@@ -246,7 +245,6 @@ def simulate_household_us(
 ) -> None:
     """Calculate US household and write result to database."""
     import json
-    import os
     from datetime import datetime, timezone
 
     from rich.console import Console
