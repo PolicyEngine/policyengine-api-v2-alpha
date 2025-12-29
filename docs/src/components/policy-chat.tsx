@@ -169,10 +169,10 @@ function ToolCard({ step }: { step: ParsedStep }) {
           )}
         </button>
         {isExpanded && step.params && Object.keys(step.params).length > 0 && (
-          <div className="ml-3.5 mt-1.5 text-sm text-[var(--color-text-muted)] bg-[var(--color-surface)] rounded-lg px-3 py-2">
+          <div className="ml-3.5 mt-1.5 font-mono text-xs text-[var(--color-text-muted)] bg-[var(--color-surface)] rounded-lg px-3 py-2 animate-slideDown">
             {Object.entries(step.params).map(([key, value]) => (
               <div key={key} className="flex gap-1">
-                <span className="text-[var(--color-pe-green)] font-medium">{key}:</span>
+                <span className="text-[var(--color-pe-green)]">{key}:</span>
                 <span className="text-[var(--color-text-secondary)]">
                   {typeof value === "string" ? value : JSON.stringify(value)}
                 </span>
@@ -202,8 +202,8 @@ function ToolCard({ step }: { step: ParsedStep }) {
           <span>Result</span>
         </button>
         {isExpanded && (
-          <div className="mt-1.5 font-mono text-xs bg-[var(--color-code-bg)] text-[var(--color-code-text)] rounded p-2 overflow-x-auto max-h-32 overflow-y-auto">
-            <pre className="whitespace-pre-wrap">{step.content.slice(0, 1500)}{step.content.length > 1500 ? "\n..." : ""}</pre>
+          <div className="mt-1.5 font-mono text-xs bg-[var(--color-code-bg)] text-[var(--color-code-text)] rounded p-2 overflow-x-auto max-h-64 overflow-y-auto animate-slideDown">
+            <pre className="whitespace-pre-wrap">{step.content}</pre>
           </div>
         )}
       </div>
@@ -431,7 +431,7 @@ export function PolicyChat() {
         {messages.length === 0 ? (
           <div className="h-full flex flex-col justify-center">
             <div className="text-center mb-8">
-              <h3 className="font-display text-2xl text-[var(--color-text-primary)] mb-2">
+              <h3 className="text-xl font-medium text-[var(--color-text-primary)] mb-2">
                 What would you like to know?
               </h3>
               <p className="text-sm text-[var(--color-text-muted)]">
@@ -563,8 +563,15 @@ export function PolicyChat() {
           from { opacity: 0; transform: translateY(4px); }
           to { opacity: 1; transform: translateY(0); }
         }
+        @keyframes slideDown {
+          from { opacity: 0; max-height: 0; }
+          to { opacity: 1; max-height: 500px; }
+        }
         .animate-fadeIn {
           animation: fadeIn 0.2s ease-out forwards;
+        }
+        .animate-slideDown {
+          animation: slideDown 0.2s ease-out forwards;
         }
       `}</style>
     </div>
