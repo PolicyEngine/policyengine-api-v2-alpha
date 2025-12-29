@@ -29,9 +29,17 @@ interface ParsedStep {
 }
 
 function parseLogEntry(message: string): ParsedStep {
-  // [AGENT] messages
+  // [AGENT] messages - filter out internal debug info
   if (message.startsWith("[AGENT]")) {
     const content = message.replace("[AGENT] ", "");
+    // Skip internal debug messages
+    if (content.startsWith("Stop reason:") ||
+        content.startsWith("Turn ") ||
+        content.startsWith("Loaded ") ||
+        content.startsWith("Fetching ") ||
+        content.startsWith("Completed")) {
+      return { type: "unknown", title: "", content: "" };
+    }
     return {
       type: "agent",
       title: "Agent",
