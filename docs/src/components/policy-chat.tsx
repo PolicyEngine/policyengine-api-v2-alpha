@@ -32,6 +32,12 @@ interface ToolCall {
   isExpanded?: boolean;
 }
 
+interface StreamLine {
+  type: "text" | "tool" | "result" | "error";
+  content: string;
+  timestamp: number;
+}
+
 export function PolicyChat() {
   const { baseUrl } = useApi();
   const [messages, setMessages] = useState<Message[]>([]);
@@ -41,6 +47,7 @@ export function PolicyChat() {
   const [mcpConnected, setMcpConnected] = useState<boolean | null>(null);
   const [displayedContent, setDisplayedContent] = useState("");
   const [isTyping, setIsTyping] = useState(false);
+  const [streamLines, setStreamLines] = useState<StreamLine[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fullContentRef = useRef("");
 
@@ -81,6 +88,7 @@ export function PolicyChat() {
     setMcpConnected(null);
     setDisplayedContent("");
     setIsTyping(false);
+    setStreamLines([]);
     fullContentRef.current = "";
 
     // Add user message
@@ -154,6 +162,11 @@ export function PolicyChat() {
                       assistantText += item.text + "\n";
                       fullContentRef.current = assistantText.trim();
                       setIsTyping(true);
+                      // Add to stream lines
+                      setStreamLines((prev) => [
+                        ...prev,
+                        { type: "text", content: item.text, timestamp: Date.now() },
+                      ]);
                       setMessages((prev) => {
                         const newMessages = [...prev];
                         const lastIndex = newMessages.length - 1;
@@ -173,6 +186,11 @@ export function PolicyChat() {
                       };
                       toolCalls.push(toolCall);
                       setCurrentToolCalls([...toolCalls]);
+                      // Add tool use to stream lines
+                      setStreamLines((prev) => [
+                        ...prev,
+                        { type: "tool", content: item.name, timestamp: Date.now() },
+                      ]);
                     }
                   }
                 }
@@ -403,6 +421,36 @@ export function PolicyChat() {
             </div>
           );
         })}
+
+        {/* Live streaming log */}
+        {isLoading && streamLines.length > 0 && (
+          <div className="bg-[var(--color-surface-sunken)] rounded-xl p-3 space-y-1 font-mono text-xs">
+            <div className="text-xs font-medium text-[var(--color-text-muted)] mb-2">
+              Live output
+            </div>
+            {streamLines.map((line, i) => (
+              <div
+                key={i}
+                className={`flex items-start gap-2 ${
+                  line.type === "tool"
+                    ? "text-amber-600"
+                    : line.type === "error"
+                    ? "text-red-500"
+                    : "text-[var(--color-text-secondary)]"
+                }`}
+              >
+                <span className="text-[var(--color-text-muted)] select-none">{">"}</span>
+                <span className="whitespace-pre-wrap break-words">
+                  {line.type === "tool" ? `[Using: ${line.content}]` : line.content}
+                </span>
+              </div>
+            ))}
+            <div className="flex items-center gap-2 text-[var(--color-text-muted)]">
+              <span className="select-none">{">"}</span>
+              <span className="inline-block w-2 h-3 bg-[var(--color-pe-green)] animate-pulse" />
+            </div>
+          </div>
+        )}
 
         {/* Live tool calls */}
         {currentToolCalls.length > 0 && (
