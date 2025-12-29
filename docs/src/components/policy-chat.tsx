@@ -153,7 +153,7 @@ function ToolCard({ step }: { step: ParsedStep }) {
       <div className="py-1 animate-fadeIn">
         <button
           onClick={() => setIsExpanded(!isExpanded)}
-          className="flex items-center gap-2 hover:text-[var(--color-pe-green)] transition-colors"
+          className="flex items-center gap-2 hover:text-[var(--color-pe-green)] transition-colors font-mono"
         >
           <span className="w-1.5 h-1.5 rounded-full bg-[var(--color-pe-green)] shrink-0" />
           <span className="text-sm text-[var(--color-text-secondary)]">{step.title}</span>
@@ -194,7 +194,7 @@ function ToolCard({ step }: { step: ParsedStep }) {
       <div className="py-1 ml-3.5 animate-fadeIn">
         <button
           onClick={() => setIsExpanded(!isExpanded)}
-          className="flex items-center gap-1.5 text-sm text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)]"
+          className="flex items-center gap-1.5 text-sm text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)] font-mono"
         >
           <svg className={`w-3.5 h-3.5 transition-transform ${isExpanded ? "rotate-90" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
@@ -240,7 +240,7 @@ function ProgressIndicator({ logs }: { logs: LogEntry[] }) {
   if (logs.length === 0) return null;
 
   return (
-    <div className="flex items-center gap-2 mb-3 text-sm text-[var(--color-text-muted)]">
+    <div className="flex items-center gap-2 mb-3 text-sm text-[var(--color-text-muted)] font-mono">
       {stage !== "Complete" && (
         <div className="w-3.5 h-3.5 border-2 border-[var(--color-pe-green)] border-t-transparent rounded-full animate-spin" />
       )}
@@ -443,7 +443,7 @@ export function PolicyChat() {
                 <button
                   key={i}
                   onClick={() => setInput(q)}
-                  className="text-left p-4 rounded-xl bg-[var(--color-surface-sunken)] hover:bg-[var(--color-surface)] border border-transparent hover:border-[var(--color-border)] text-sm text-[var(--color-text-secondary)] transition-all group"
+                  className="text-left p-4 rounded-xl bg-[var(--color-surface-sunken)] hover:bg-[var(--color-surface)] border border-transparent hover:border-[var(--color-border)] text-sm text-[var(--color-text-secondary)] transition-all group font-mono"
                 >
                   <span className="group-hover:text-[var(--color-pe-green)] transition-colors">{q}</span>
                 </button>
@@ -457,7 +457,7 @@ export function PolicyChat() {
                 {message.role === "user" ? (
                   <div className="flex justify-end">
                     <div className="max-w-[80%] bg-[var(--color-pe-green)] text-white rounded-2xl rounded-br-md px-4 py-3">
-                      <p className="text-sm">{message.content}</p>
+                      <p className="text-sm font-mono">{message.content}</p>
                     </div>
                   </div>
                 ) : (
@@ -470,7 +470,7 @@ export function PolicyChat() {
                         {message.status === "pending" ? (
                           <div className="flex items-center gap-3">
                             <div className="w-5 h-5 border-2 border-[var(--color-pe-green)] border-t-transparent rounded-full animate-spin" />
-                            <span className="text-sm text-[var(--color-text-secondary)]">Starting analysis...</span>
+                            <span className="text-sm text-[var(--color-text-secondary)] font-mono">Starting analysis...</span>
                           </div>
                         ) : (
                           <div className="space-y-0">
@@ -488,7 +488,7 @@ export function PolicyChat() {
                         {/* Collapsible steps summary */}
                         {parsedSteps.length > 0 && (
                           <details className="group">
-                            <summary className="cursor-pointer list-none flex items-center gap-2 text-sm text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)]">
+                            <summary className="cursor-pointer list-none flex items-center gap-2 text-sm text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)] font-mono">
                               <svg className="w-3.5 h-3.5 group-open:rotate-90 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                               </svg>
@@ -534,7 +534,7 @@ export function PolicyChat() {
             onChange={(e) => setInput(e.target.value)}
             placeholder="Ask a policy question..."
             disabled={isLoading}
-            className="flex-1 px-4 py-3 text-sm border border-[var(--color-border)] rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-[var(--color-pe-green)] focus:border-transparent disabled:opacity-50 placeholder:text-[var(--color-text-muted)]"
+            className="flex-1 px-4 py-3 text-sm font-mono border border-[var(--color-border)] rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-[var(--color-pe-green)] focus:border-transparent disabled:opacity-50 placeholder:text-[var(--color-text-muted)]"
           />
           <button
             type="submit"
