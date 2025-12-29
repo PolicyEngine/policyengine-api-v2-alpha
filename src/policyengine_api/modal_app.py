@@ -187,7 +187,7 @@ def simulate_household_uk(
             session.exec(
                 text("""
                     UPDATE household_jobs
-                    SET status = 'completed',
+                    SET status = 'COMPLETED',
                         result = :result,
                         completed_at = :completed_at
                     WHERE id = :job_id
@@ -216,7 +216,7 @@ def simulate_household_uk(
             session.exec(
                 text("""
                     UPDATE household_jobs
-                    SET status = 'failed',
+                    SET status = 'FAILED',
                         error_message = :error,
                         completed_at = :completed_at
                     WHERE id = :job_id
@@ -316,7 +316,7 @@ def simulate_household_us(
             session.exec(
                 text("""
                     UPDATE household_jobs
-                    SET status = 'completed',
+                    SET status = 'COMPLETED',
                         result = :result,
                         completed_at = :completed_at
                     WHERE id = :job_id
@@ -348,7 +348,7 @@ def simulate_household_us(
             session.exec(
                 text("""
                     UPDATE household_jobs
-                    SET status = 'failed',
+                    SET status = 'FAILED',
                         error_message = :error,
                         completed_at = :completed_at
                     WHERE id = :job_id
