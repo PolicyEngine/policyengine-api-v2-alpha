@@ -5,37 +5,15 @@ import ReactMarkdown from "react-markdown";
 import remarkBreaks from "remark-breaks";
 import { useApi } from "./api-context";
 
-// Types for Claude Code stream-json format
-interface StreamEvent {
-  type: "system" | "assistant" | "user" | "result";
-  subtype?: string;
-  message?: {
-    content: Array<{ type: string; text?: string; name?: string; input?: unknown }>;
-  };
-  result?: string;
-  mcp_servers?: Array<{ name: string; status: string }>;
-  tool_use_result?: string | { stdout?: string };
-  total_cost_usd?: number;
-  duration_ms?: number;
-}
-
 interface Message {
   role: "user" | "assistant";
   content: string;
-  status?: "pending" | "streaming" | "completed" | "failed";
+  status?: "pending" | "running" | "completed" | "failed";
 }
 
-interface ToolCall {
-  name: string;
-  input: unknown;
-  result?: string;
-  isExpanded?: boolean;
-}
-
-interface StreamLine {
-  type: "text" | "tool" | "result" | "error";
-  content: string;
-  timestamp: number;
+interface LogEntry {
+  timestamp: string;
+  message: string;
 }
 
 export function PolicyChat() {
@@ -43,13 +21,10 @@ export function PolicyChat() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const [currentToolCalls, setCurrentToolCalls] = useState<ToolCall[]>([]);
-  const [mcpConnected, setMcpConnected] = useState<boolean | null>(null);
-  const [displayedContent, setDisplayedContent] = useState("");
-  const [isTyping, setIsTyping] = useState(false);
-  const [streamLines, setStreamLines] = useState<StreamLine[]>([]);
+  const [logs, setLogs] = useState<LogEntry[]>([]);
+  const [callId, setCallId] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const fullContentRef = useRef("");
+  const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -57,25 +32,89 @@ export function PolicyChat() {
 
   useEffect(() => {
     scrollToBottom();
-  }, [messages, currentToolCalls, displayedContent]);
+  }, [messages, logs]);
 
-  // Typing animation effect
+  // Cleanup polling on unmount
   useEffect(() => {
-    if (!isTyping || !fullContentRef.current) return;
+    return () => {
+      if (pollIntervalRef.current) {
+        clearInterval(pollIntervalRef.current);
+      }
+    };
+  }, []);
 
-    const targetContent = fullContentRef.current;
-    if (displayedContent.length >= targetContent.length) {
-      setIsTyping(false);
-      return;
+  const pollLogs = async (id: string) => {
+    try {
+      const res = await fetch(`${baseUrl}/agent/logs/${id}`);
+      if (!res.ok) {
+        console.error("Failed to fetch logs:", res.status);
+        return;
+      }
+
+      const data = await res.json();
+      setLogs(data.logs || []);
+
+      // Check if completed or failed
+      if (data.status === "completed" || data.status === "failed") {
+        // Stop polling
+        if (pollIntervalRef.current) {
+          clearInterval(pollIntervalRef.current);
+          pollIntervalRef.current = null;
+        }
+
+        setIsLoading(false);
+        setCallId(null);
+
+        // Extract final result from logs or result field
+        let finalContent = "";
+        if (data.result?.result) {
+          finalContent = data.result.result;
+        } else {
+          // Try to extract from logs - look for [CLAUDE] lines with result
+          const claudeLogs = data.logs
+            .map((l: LogEntry) => l.message)
+            .filter((m: string) => m.startsWith("[CLAUDE]"))
+            .map((m: string) => m.replace("[CLAUDE] ", ""));
+
+          // Try to parse the last few lines for result
+          for (const log of claudeLogs.reverse()) {
+            try {
+              const event = JSON.parse(log);
+              if (event.type === "result" && event.result) {
+                finalContent = event.result;
+                break;
+              }
+            } catch {
+              // Not JSON, skip
+            }
+          }
+
+          if (!finalContent) {
+            finalContent =
+              data.status === "completed"
+                ? "Analysis completed. Check logs for details."
+                : "Analysis failed. Check logs for errors.";
+          }
+        }
+
+        // Update assistant message with final content
+        setMessages((prev) => {
+          const newMessages = [...prev];
+          const lastIndex = newMessages.length - 1;
+          if (newMessages[lastIndex]?.role === "assistant") {
+            newMessages[lastIndex] = {
+              ...newMessages[lastIndex],
+              content: finalContent,
+              status: data.status,
+            };
+          }
+          return newMessages;
+        });
+      }
+    } catch (err) {
+      console.error("Error polling logs:", err);
     }
-
-    const charsToAdd = Math.min(3, targetContent.length - displayedContent.length);
-    const timeout = setTimeout(() => {
-      setDisplayedContent(targetContent.slice(0, displayedContent.length + charsToAdd));
-    }, 10);
-
-    return () => clearTimeout(timeout);
-  }, [displayedContent, isTyping]);
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -84,12 +123,14 @@ export function PolicyChat() {
     const userMessage = input.trim();
     setInput("");
     setIsLoading(true);
-    setCurrentToolCalls([]);
-    setMcpConnected(null);
-    setDisplayedContent("");
-    setIsTyping(false);
-    setStreamLines([]);
-    fullContentRef.current = "";
+    setLogs([]);
+    setCallId(null);
+
+    // Stop any existing polling
+    if (pollIntervalRef.current) {
+      clearInterval(pollIntervalRef.current);
+      pollIntervalRef.current = null;
+    }
 
     // Add user message
     setMessages((prev) => [...prev, { role: "user", content: userMessage }]);
@@ -101,7 +142,8 @@ export function PolicyChat() {
     ]);
 
     try {
-      const res = await fetch(`${baseUrl}/agent/stream`, {
+      // Start the agent
+      const res = await fetch(`${baseUrl}/agent/run`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ question: userMessage }),
@@ -111,159 +153,30 @@ export function PolicyChat() {
         throw new Error(`HTTP ${res.status}`);
       }
 
-      const reader = res.body?.getReader();
-      if (!reader) throw new Error("No response body");
+      const data = await res.json();
+      const newCallId = data.call_id;
+      setCallId(newCallId);
 
-      const decoder = new TextDecoder();
-      let assistantText = "";
-      let finalResult = "";
-      const toolCalls: ToolCall[] = [];
-
-      // Update to streaming status
+      // Update to running status
       setMessages((prev) => {
         const newMessages = [...prev];
         const lastIndex = newMessages.length - 1;
         if (newMessages[lastIndex]?.role === "assistant") {
           newMessages[lastIndex] = {
             ...newMessages[lastIndex],
-            status: "streaming",
+            status: "running",
           };
         }
         return newMessages;
       });
 
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
+      // Start polling for logs
+      pollIntervalRef.current = setInterval(() => {
+        pollLogs(newCallId);
+      }, 1000);
 
-        const chunk = decoder.decode(value, { stream: true });
-        const lines = chunk.split("\n");
-
-        for (const line of lines) {
-          if (line.startsWith("data: ")) {
-            try {
-              const outerData = JSON.parse(line.slice(6));
-
-              if (outerData.type === "output" && outerData.content) {
-                const event: StreamEvent = JSON.parse(outerData.content);
-
-                // Handle system init - check MCP connection
-                if (event.type === "system" && event.subtype === "init") {
-                  const mcpServer = event.mcp_servers?.find(
-                    (s) => s.name === "policyengine"
-                  );
-                  setMcpConnected(mcpServer?.status === "connected");
-                }
-
-                // Handle assistant messages
-                if (event.type === "assistant" && event.message?.content) {
-                  for (const item of event.message.content) {
-                    if (item.type === "text" && item.text) {
-                      assistantText += item.text + "\n";
-                      fullContentRef.current = assistantText.trim();
-                      setIsTyping(true);
-                      // Add to stream lines
-                      setStreamLines((prev) => [
-                        ...prev,
-                        { type: "text", content: item.text!, timestamp: Date.now() },
-                      ]);
-                      setMessages((prev) => {
-                        const newMessages = [...prev];
-                        const lastIndex = newMessages.length - 1;
-                        if (newMessages[lastIndex]?.role === "assistant") {
-                          newMessages[lastIndex] = {
-                            ...newMessages[lastIndex],
-                            content: assistantText.trim(),
-                          };
-                        }
-                        return newMessages;
-                      });
-                    } else if (item.type === "tool_use" && item.name) {
-                      const toolCall: ToolCall = {
-                        name: item.name,
-                        input: item.input,
-                        isExpanded: false,
-                      };
-                      toolCalls.push(toolCall);
-                      setCurrentToolCalls([...toolCalls]);
-                      // Add tool use to stream lines
-                      setStreamLines((prev) => [
-                        ...prev,
-                        { type: "tool", content: item.name!, timestamp: Date.now() },
-                      ]);
-                    }
-                  }
-                }
-
-                // Handle tool results
-                if (event.type === "user" && event.tool_use_result) {
-                  if (toolCalls.length > 0) {
-                    const result =
-                      typeof event.tool_use_result === "string"
-                        ? event.tool_use_result
-                        : event.tool_use_result.stdout || "";
-                    toolCalls[toolCalls.length - 1].result = result;
-                    setCurrentToolCalls([...toolCalls]);
-                  }
-                }
-
-                // Handle final result
-                if (event.type === "result" && event.result) {
-                  finalResult = event.result;
-                  fullContentRef.current = finalResult;
-                  setIsTyping(true);
-                  setMessages((prev) => {
-                    const newMessages = [...prev];
-                    const lastIndex = newMessages.length - 1;
-                    if (newMessages[lastIndex]?.role === "assistant") {
-                      newMessages[lastIndex] = {
-                        ...newMessages[lastIndex],
-                        content: finalResult,
-                        status: "completed",
-                      };
-                    }
-                    return newMessages;
-                  });
-                }
-              } else if (outerData.type === "error") {
-                setMessages((prev) => {
-                  const newMessages = [...prev];
-                  const lastIndex = newMessages.length - 1;
-                  if (newMessages[lastIndex]?.role === "assistant") {
-                    newMessages[lastIndex] = {
-                      role: "assistant",
-                      content: `Error: ${outerData.content}`,
-                      status: "failed",
-                    };
-                  }
-                  return newMessages;
-                });
-              } else if (outerData.type === "done") {
-                setCurrentToolCalls([]);
-                setIsTyping(false);
-                setDisplayedContent(fullContentRef.current);
-                if (outerData.returncode !== 0) {
-                  setMessages((prev) => {
-                    const newMessages = [...prev];
-                    const lastIndex = newMessages.length - 1;
-                    if (newMessages[lastIndex]?.role === "assistant") {
-                      newMessages[lastIndex] = {
-                        ...newMessages[lastIndex],
-                        status: "failed",
-                      };
-                    }
-                    return newMessages;
-                  });
-                }
-              }
-            } catch {
-              // Ignore parse errors for incomplete chunks
-            }
-          }
-        }
-      }
-
-      setIsLoading(false);
+      // Initial poll
+      pollLogs(newCallId);
     } catch (err) {
       setMessages((prev) => {
         const newMessages = [...prev];
@@ -281,44 +194,58 @@ export function PolicyChat() {
     }
   };
 
-  const toggleToolExpanded = (index: number) => {
-    setCurrentToolCalls((prev) =>
-      prev.map((t, i) =>
-        i === index ? { ...t, isExpanded: !t.isExpanded } : t
-      )
-    );
+  // Parse log message to extract useful info
+  const parseLogMessage = (message: string): { type: string; content: string } => {
+    if (message.startsWith("[AGENT]")) {
+      return { type: "agent", content: message.replace("[AGENT] ", "") };
+    }
+    if (message.startsWith("[CLAUDE]")) {
+      const claudeContent = message.replace("[CLAUDE] ", "");
+      // Try to parse as JSON
+      try {
+        const event = JSON.parse(claudeContent);
+        if (event.type === "assistant" && event.message?.content) {
+          const textParts = event.message.content
+            .filter((c: { type: string }) => c.type === "text")
+            .map((c: { text: string }) => c.text)
+            .join("");
+          if (textParts) {
+            return { type: "text", content: textParts };
+          }
+          const toolParts = event.message.content
+            .filter((c: { type: string }) => c.type === "tool_use")
+            .map((c: { name: string }) => c.name);
+          if (toolParts.length > 0) {
+            return { type: "tool", content: `Using: ${toolParts.join(", ")}` };
+          }
+        }
+        if (event.type === "system" && event.subtype === "init") {
+          const mcpStatus = event.mcp_servers?.find(
+            (s: { name: string }) => s.name === "policyengine"
+          );
+          return {
+            type: "system",
+            content: mcpStatus?.status === "connected" ? "MCP connected" : "Starting...",
+          };
+        }
+        if (event.type === "result") {
+          return { type: "result", content: "Analysis complete" };
+        }
+        return { type: "claude", content: `[${event.type || "event"}]` };
+      } catch {
+        return { type: "claude", content: claudeContent.slice(0, 100) };
+      }
+    }
+    return { type: "log", content: message.slice(0, 100) };
   };
 
   const exampleQuestions = [
-    // UK tax questions
     "How much would it cost to set the UK basic income tax rate to 19p?",
     "What would happen if we doubled child benefit?",
-    "How would a £15,000 personal allowance affect different income groups?",
+    "Calculate tax for a UK household earning 50,000",
     "What is the budgetary impact of abolishing the higher rate of income tax?",
-    "How much does universal credit cost the government?",
-    // US tax questions
-    "What would a $2,000 child tax credit cost in the US?",
-    "How would doubling SNAP benefits affect poverty rates?",
-    "What is the revenue impact of a 25% top marginal tax rate?",
-    // Household calculations
-    "Calculate tax for a UK household earning £50,000",
     "What benefits would a single parent with two children receive in California?",
-    "How much income tax does someone earning $100,000 in New York pay?",
   ];
-
-  const formatToolName = (name: string) => {
-    return name
-      .replace("mcp__policyengine__", "")
-      .replace(/_/g, " ")
-      .replace(/\b\w/g, (c) => c.toUpperCase());
-  };
-
-  const getDisplayContent = (message: Message, isLastMessage: boolean) => {
-    if (isLastMessage && isTyping) {
-      return displayedContent;
-    }
-    return message.content;
-  };
 
   return (
     <div className="border border-[var(--color-border)] rounded-xl overflow-hidden bg-white flex flex-col h-[600px]">
@@ -327,22 +254,14 @@ export function PolicyChat() {
         <div className="flex items-center gap-2">
           <div
             className={`w-2 h-2 rounded-full ${
-              mcpConnected === true
-                ? "bg-[var(--color-pe-green)]"
-                : mcpConnected === false
-                  ? "bg-red-500"
-                  : "bg-gray-300"
-            } ${mcpConnected === null && isLoading ? "animate-pulse" : ""}`}
+              isLoading ? "bg-amber-400 animate-pulse" : "bg-gray-300"
+            }`}
           />
           <span className="text-sm font-medium text-[var(--color-text-primary)] font-mono">
             Policy analyst
           </span>
           <span className="text-xs text-[var(--color-text-muted)] ml-auto font-mono">
-            {mcpConnected === true
-              ? "MCP connected"
-              : mcpConnected === false
-                ? "MCP failed"
-                : "Powered by Claude Code"}
+            Powered by Claude Code + MCP
           </span>
         </div>
         <p className="text-xs text-[var(--color-text-muted)] mt-1 font-mono">
@@ -371,141 +290,73 @@ export function PolicyChat() {
           </div>
         )}
 
-        {messages.map((message, i) => {
-          const isLastMessage = i === messages.length - 1;
-          const content = getDisplayContent(message, isLastMessage);
-
-          return (
+        {messages.map((message, i) => (
+          <div
+            key={i}
+            className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}
+          >
             <div
-              key={i}
-              className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}
+              className={`max-w-[85%] rounded-xl px-4 py-3 ${
+                message.role === "user"
+                  ? "bg-[var(--color-pe-green)] text-white"
+                  : "bg-[var(--color-surface-sunken)] text-[var(--color-text-primary)]"
+              }`}
             >
-              <div
-                className={`max-w-[85%] rounded-xl px-4 py-3 ${
-                  message.role === "user"
-                    ? "bg-[var(--color-pe-green)] text-white"
-                    : "bg-[var(--color-surface-sunken)] text-[var(--color-text-primary)]"
-                }`}
-              >
-                {message.role === "assistant" && message.status === "pending" ? (
-                  <div className="flex items-center gap-2 font-mono">
-                    <div className="w-3 h-3 border-2 border-[var(--color-pe-green)] border-t-transparent rounded-full animate-spin" />
-                    <span className="text-sm">Starting Claude Code...</span>
-                  </div>
-                ) : message.role === "assistant" && message.status === "streaming" ? (
-                  <div className="font-mono">
-                    {content ? (
-                      <div className="prose prose-sm max-w-none text-sm [&>*]:text-[var(--color-text-primary)] [&_code]:bg-[var(--color-surface)] [&_code]:px-1 [&_code]:py-0.5 [&_code]:rounded [&_strong]:font-semibold">
-                        <ReactMarkdown remarkPlugins={[remarkBreaks]}>{content}</ReactMarkdown>
-                      </div>
-                    ) : currentToolCalls.length === 0 ? (
-                      <span className="text-sm text-[var(--color-text-muted)]">
-                        Thinking...
-                      </span>
-                    ) : null}
-                    {isLastMessage && isTyping && (
-                      <span className="inline-block w-2 h-4 bg-[var(--color-pe-green)] ml-0.5 animate-pulse" />
-                    )}
-                  </div>
-                ) : message.status === "completed" ? (
-                  <div className="font-mono prose prose-sm max-w-none text-sm [&>*]:text-[var(--color-text-primary)] [&_code]:bg-[var(--color-surface)] [&_code]:px-1 [&_code]:py-0.5 [&_code]:rounded [&_strong]:font-semibold [&_h1]:text-base [&_h2]:text-sm [&_h3]:text-sm">
-                    <ReactMarkdown remarkPlugins={[remarkBreaks]}>{content}</ReactMarkdown>
-                    {isLastMessage && isTyping && (
-                      <span className="inline-block w-2 h-4 bg-[var(--color-pe-green)] ml-0.5 animate-pulse" />
-                    )}
-                  </div>
-                ) : (
-                  <div className="text-sm whitespace-pre-wrap font-mono">{content}</div>
-                )}
-              </div>
+              {message.role === "assistant" &&
+              (message.status === "pending" || message.status === "running") ? (
+                <div className="flex items-center gap-2 font-mono">
+                  <div className="w-3 h-3 border-2 border-[var(--color-pe-green)] border-t-transparent rounded-full animate-spin" />
+                  <span className="text-sm">
+                    {message.status === "pending" ? "Starting..." : "Analysing..."}
+                  </span>
+                </div>
+              ) : message.status === "completed" || message.status === "failed" ? (
+                <div className="font-mono prose prose-sm max-w-none text-sm [&>*]:text-[var(--color-text-primary)] [&_code]:bg-[var(--color-surface)] [&_code]:px-1 [&_code]:py-0.5 [&_code]:rounded [&_strong]:font-semibold">
+                  <ReactMarkdown remarkPlugins={[remarkBreaks]}>
+                    {message.content}
+                  </ReactMarkdown>
+                </div>
+              ) : (
+                <div className="text-sm whitespace-pre-wrap font-mono">{message.content}</div>
+              )}
             </div>
-          );
-        })}
+          </div>
+        ))}
 
-        {/* Live streaming log */}
-        {isLoading && streamLines.length > 0 && (
-          <div className="bg-[var(--color-surface-sunken)] rounded-xl p-3 space-y-1 font-mono text-xs">
-            <div className="text-xs font-medium text-[var(--color-text-muted)] mb-2">
-              Live output
+        {/* Live logs */}
+        {isLoading && logs.length > 0 && (
+          <div className="bg-[var(--color-surface-sunken)] rounded-xl p-3 space-y-1 font-mono text-xs max-h-64 overflow-y-auto">
+            <div className="text-xs font-medium text-[var(--color-text-muted)] mb-2 sticky top-0 bg-[var(--color-surface-sunken)]">
+              Live output ({logs.length} entries)
             </div>
-            {streamLines.map((line, i) => (
-              <div
-                key={i}
-                className={`flex items-start gap-2 ${
-                  line.type === "tool"
-                    ? "text-amber-600"
-                    : line.type === "error"
-                    ? "text-red-500"
-                    : "text-[var(--color-text-secondary)]"
-                }`}
-              >
-                <span className="text-[var(--color-text-muted)] select-none">{">"}</span>
-                <span className="whitespace-pre-wrap break-words">
-                  {line.type === "tool" ? `[Using: ${line.content}]` : line.content}
-                </span>
-              </div>
-            ))}
+            {logs.slice(-30).map((log, i) => {
+              const parsed = parseLogMessage(log.message);
+              return (
+                <div
+                  key={i}
+                  className={`flex items-start gap-2 ${
+                    parsed.type === "tool"
+                      ? "text-amber-600"
+                      : parsed.type === "text"
+                      ? "text-[var(--color-text-primary)]"
+                      : parsed.type === "agent"
+                      ? "text-blue-600"
+                      : parsed.type === "system"
+                      ? "text-green-600"
+                      : "text-[var(--color-text-muted)]"
+                  }`}
+                >
+                  <span className="text-[var(--color-text-muted)] select-none shrink-0">
+                    {">"}
+                  </span>
+                  <span className="whitespace-pre-wrap break-words">{parsed.content}</span>
+                </div>
+              );
+            })}
             <div className="flex items-center gap-2 text-[var(--color-text-muted)]">
               <span className="select-none">{">"}</span>
               <span className="inline-block w-2 h-3 bg-[var(--color-pe-green)] animate-pulse" />
             </div>
-          </div>
-        )}
-
-        {/* Live tool calls */}
-        {currentToolCalls.length > 0 && (
-          <div className="bg-[var(--color-surface-sunken)] rounded-xl p-3 space-y-2">
-            <div className="text-xs font-medium text-[var(--color-text-muted)] mb-2 font-mono">
-              API calls
-            </div>
-            {currentToolCalls.map((tool, i) => (
-              <div
-                key={i}
-                className="bg-white rounded-lg border border-[var(--color-border)] overflow-hidden"
-              >
-                <button
-                  onClick={() => toggleToolExpanded(i)}
-                  className="w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-[var(--color-surface)]"
-                >
-                  <div
-                    className={`w-2 h-2 rounded-full ${
-                      tool.result ? "bg-[var(--color-pe-green)]" : "bg-amber-400 animate-pulse"
-                    }`}
-                  />
-                  <span className="text-xs font-mono text-[var(--color-text-secondary)] flex-1">
-                    {formatToolName(tool.name)}
-                  </span>
-                  <span className="text-xs text-[var(--color-text-muted)] font-mono">
-                    {tool.isExpanded ? "−" : "+"}
-                  </span>
-                </button>
-                {tool.isExpanded && (
-                  <div className="px-3 py-2 border-t border-[var(--color-border)] bg-[var(--color-surface-sunken)]">
-                    {tool.input !== undefined && tool.input !== null && (
-                      <div className="mb-2">
-                        <div className="text-xs text-[var(--color-text-muted)] mb-1 font-mono">
-                          Input:
-                        </div>
-                        <pre className="text-xs font-mono overflow-x-auto bg-white p-2 rounded">
-                          {JSON.stringify(tool.input, null, 2)}
-                        </pre>
-                      </div>
-                    )}
-                    {tool.result && (
-                      <div>
-                        <div className="text-xs text-[var(--color-text-muted)] mb-1 font-mono">
-                          Result:
-                        </div>
-                        <pre className="text-xs font-mono overflow-x-auto bg-white p-2 rounded max-h-32 overflow-y-auto">
-                          {tool.result.slice(0, 500)}
-                          {tool.result.length > 500 && "..."}
-                        </pre>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-            ))}
           </div>
         )}
 
