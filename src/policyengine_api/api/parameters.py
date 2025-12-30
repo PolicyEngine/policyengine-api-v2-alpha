@@ -37,11 +37,9 @@ def list_parameters(
 
     Args:
         search: Filter by parameter name, label, or description.
-            For UK parameters, try: "hmrc" or "gov.hmrc"
-            For US parameters, try: "irs" or "gov.irs"
         tax_benefit_model_name: Filter by country model.
-            Use "policyengine_uk" for UK parameters.
-            Use "policyengine_us" for US parameters.
+            Use "policyengine-uk" for UK parameters.
+            Use "policyengine-us" for US parameters.
     """
     query = select(Parameter)
 
@@ -54,10 +52,12 @@ def list_parameters(
         )
 
     if search:
+        # Case-insensitive search using ILIKE
+        search_pattern = f"%{search}%"
         search_filter = (
-            Parameter.name.contains(search)
-            | Parameter.label.contains(search)
-            | Parameter.description.contains(search)
+            Parameter.name.ilike(search_pattern)
+            | Parameter.label.ilike(search_pattern)
+            | Parameter.description.ilike(search_pattern)
         )
         query = query.where(search_filter)
 

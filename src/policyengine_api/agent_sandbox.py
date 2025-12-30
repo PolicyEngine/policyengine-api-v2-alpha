@@ -30,8 +30,8 @@ You have access to the full PolicyEngine API. Key workflows:
    - Poll GET /analysis/economic-impact/{report_id} until completed
 
 When searching for parameters, use tax_benefit_model_name to filter by country:
-- "policyengine_uk" for UK parameters
-- "policyengine_us" for US parameters
+- "policyengine-uk" for UK parameters
+- "policyengine-us" for US parameters
 
 When answering questions:
 1. Use the API tools to get accurate, current data

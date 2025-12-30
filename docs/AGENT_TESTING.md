@@ -103,7 +103,19 @@ Tests are in `tests/test_agent_policy_questions.py` (integration tests requiring
 
 **Example**: `gov.hmrc.income_tax.allowances.personal_allowance.amount` has two entries with different IDs.
 
-**Solution needed**: Data cleanup - deduplicate parameters in seed script.
+**Solution implemented**: Deduplicate parameters by name in seed script (`seen_names` set).
+
+### Issue 6: Case-sensitive search
+
+**Problem**: Search for "personal allowance" didn't find "Personal allowance" (capital P).
+
+**Solution implemented**: Changed search to use `ILIKE` instead of `contains` for case-insensitive matching.
+
+### Issue 7: Model name mismatch
+
+**Problem**: System prompt said `policyengine_uk` but database has `policyengine-uk` (hyphen vs underscore).
+
+**Solution implemented**: Updated system prompt and API docstrings to use correct model names with hyphens.
 
 ### Issue 3: Variables endpoint lacks search
 
@@ -127,23 +139,27 @@ Tests are in `tests/test_agent_policy_questions.py` (integration tests requiring
 
 | Endpoint | Improvement |
 |----------|-------------|
-| `/parameters/` | Added `tax_benefit_model_name` filter |
-| `/variables/` | Added `search` and `tax_benefit_model_name` filters |
+| `/parameters/` | Added `tax_benefit_model_name` filter, case-insensitive search |
+| `/variables/` | Added `search` and `tax_benefit_model_name` filters, case-insensitive search |
 | `/datasets/` | Added `tax_benefit_model_name` filter |
 | `/parameter-values/` | Added `current` filter |
 | Seed script | Deduplicate parameters by name |
+| System prompt | Fixed model names (hyphen not underscore) |
 
-## Baseline measurements (production API, before improvements)
+## Measurements
 
-| Question type | Turns | Target | Notes |
-|---------------|-------|--------|-------|
-| Parameter lookup (UK personal allowance) | 9-10 | 3-4 | No country filter, mixed UK/US results |
-| Household calculation (UK £50k income) | 6 | 5-6 | Efficient, includes 2 polling turns |
+| Question type | Baseline | After improvements | Target |
+|---------------|----------|-------------------|--------|
+| Parameter lookup (UK personal allowance) | 10 turns | **3 turns** | 3-4 |
+| Household calculation (UK £50k income) | 6 turns | - | 5-6 |
 
 ## Progress log
 
 - 2024-12-30: Initial setup, created test framework and first batch of questions
-- 2024-12-30: Tested personal allowance lookup - 9 turns (target: 3-4). Root cause: no country filter on parameter search
+- 2024-12-30: Tested personal allowance lookup - 9-10 turns (target: 3-4). Root cause: no country filter on parameter search
 - 2024-12-30: Added `tax_benefit_model_name` filter to `/parameters/`, `/variables/`, `/datasets/`
 - 2024-12-30: Tested household calc - 6 turns (acceptable). Async polling is the overhead
 - 2024-12-30: Discovered duplicate parameters in DB causing extra turns
+- 2024-12-30: Fixed model name mismatch (policyengine-uk with hyphen, not underscore)
+- 2024-12-30: Added case-insensitive search using ILIKE
+- 2024-12-30: Tested personal allowance lookup - **3 turns** (target met!)

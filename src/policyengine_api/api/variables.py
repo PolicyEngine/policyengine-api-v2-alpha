@@ -39,8 +39,8 @@ def list_variables(
     Args:
         search: Filter by variable name, label, or description.
         tax_benefit_model_name: Filter by country model.
-            Use "policyengine_uk" for UK variables.
-            Use "policyengine_us" for US variables.
+            Use "policyengine-uk" for UK variables.
+            Use "policyengine-us" for US variables.
     """
     query = select(Variable)
 
@@ -53,10 +53,12 @@ def list_variables(
         )
 
     if search:
+        # Case-insensitive search using ILIKE
+        search_pattern = f"%{search}%"
         search_filter = (
-            Variable.name.contains(search)
-            | Variable.label.contains(search)
-            | Variable.description.contains(search)
+            Variable.name.ilike(search_pattern)
+            | Variable.label.ilike(search_pattern)
+            | Variable.description.ilike(search_pattern)
         )
         query = query.where(search_filter)
 

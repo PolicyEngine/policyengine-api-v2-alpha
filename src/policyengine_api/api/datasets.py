@@ -29,8 +29,8 @@ def list_datasets(
 
     Args:
         tax_benefit_model_name: Filter by country model.
-            Use "policyengine_uk" for UK datasets.
-            Use "policyengine_us" for US datasets.
+            Use "policyengine-uk" for UK datasets.
+            Use "policyengine-us" for US datasets.
     """
     query = select(Dataset)
 
