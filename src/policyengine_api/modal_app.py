@@ -78,7 +78,7 @@ def configure_logfire(service_name: str, traceparent: str | None = None):
 
     token = os.environ.get("LOGFIRE_TOKEN", "")
     if not token:
-        return None
+        return
 
     logfire.configure(
         service_name=service_name,
@@ -89,15 +89,14 @@ def configure_logfire(service_name: str, traceparent: str | None = None):
 
     # If traceparent provided, attach to the current context
     if traceparent:
+        from opentelemetry import context
         from opentelemetry.trace.propagation.tracecontext import (
             TraceContextTextMapPropagator,
         )
 
         propagator = TraceContextTextMapPropagator()
         ctx = propagator.extract(carrier={"traceparent": traceparent})
-        return ctx
-
-    return None
+        context.attach(ctx)
 
 
 def get_database_url() -> str:
@@ -167,9 +166,9 @@ def simulate_household_uk(
     import logfire
     from sqlmodel import Session, create_engine
 
-    ctx = configure_logfire("policyengine-modal-uk", traceparent)
+    configure_logfire("policyengine-modal-uk", traceparent)
 
-    with logfire.span("simulate_household_uk", job_id=job_id, _context=ctx):
+    with logfire.span("simulate_household_uk", job_id=job_id):
         logfire.info("Starting UK household calculation", job_id=job_id)
 
         database_url = get_database_url()
@@ -298,9 +297,9 @@ def simulate_household_us(
     import logfire
     from sqlmodel import Session, create_engine
 
-    ctx = configure_logfire("policyengine-modal-us", traceparent)
+    configure_logfire("policyengine-modal-us", traceparent)
 
-    with logfire.span("simulate_household_us", job_id=job_id, _context=ctx):
+    with logfire.span("simulate_household_us", job_id=job_id):
         logfire.info("Starting US household calculation", job_id=job_id)
 
         database_url = get_database_url()
@@ -424,9 +423,9 @@ def simulate_economy_uk(simulation_id: str, traceparent: str | None = None) -> N
     import logfire
     from sqlmodel import Session, create_engine
 
-    ctx = configure_logfire("policyengine-modal-uk", traceparent)
+    configure_logfire("policyengine-modal-uk", traceparent)
 
-    with logfire.span("simulate_economy_uk", simulation_id=simulation_id, _context=ctx):
+    with logfire.span("simulate_economy_uk", simulation_id=simulation_id):
         logfire.info("Starting UK economy simulation", simulation_id=simulation_id)
 
         database_url = get_database_url()
@@ -540,9 +539,9 @@ def simulate_economy_us(simulation_id: str, traceparent: str | None = None) -> N
     import logfire
     from sqlmodel import Session, create_engine
 
-    ctx = configure_logfire("policyengine-modal-us", traceparent)
+    configure_logfire("policyengine-modal-us", traceparent)
 
-    with logfire.span("simulate_economy_us", simulation_id=simulation_id, _context=ctx):
+    with logfire.span("simulate_economy_us", simulation_id=simulation_id):
         logfire.info("Starting US economy simulation", simulation_id=simulation_id)
 
         database_url = get_database_url()
@@ -656,9 +655,9 @@ def economy_comparison_uk(job_id: str, traceparent: str | None = None) -> None:
     import logfire
     from sqlmodel import Session, create_engine
 
-    ctx = configure_logfire("policyengine-modal-uk", traceparent)
+    configure_logfire("policyengine-modal-uk", traceparent)
 
-    with logfire.span("economy_comparison_uk", job_id=job_id, _context=ctx):
+    with logfire.span("economy_comparison_uk", job_id=job_id):
         logfire.info("Starting UK economy comparison", job_id=job_id)
 
         database_url = get_database_url()
@@ -888,9 +887,9 @@ def economy_comparison_us(job_id: str, traceparent: str | None = None) -> None:
     import logfire
     from sqlmodel import Session, create_engine
 
-    ctx = configure_logfire("policyengine-modal-us", traceparent)
+    configure_logfire("policyengine-modal-us", traceparent)
 
-    with logfire.span("economy_comparison_us", job_id=job_id, _context=ctx):
+    with logfire.span("economy_comparison_us", job_id=job_id):
         logfire.info("Starting US economy comparison", job_id=job_id)
 
         database_url = get_database_url()
