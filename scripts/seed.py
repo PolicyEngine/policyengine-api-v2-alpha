@@ -1,5 +1,6 @@
 """Seed database with UK and US models, variables, parameters, datasets."""
 
+import argparse
 import json
 import logging
 import math
@@ -101,7 +102,7 @@ def bulk_insert(session, table: str, columns: list[str], rows: list[dict]):
     session.commit()
 
 
-def seed_model(model_version, session) -> TaxBenefitModelVersion:
+def seed_model(model_version, session, lite: bool = False) -> TaxBenefitModelVersion:
     """Seed a tax-benefit model with its variables and parameters."""
 
     with logfire.span(
@@ -205,18 +206,27 @@ def seed_model(model_version, session) -> TaxBenefitModelVersion:
                 f"  [green]✓[/green] Added {len(model_version.variables)} variables"
             )
 
-        # Add parameters (only user-facing ones: those with labels or gov.* params)
+        # Add parameters (only user-facing ones: those with labels)
         # Deduplicate by name - keep first occurrence
+        # In lite mode, exclude US state parameters (gov.states.*)
         seen_names = set()
         parameters_to_add = []
+        skipped_state_params = 0
         for p in model_version.parameters:
-            if p.label is not None and p.name not in seen_names:
-                parameters_to_add.append(p)
-                seen_names.add(p.name)
-        console.print(
-            f"  Filtered to {len(parameters_to_add)} user-facing parameters "
-            f"(from {len(model_version.parameters)} total, deduplicated by name)"
-        )
+            if p.label is None or p.name in seen_names:
+                continue
+            # In lite mode, skip state-level parameters for faster seeding
+            if lite and p.name.startswith("gov.states."):
+                skipped_state_params += 1
+                continue
+            parameters_to_add.append(p)
+            seen_names.add(p.name)
+
+        filter_msg = f"  Filtered to {len(parameters_to_add)} user-facing parameters"
+        filter_msg += f" (from {len(model_version.parameters)} total, deduplicated by name)"
+        if lite and skipped_state_params > 0:
+            filter_msg += f", skipped {skipped_state_params} state params (lite mode)"
+        console.print(filter_msg)
 
         with logfire.span("add_parameters", count=len(parameters_to_add)):
             # Build list of parameter dicts for bulk insert
@@ -580,16 +590,25 @@ def seed_example_policies(session):
 
 def main():
     """Main seed function."""
+    parser = argparse.ArgumentParser(description="Seed PolicyEngine database")
+    parser.add_argument(
+        "--lite",
+        action="store_true",
+        help="Lite mode: skip US state parameters for faster local seeding",
+    )
+    args = parser.parse_args()
+
     with logfire.span("database_seeding"):
-        console.print("[bold green]PolicyEngine database seeding[/bold green]\n")
+        mode_str = " (lite mode)" if args.lite else ""
+        console.print(f"[bold green]PolicyEngine database seeding{mode_str}[/bold green]\n")
 
         with next(get_quiet_session()) as session:
             # Seed UK model
-            uk_version = seed_model(uk_latest, session)
+            uk_version = seed_model(uk_latest, session, lite=args.lite)
             console.print(f"[green]✓[/green] UK model seeded: {uk_version.id}\n")
 
             # Seed US model
-            us_version = seed_model(us_latest, session)
+            us_version = seed_model(us_latest, session, lite=args.lite)
             console.print(f"[green]✓[/green] US model seeded: {us_version.id}\n")
 
             # Seed datasets
