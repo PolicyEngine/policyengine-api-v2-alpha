@@ -1,4 +1,4 @@
-.PHONY: install dev format lint test integration-test clean seed up down logs start-supabase stop-supabase reset rebuild create-state-bucket deploy-local init db-reset-prod modal-deploy modal-serve docs
+.PHONY: install dev format lint test integration-test clean seed seed-full up down logs start-supabase stop-supabase rebuild create-state-bucket deploy-local init db-reset-local db-reseed-local db-reset-prod db-reseed-prod modal-deploy modal-serve docs
 
 # AWS Configuration
 AWS_REGION ?= us-east-1
@@ -25,8 +25,8 @@ integration-test:
 	@supabase start || true
 	@echo "2. Initialising database..."
 	@echo "yes" | uv run python scripts/init.py
-	@echo "3. Running seed script..."
-	@uv run python scripts/seed.py
+	@echo "3. Running seed script (lite mode)..."
+	@uv run python scripts/seed.py --lite
 	@echo "4. Running integration tests..."
 	@pytest tests/test_integration.py -v --tb=short
 	@echo "✓ Integration tests complete!"
@@ -40,9 +40,18 @@ clean:
 	find . -type f -name "*.pyc" -delete
 	find . -type d -name "*.egg-info" -exec rm -rf {} + 2>/dev/null || true
 
-reset:
-	@echo "Resetting Supabase database..."
-	supabase db reset
+db-reset-local:
+	@echo "Resetting and reseeding LOCAL database..."
+	@echo "1. Initialising database (drops and recreates tables)..."
+	@echo "yes" | uv run python scripts/init.py
+	@echo "2. Seeding data (lite mode)..."
+	@uv run python scripts/seed.py --lite
+	@echo "✓ Local database reset and seeded!"
+
+db-reseed-local:
+	@echo "Reseeding LOCAL database (lite mode, keeps existing tables)..."
+	@uv run python scripts/seed.py --lite
+	@echo "✓ Local database reseeded!"
 
 rebuild:
 	@echo "Rebuilding Docker containers..."
@@ -52,7 +61,11 @@ rebuild:
 	@echo "✓ Rebuild complete!"
 
 seed:
-	@echo "Seeding database with UK and US models..."
+	@echo "Seeding database with UK and US models (lite mode)..."
+	uv run python scripts/seed.py --lite
+
+seed-full:
+	@echo "Seeding database with UK and US models (full)..."
 	uv run python scripts/seed.py
 
 start-supabase:
@@ -107,6 +120,22 @@ db-reset-prod:
 		echo "Resetting production database..."; \
 		set -a && . .env.prod && set +a && \
 		echo "yes" | uv run python scripts/init.py && \
+		uv run python scripts/seed.py; \
+	else \
+		echo "Aborted."; \
+		exit 1; \
+	fi
+
+db-reseed-prod:
+	@echo "⚠️  WARNING: This will reseed the PRODUCTION database ⚠️"
+	@echo "This will add/update models, parameters, and datasets."
+	@echo "Existing data will be preserved where possible."
+	@echo ""
+	@read -p "Are you sure you want to continue? Type 'yes' to confirm: " -r CONFIRM; \
+	echo; \
+	if [ "$$CONFIRM" = "yes" ]; then \
+		echo "Reseeding production database..."; \
+		set -a && . .env.prod && set +a && \
 		uv run python scripts/seed.py; \
 	else \
 		echo "Aborted."; \
