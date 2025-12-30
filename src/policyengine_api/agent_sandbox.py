@@ -341,6 +341,7 @@ def _run_agent_impl(
     question: str,
     api_base_url: str = "https://v2.api.policyengine.org",
     call_id: str = "",
+    history: list[dict] | None = None,
     max_turns: int = 30,
 ) -> dict:
     """Core agent implementation."""
@@ -376,7 +377,13 @@ def _run_agent_impl(
     claude_tools.append(SLEEP_TOOL)
 
     client = anthropic.Anthropic()
-    messages = [{"role": "user", "content": question}]
+
+    # Build messages with conversation history
+    messages = []
+    if history:
+        for msg in history:
+            messages.append({"role": msg["role"], "content": msg["content"]})
+    messages.append({"role": "user", "content": question})
 
     final_response = None
     turns = 0

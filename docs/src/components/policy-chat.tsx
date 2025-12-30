@@ -388,6 +388,11 @@ export function PolicyChat() {
       pollIntervalRef.current = null;
     }
 
+    // Build history from completed messages (exclude pending/running ones)
+    const history = messages
+      .filter(m => m.status === "completed" || m.role === "user")
+      .map(m => ({ role: m.role, content: m.content }));
+
     setMessages((prev) => [...prev, { role: "user", content: userMessage }]);
     setMessages((prev) => [
       ...prev,
@@ -398,7 +403,7 @@ export function PolicyChat() {
       const res = await fetch(`${baseUrl}/agent/run`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ question: userMessage }),
+        body: JSON.stringify({ question: userMessage, history }),
       });
 
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -555,7 +560,13 @@ export function PolicyChat() {
                             ? "bg-red-50 border border-red-200"
                             : "bg-white border border-[var(--color-border)]"
                         }`}>
-                          <div className="response-content">
+                          <div
+                            className="response-content font-[family-name:var(--font-inter)]"
+                            style={{
+                              fontSize: '15px',
+                              lineHeight: 1.7,
+                            }}
+                          >
                             <ReactMarkdown remarkPlugins={[remarkBreaks, remarkGfm]}>
                               {message.content}
                             </ReactMarkdown>
@@ -605,7 +616,7 @@ export function PolicyChat() {
         </div>
       </form>
 
-      <style jsx global>{`
+      <style jsx>{`
         @keyframes fadeIn {
           from { opacity: 0; transform: translateY(4px); }
           to { opacity: 1; transform: translateY(0); }
@@ -619,108 +630,6 @@ export function PolicyChat() {
         }
         .animate-slideDown {
           animation: slideDown 0.2s ease-out forwards;
-        }
-
-        /* Response content typography */
-        .response-content {
-          font-family: var(--font-sans);
-          font-size: 14px;
-          line-height: 1.6;
-          color: var(--color-text-primary);
-        }
-        .response-content p {
-          margin: 0.75em 0;
-        }
-        .response-content p:first-child {
-          margin-top: 0;
-        }
-        .response-content p:last-child {
-          margin-bottom: 0;
-        }
-        .response-content h1, .response-content h2, .response-content h3 {
-          font-weight: 600;
-          margin-top: 1.25em;
-          margin-bottom: 0.5em;
-          line-height: 1.3;
-        }
-        .response-content h1 { font-size: 1.25em; }
-        .response-content h2 { font-size: 1.1em; }
-        .response-content h3 { font-size: 1em; }
-        .response-content h1:first-child,
-        .response-content h2:first-child,
-        .response-content h3:first-child {
-          margin-top: 0;
-        }
-        .response-content strong {
-          font-weight: 600;
-        }
-        .response-content ul, .response-content ol {
-          margin: 0.75em 0;
-          padding-left: 1.5em;
-        }
-        .response-content li {
-          margin: 0.25em 0;
-        }
-        .response-content code {
-          font-family: var(--font-mono);
-          font-size: 0.9em;
-          background: var(--color-surface-sunken);
-          padding: 0.15em 0.4em;
-          border-radius: 4px;
-        }
-        .response-content pre {
-          font-family: var(--font-mono);
-          font-size: 12px;
-          background: var(--color-code-bg);
-          color: var(--color-code-text);
-          padding: 1em;
-          border-radius: 8px;
-          overflow-x: auto;
-          margin: 1em 0;
-        }
-        .response-content pre code {
-          background: none;
-          padding: 0;
-          font-size: inherit;
-        }
-        .response-content table {
-          width: 100%;
-          border-collapse: collapse;
-          margin: 1em 0;
-          font-size: 13px;
-        }
-        .response-content th {
-          background: var(--color-surface-sunken);
-          border: 1px solid var(--color-border);
-          padding: 0.5em 0.75em;
-          text-align: left;
-          font-weight: 600;
-        }
-        .response-content td {
-          border: 1px solid var(--color-border);
-          padding: 0.5em 0.75em;
-        }
-        .response-content tr:hover td {
-          background: var(--color-surface-sunken);
-        }
-        .response-content blockquote {
-          border-left: 3px solid var(--color-pe-green);
-          padding-left: 1em;
-          margin: 1em 0;
-          color: var(--color-text-secondary);
-          font-style: italic;
-        }
-        .response-content a {
-          color: var(--color-pe-green);
-          text-decoration: underline;
-        }
-        .response-content a:hover {
-          color: var(--color-pe-green-dark);
-        }
-        .response-content hr {
-          border: none;
-          border-top: 1px solid var(--color-border);
-          margin: 1.5em 0;
         }
       `}</style>
     </div>
