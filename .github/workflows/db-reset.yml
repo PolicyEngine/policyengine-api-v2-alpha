@@ -20,12 +20,11 @@ on:
       - ".github/workflows/db-reset.yml"
 
 jobs:
-  # Validation job - runs on PR to test connectivity
+  # Validation job - runs on PR to test connectivity (no environment = no approval needed)
   validate:
     name: Validate database connectivity
     runs-on: ubuntu-latest
     if: github.event_name == 'pull_request'
-    environment: production
 
     steps:
       - name: Checkout code
@@ -43,11 +42,6 @@ jobs:
       - name: Test database connectivity
         env:
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_POOLER_URL }}
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
-          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
-          LOGFIRE_TOKEN: ${{ secrets.LOGFIRE_TOKEN }}
-          LOGFIRE_ENVIRONMENT: prod
         run: |
           echo "Testing database connectivity..."
           uv run python -c "
