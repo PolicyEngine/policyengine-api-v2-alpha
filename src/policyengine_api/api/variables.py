@@ -9,28 +9,59 @@ from typing import List
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
-from fastapi_cache.decorator import cache
 from sqlmodel import Session, select
 
-from policyengine_api.models import Variable, VariableRead
+from policyengine_api.models import (
+    TaxBenefitModel,
+    TaxBenefitModelVersion,
+    Variable,
+    VariableRead,
+)
 from policyengine_api.services.database import get_session
 
 router = APIRouter(prefix="/variables", tags=["variables"])
 
 
 @router.get("/", response_model=List[VariableRead])
-@cache(expire=3600)  # Cache for 1 hour
 def list_variables(
-    skip: int = 0, limit: int = 100, session: Session = Depends(get_session)
+    skip: int = 0,
+    limit: int = 100,
+    search: str | None = None,
+    tax_benefit_model_name: str | None = None,
+    session: Session = Depends(get_session),
 ):
-    """List available variables with pagination.
+    """List available variables with pagination and search.
 
     Variables are inputs (e.g. employment_income, age) and outputs (e.g. income_tax,
     household_net_income) of tax-benefit calculations. Use variable names in
     household calculation requests.
+
+    Args:
+        search: Filter by variable name, label, or description.
+        tax_benefit_model_name: Filter by country model.
+            Use "policyengine_uk" for UK variables.
+            Use "policyengine_us" for US variables.
     """
+    query = select(Variable)
+
+    # Filter by tax benefit model name (country)
+    if tax_benefit_model_name:
+        query = (
+            query.join(TaxBenefitModelVersion)
+            .join(TaxBenefitModel)
+            .where(TaxBenefitModel.name == tax_benefit_model_name)
+        )
+
+    if search:
+        search_filter = (
+            Variable.name.contains(search)
+            | Variable.label.contains(search)
+            | Variable.description.contains(search)
+        )
+        query = query.where(search_filter)
+
     variables = session.exec(
-        select(Variable).order_by(Variable.name).offset(skip).limit(limit)
+        query.order_by(Variable.name).offset(skip).limit(limit)
     ).all()
     return variables
 

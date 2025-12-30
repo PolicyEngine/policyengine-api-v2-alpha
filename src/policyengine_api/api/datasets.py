@@ -11,24 +11,35 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel import Session, select
 
-from policyengine_api.models import Dataset, DatasetRead
+from policyengine_api.models import Dataset, DatasetRead, TaxBenefitModel
 from policyengine_api.services.database import get_session
 
 router = APIRouter(prefix="/datasets", tags=["datasets"])
 
 
 @router.get("/", response_model=List[DatasetRead])
-def list_datasets(session: Session = Depends(get_session)):
-    """List all available datasets.
+def list_datasets(
+    tax_benefit_model_name: str | None = None,
+    session: Session = Depends(get_session),
+):
+    """List available datasets.
 
     Returns datasets that can be used with the /analysis/economic-impact endpoint.
     Each dataset represents population microdata for a specific country and year.
 
-    USAGE: For UK analysis, look for datasets with names containing "uk" or "frs".
-    For US analysis, look for datasets with names containing "us" or "cps".
-    Use the dataset's id when calling /analysis/economic-impact.
+    Args:
+        tax_benefit_model_name: Filter by country model.
+            Use "policyengine_uk" for UK datasets.
+            Use "policyengine_us" for US datasets.
     """
-    datasets = session.exec(select(Dataset)).all()
+    query = select(Dataset)
+
+    if tax_benefit_model_name:
+        query = query.join(TaxBenefitModel).where(
+            TaxBenefitModel.name == tax_benefit_model_name
+        )
+
+    datasets = session.exec(query).all()
     return datasets
 
 

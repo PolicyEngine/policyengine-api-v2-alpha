@@ -97,7 +97,25 @@ Tests are in `tests/test_agent_policy_questions.py` (integration tests requiring
 - Adding specific parameter name examples to system prompt
 - Telling agent exactly what to search for
 
-### Issue 2: [To be discovered]
+### Issue 2: Duplicate parameters in database
+
+**Problem**: Same parameter name exists with multiple IDs. One has values, one doesn't. Agent picks wrong one first.
+
+**Example**: `gov.hmrc.income_tax.allowances.personal_allowance.amount` has two entries with different IDs.
+
+**Solution needed**: Data cleanup - deduplicate parameters in seed script.
+
+### Issue 3: Variables endpoint lacks search
+
+**Problem**: `/variables/` had no search or country filter. Agent can't discover variable names.
+
+**Solution implemented**: Added `search` and `tax_benefit_model_name` filters to `/variables/`.
+
+### Issue 4: Datasets endpoint lacks country filter
+
+**Problem**: `/datasets/` returned all datasets, mixing UK and US.
+
+**Solution implemented**: Added `tax_benefit_model_name` filter to `/datasets/`.
 
 ## Progress log
 
