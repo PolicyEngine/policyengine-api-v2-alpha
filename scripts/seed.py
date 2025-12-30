@@ -206,10 +206,16 @@ def seed_model(model_version, session) -> TaxBenefitModelVersion:
             )
 
         # Add parameters (only user-facing ones: those with labels or gov.* params)
-        parameters_to_add = [p for p in model_version.parameters if p.label is not None]
+        # Deduplicate by name - keep first occurrence
+        seen_names = set()
+        parameters_to_add = []
+        for p in model_version.parameters:
+            if p.label is not None and p.name not in seen_names:
+                parameters_to_add.append(p)
+                seen_names.add(p.name)
         console.print(
             f"  Filtered to {len(parameters_to_add)} user-facing parameters "
-            f"(from {len(model_version.parameters)} total)"
+            f"(from {len(model_version.parameters)} total, deduplicated by name)"
         )
 
         with logfire.span("add_parameters", count=len(parameters_to_add)):
