@@ -117,7 +117,17 @@ Tests are in `tests/test_agent_policy_questions.py` (integration tests requiring
 
 **Solution implemented**: Added `tax_benefit_model_name` filter to `/datasets/`.
 
+## Baseline measurements (production API, before improvements)
+
+| Question type | Turns | Target | Notes |
+|---------------|-------|--------|-------|
+| Parameter lookup (UK personal allowance) | 9-10 | 3-4 | No country filter, mixed UK/US results |
+| Household calculation (UK £50k income) | 6 | 5-6 | Efficient, includes 2 polling turns |
+
 ## Progress log
 
 - 2024-12-30: Initial setup, created test framework and first batch of questions
 - 2024-12-30: Tested personal allowance lookup - 9 turns (target: 3-4). Root cause: no country filter on parameter search
+- 2024-12-30: Added `tax_benefit_model_name` filter to `/parameters/`, `/variables/`, `/datasets/`
+- 2024-12-30: Tested household calc - 6 turns (acceptable). Async polling is the overhead
+- 2024-12-30: Discovered duplicate parameters in DB causing extra turns
