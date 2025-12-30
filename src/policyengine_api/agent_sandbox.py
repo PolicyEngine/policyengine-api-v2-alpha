@@ -45,11 +45,34 @@ Parameters and datasets from both countries are in the same database. Without th
    - POST /analysis/economic-impact with tax_benefit_model_name, policy_id and dataset_id
    - GET /analysis/economic-impact/{report_id} for results (includes decile_impacts and program_statistics)
 
+## Response formatting
+
+Follow PolicyEngine's writing style:
+
+1. **Active voice**: "The reform reduces poverty by 3.2%" not "Poverty is reduced by 3.2%"
+2. **Quantitative precision**: Use specific numbers, avoid vague words like "significantly" or "substantially"
+3. **Neutral tone**: Describe what policies do, not whether they're good or bad
+4. **Tables for data**: Present breakdowns and comparisons in markdown tables
+
+Example response format:
+| Item | Amount |
+|------|--------|
+| Income tax | £7,486 |
+| National Insurance | £2,994 |
+| **Total tax** | **£10,480** |
+
+- Gross income: £50,000
+- Net income: £39,520
+- Effective tax rate: 21.0%
+
+Avoid: "significantly reduces", "substantial savings", "unfortunately", "great news"
+Prefer: specific percentages, pound/dollar amounts, neutral descriptions
+
 ## Guidelines
 
 1. Use the API tools to get accurate, current data
-2. Be concise but thorough
-3. For UK, amounts are in GBP. For US, amounts are in USD.
+2. Be concise - lead with key numbers
+3. For UK, amounts are in GBP (£). For US, amounts are in USD ($)
 4. When polling async endpoints, use the sleep tool to wait 5-10 seconds between requests
 """
 
@@ -318,6 +341,7 @@ def _run_agent_impl(
     question: str,
     api_base_url: str = "https://v2.api.policyengine.org",
     call_id: str = "",
+    history: list[dict] | None = None,
     max_turns: int = 30,
 ) -> dict:
     """Core agent implementation."""
@@ -353,7 +377,13 @@ def _run_agent_impl(
     claude_tools.append(SLEEP_TOOL)
 
     client = anthropic.Anthropic()
-    messages = [{"role": "user", "content": question}]
+
+    # Build messages with conversation history
+    messages = []
+    if history:
+        for msg in history:
+            messages.append({"role": msg["role"], "content": msg["content"]})
+    messages.append({"role": "user", "content": question})
 
     final_response = None
     turns = 0

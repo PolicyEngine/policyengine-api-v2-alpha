@@ -54,11 +54,10 @@ def list_variables(
 
     if search:
         # Case-insensitive search using ILIKE
+        # Note: Variables don't have a label field, only name and description
         search_pattern = f"%{search}%"
-        search_filter = (
-            Variable.name.ilike(search_pattern)
-            | Variable.label.ilike(search_pattern)
-            | Variable.description.ilike(search_pattern)
+        search_filter = Variable.name.ilike(search_pattern) | Variable.description.ilike(
+            search_pattern
         )
         query = query.where(search_filter)
 

@@ -363,10 +363,11 @@ def seed_model(model_version, session, lite: bool = False) -> TaxBenefitModelVer
         return db_version
 
 
-def seed_datasets(session):
+def seed_datasets(session, lite: bool = False):
     """Seed datasets and upload to S3."""
     with logfire.span("seed_datasets"):
-        console.print("[bold blue]Seeding datasets...")
+        mode_str = " (lite mode - 2026 only)" if lite else ""
+        console.print(f"[bold blue]Seeding datasets{mode_str}...")
 
         # Get UK and US models
         uk_model = session.exec(
@@ -384,7 +385,16 @@ def seed_datasets(session):
 
         # UK datasets
         console.print("  Creating UK datasets...")
-        uk_datasets = ensure_uk_datasets()
+        data_folder = str(Path(__file__).parent.parent / "data")
+        uk_datasets = ensure_uk_datasets(data_folder=data_folder)
+
+        # In lite mode, only upload FRS 2026
+        if lite:
+            uk_datasets = {
+                k: v for k, v in uk_datasets.items() if v.year == 2026 and "frs" in k
+            }
+            console.print(f"    Lite mode: filtered to {len(uk_datasets)} dataset(s)")
+
         uk_created = 0
         uk_skipped = 0
 
@@ -430,7 +440,15 @@ def seed_datasets(session):
 
         # US datasets
         console.print("  Creating US datasets...")
-        us_datasets = ensure_us_datasets()
+        us_datasets = ensure_us_datasets(data_folder=data_folder)
+
+        # In lite mode, only upload CPS 2026
+        if lite:
+            us_datasets = {
+                k: v for k, v in us_datasets.items() if v.year == 2026 and "cps" in k
+            }
+            console.print(f"    Lite mode: filtered to {len(us_datasets)} dataset(s)")
+
         us_created = 0
         us_skipped = 0
 
@@ -602,7 +620,7 @@ def main():
     parser.add_argument(
         "--lite",
         action="store_true",
-        help="Lite mode: skip US state parameters for faster local seeding",
+        help="Lite mode: skip US state parameters, only seed FRS 2026 and CPS 2026 datasets",
     )
     args = parser.parse_args()
 
@@ -619,11 +637,8 @@ def main():
             us_version = seed_model(us_latest, session, lite=args.lite)
             console.print(f"[green]✓[/green] US model seeded: {us_version.id}\n")
 
-            # Seed datasets (skip in lite mode - requires cached data)
-            if not args.lite:
-                seed_datasets(session)
-            else:
-                console.print("[yellow]Skipping datasets (lite mode)[/yellow]\n")
+            # Seed datasets
+            seed_datasets(session, lite=args.lite)
 
             # Seed example policies
             seed_example_policies(session)

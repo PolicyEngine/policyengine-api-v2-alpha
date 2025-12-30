@@ -19,10 +19,18 @@ from policyengine_api.config import settings
 router = APIRouter(prefix="/agent", tags=["agent"])
 
 
+class ConversationMessage(BaseModel):
+    """A message in the conversation history."""
+
+    role: str  # "user" or "assistant"
+    content: str
+
+
 class RunRequest(BaseModel):
     """Request to run the agent."""
 
     question: str
+    history: list[ConversationMessage] = []
 
 
 class RunResponse(BaseModel):
@@ -67,12 +75,18 @@ _calls: dict[str, dict] = {}
 _logs: dict[str, list[LogEntry]] = {}
 
 
-def _run_local_agent(call_id: str, question: str, api_base_url: str) -> None:
+def _run_local_agent(
+    call_id: str,
+    question: str,
+    api_base_url: str,
+    history: list[ConversationMessage] | None = None,
+) -> None:
     """Run agent locally in a background thread."""
     from policyengine_api.agent_sandbox import _run_agent_impl
 
     try:
-        result = _run_agent_impl(question, api_base_url, call_id)
+        history_dicts = [{"role": m.role, "content": m.content} for m in (history or [])]
+        result = _run_agent_impl(question, api_base_url, call_id, history_dicts)
         _calls[call_id]["status"] = result.get("status", "completed")
         _calls[call_id]["result"] = result
     except Exception as e:
@@ -139,7 +153,7 @@ async def run_agent(request: RunRequest) -> RunResponse:
         # Run in background using asyncio
         loop = asyncio.get_event_loop()
         loop.run_in_executor(
-            None, _run_local_agent, call_id, request.question, api_base_url
+            None, _run_local_agent, call_id, request.question, api_base_url, request.history
         )
 
     return RunResponse(call_id=call_id, status="running")
