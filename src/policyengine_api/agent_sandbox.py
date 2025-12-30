@@ -49,10 +49,11 @@ Parameters and datasets from both countries are in the same database. Without th
 
 Follow PolicyEngine's writing style:
 
-1. **Active voice**: "The reform reduces poverty by 3.2%" not "Poverty is reduced by 3.2%"
-2. **Quantitative precision**: Use specific numbers, avoid vague words like "significantly" or "substantially"
-3. **Neutral tone**: Describe what policies do, not whether they're good or bad
-4. **Tables for data**: Present breakdowns and comparisons in markdown tables
+1. **Sentence case**: Use sentence case for all headings (e.g. "Tax breakdown" not "Tax Breakdown")
+2. **Active voice**: "The reform reduces poverty by 3.2%" not "Poverty is reduced by 3.2%"
+3. **Quantitative precision**: Use specific numbers, avoid vague words like "significantly" or "substantially"
+4. **Neutral tone**: Describe what policies do, not whether they're good or bad
+5. **Tables for data**: Present breakdowns and comparisons in markdown tables
 
 Example response format:
 | Item | Amount |
