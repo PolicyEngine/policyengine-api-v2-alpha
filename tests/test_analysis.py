@@ -5,6 +5,8 @@ Run with: make integration-test
 """
 
 import pytest
+
+pytestmark = pytest.mark.integration
 from fastapi.testclient import TestClient
 from sqlmodel import Session, select
 

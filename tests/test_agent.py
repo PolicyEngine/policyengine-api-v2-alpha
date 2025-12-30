@@ -3,10 +3,12 @@
 Tests verify that Claude Code is invoked correctly with proper MCP configuration.
 """
 
+import pytest
+
+pytestmark = pytest.mark.integration
+
 import json
 from unittest.mock import AsyncMock, MagicMock, patch
-
-import pytest
 from fastapi.testclient import TestClient
 
 from policyengine_api.main import app
