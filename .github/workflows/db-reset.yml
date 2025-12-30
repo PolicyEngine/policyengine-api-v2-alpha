@@ -1,0 +1,85 @@
+name: Reset production database
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "Seeding mode"
+        required: true
+        default: "lite"
+        type: choice
+        options:
+          - lite
+          - full
+      confirm:
+        description: "Type 'reset-prod' to confirm"
+        required: true
+        type: string
+
+jobs:
+  reset-db:
+    name: Reset and reseed database
+    runs-on: ubuntu-latest
+    environment: production
+
+    steps:
+      - name: Verify confirmation
+        if: ${{ github.event.inputs.confirm != 'reset-prod' }}
+        run: |
+          echo "❌ Confirmation failed. You must type 'reset-prod' to proceed."
+          exit 1
+
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Setup Python
+        run: uv python install 3.13
+
+      - name: Sync dependencies
+        run: uv sync
+
+      - name: Reset database (init)
+        env:
+          DATABASE_URL: ${{ secrets.SUPABASE_DB_URL }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+          LOGFIRE_TOKEN: ${{ secrets.LOGFIRE_TOKEN }}
+          LOGFIRE_ENVIRONMENT: prod
+        run: |
+          echo "Resetting database tables..."
+          echo "yes" | uv run python scripts/init.py
+
+      - name: Seed database (lite)
+        if: ${{ github.event.inputs.mode == 'lite' }}
+        env:
+          DATABASE_URL: ${{ secrets.SUPABASE_DB_URL }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+          STORAGE_BUCKET: ${{ vars.STORAGE_BUCKET }}
+          LOGFIRE_TOKEN: ${{ secrets.LOGFIRE_TOKEN }}
+          LOGFIRE_ENVIRONMENT: prod
+        run: |
+          echo "Seeding database (lite mode - no datasets, no state params)..."
+          uv run python scripts/seed.py --lite
+
+      - name: Seed database (full)
+        if: ${{ github.event.inputs.mode == 'full' }}
+        env:
+          DATABASE_URL: ${{ secrets.SUPABASE_DB_URL }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+          STORAGE_BUCKET: ${{ vars.STORAGE_BUCKET }}
+          LOGFIRE_TOKEN: ${{ secrets.LOGFIRE_TOKEN }}
+          LOGFIRE_ENVIRONMENT: prod
+        run: |
+          echo "Seeding database (full mode - includes datasets)..."
+          uv run python scripts/seed.py
+
+      - name: Summary
+        run: |
+          echo "✅ Database reset complete!"
+          echo "Mode: ${{ github.event.inputs.mode }}"
+          echo "Triggered by: ${{ github.actor }}"
