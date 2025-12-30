@@ -117,6 +117,22 @@ Tests are in `tests/test_agent_policy_questions.py` (integration tests requiring
 
 **Solution implemented**: Added `tax_benefit_model_name` filter to `/datasets/`.
 
+### Issue 5: Parameter values lack "current" filter
+
+**Problem**: Agent had to parse through all historical values to find current one.
+
+**Solution implemented**: Added `current=true` filter to `/parameter-values/` endpoint.
+
+## API improvements summary
+
+| Endpoint | Improvement |
+|----------|-------------|
+| `/parameters/` | Added `tax_benefit_model_name` filter |
+| `/variables/` | Added `search` and `tax_benefit_model_name` filters |
+| `/datasets/` | Added `tax_benefit_model_name` filter |
+| `/parameter-values/` | Added `current` filter |
+| Seed script | Deduplicate parameters by name |
+
 ## Baseline measurements (production API, before improvements)
 
 | Question type | Turns | Target | Notes |
