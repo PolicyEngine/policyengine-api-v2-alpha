@@ -157,6 +157,7 @@ def apply_rls_policies(engine):
         "parameters",
         "parameter_values",
         "users",
+        "household_jobs",
     ]
 
     # Read-only tables (public can read, only service role can write)
@@ -176,6 +177,7 @@ def apply_rls_policies(engine):
         "policies",
         "dynamics",
         "reports",
+        "household_jobs",
     ]
 
     # Read-only results tables

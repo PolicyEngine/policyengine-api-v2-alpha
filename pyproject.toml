@@ -53,6 +53,10 @@ ignore = ["E501"]  # Tool descriptions need to be long
 testpaths = ["tests"]
 pythonpath = ["."]
 asyncio_mode = "auto"
+markers = [
+    "integration: tests that require external services (API keys, databases)",
+    "slow: tests that take a long time to run",
+]
 
 [dependency-groups]
 dev = [

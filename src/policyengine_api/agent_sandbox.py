@@ -2,6 +2,7 @@
 
 import json
 import re
+import time
 from typing import Any, Callable
 
 import anthropic
@@ -34,7 +35,26 @@ When answering questions:
 3. Be concise but thorough
 4. For UK, amounts are in GBP. For US, amounts are in USD.
 5. Poll async endpoints until status is "completed"
+
+IMPORTANT: When polling async endpoints, ALWAYS use the sleep tool to wait 5-10 seconds between requests.
+Do not poll in a tight loop - this wastes resources and may hit rate limits.
 """
+
+# Sleep tool for polling delays
+SLEEP_TOOL = {
+    "name": "sleep",
+    "description": "Wait for a specified number of seconds. Use this between polling requests to avoid hammering the API.",
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "seconds": {
+                "type": "number",
+                "description": "Number of seconds to sleep (1-60)",
+            }
+        },
+        "required": ["seconds"],
+    },
+}
 
 
 def fetch_openapi_spec(api_base_url: str) -> dict:
@@ -285,7 +305,7 @@ def _run_agent_impl(
     question: str,
     api_base_url: str = "https://v2.api.policyengine.org",
     call_id: str = "",
-    max_turns: int = 15,
+    max_turns: int = 30,
 ) -> dict:
     """Core agent implementation."""
 
@@ -316,6 +336,8 @@ def _run_agent_impl(
     claude_tools = [
         {k: v for k, v in t.items() if k != "_meta"} for t in tools
     ]
+    # Add the sleep tool
+    claude_tools.append(SLEEP_TOOL)
 
     client = anthropic.Anthropic()
     messages = [{"role": "user", "content": question}]
@@ -350,11 +372,18 @@ def _run_agent_impl(
                 assistant_content.append(block)
 
                 # Execute tool
-                tool = tool_lookup.get(block.name)
-                if tool:
-                    result = execute_api_tool(tool, block.input, api_base_url, log)
+                if block.name == "sleep":
+                    # Handle sleep tool specially
+                    seconds = min(max(block.input.get("seconds", 5), 1), 60)
+                    log(f"[SLEEP] Waiting {seconds} seconds...")
+                    time.sleep(seconds)
+                    result = f"Slept for {seconds} seconds"
                 else:
-                    result = f"Unknown tool: {block.name}"
+                    tool = tool_lookup.get(block.name)
+                    if tool:
+                        result = execute_api_tool(tool, block.input, api_base_url, log)
+                    else:
+                        result = f"Unknown tool: {block.name}"
 
                 log(f"[TOOL_RESULT] {result[:300]}")
 
@@ -392,12 +421,12 @@ def _run_agent_impl(
     return result
 
 
-@app.function(image=image, secrets=[anthropic_secret], timeout=300)
+@app.function(image=image, secrets=[anthropic_secret], timeout=600)
 def run_agent(
     question: str,
     api_base_url: str = "https://v2.api.policyengine.org",
     call_id: str = "",
-    max_turns: int = 15,
+    max_turns: int = 30,
 ) -> dict:
     """Run agentic loop to answer a policy question (Modal wrapper)."""
     return _run_agent_impl(question, api_base_url, call_id, max_turns)

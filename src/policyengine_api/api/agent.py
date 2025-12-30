@@ -3,14 +3,14 @@
 This endpoint lets users ask natural language questions about tax/benefit policy
 and get AI-generated reports using Claude Code connected to the PolicyEngine MCP server.
 
-The agent runs in a Modal sandbox and logs are fetched via Modal SDK.
+The agent runs in a Modal sandbox (production) or locally (development).
 """
 
+import asyncio
 import uuid
 from datetime import datetime
 
 import logfire
-import modal
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
@@ -67,6 +67,19 @@ _calls: dict[str, dict] = {}
 _logs: dict[str, list[LogEntry]] = {}
 
 
+def _run_local_agent(call_id: str, question: str, api_base_url: str) -> None:
+    """Run agent locally in a background thread."""
+    from policyengine_api.agent_sandbox import _run_agent_impl
+
+    try:
+        result = _run_agent_impl(question, api_base_url, call_id)
+        _calls[call_id]["status"] = result.get("status", "completed")
+        _calls[call_id]["result"] = result
+    except Exception as e:
+        _calls[call_id]["status"] = "failed"
+        _calls[call_id]["result"] = {"status": "failed", "error": str(e)}
+
+
 @router.post("/run", response_model=RunResponse)
 async def run_agent(request: RunRequest) -> RunResponse:
     """Start the agent to answer a policy question.
@@ -90,30 +103,44 @@ async def run_agent(request: RunRequest) -> RunResponse:
     logfire.info("agent_run", question=request.question[:100])
 
     api_base_url = settings.policyengine_api_url
-
-    # Look up the deployed function
-    run_fn = modal.Function.from_name("policyengine-sandbox", "run_agent")
-
-    # Generate a call_id before spawning so we can pass it to the function
     call_id = f"fc-{uuid.uuid4().hex[:24]}"
 
     # Initialize logs storage
     _logs[call_id] = []
 
-    # Spawn the function (non-blocking) - pass call_id so it can POST logs back
-    call = run_fn.spawn(request.question, api_base_url, call_id)
+    if settings.agent_use_modal:
+        # Production: use Modal
+        import modal
 
-    # Store call info
-    _calls[call_id] = {
-        "call": call,
-        "modal_call_id": call.object_id,
-        "question": request.question,
-        "started_at": datetime.utcnow().isoformat(),
-        "status": "running",
-        "result": None,
-    }
+        run_fn = modal.Function.from_name("policyengine-sandbox", "run_agent")
+        call = run_fn.spawn(request.question, api_base_url, call_id)
 
-    logfire.info("agent_spawned", call_id=call_id, modal_call_id=call.object_id)
+        _calls[call_id] = {
+            "call": call,
+            "modal_call_id": call.object_id,
+            "question": request.question,
+            "started_at": datetime.utcnow().isoformat(),
+            "status": "running",
+            "result": None,
+        }
+        logfire.info("agent_spawned", call_id=call_id, modal_call_id=call.object_id)
+    else:
+        # Local development: run in background thread
+        _calls[call_id] = {
+            "call": None,
+            "modal_call_id": None,
+            "question": request.question,
+            "started_at": datetime.utcnow().isoformat(),
+            "status": "running",
+            "result": None,
+        }
+        logfire.info("agent_spawned_local", call_id=call_id)
+
+        # Run in background using asyncio
+        loop = asyncio.get_event_loop()
+        loop.run_in_executor(
+            None, _run_local_agent, call_id, request.question, api_base_url
+        )
 
     return RunResponse(call_id=call_id, status="running")
 
