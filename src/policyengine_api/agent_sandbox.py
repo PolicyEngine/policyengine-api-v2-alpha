@@ -390,7 +390,7 @@ def _run_agent_impl(
         return {}
 
     def log(msg: str) -> None:
-        logfire.info(msg, call_id=call_id)
+        logfire.info("agent_log", message=msg, call_id=call_id)
         print(msg)
         if call_id:
             try:
