@@ -560,14 +560,7 @@ export function PolicyChat() {
                             ? "bg-red-50 border border-red-200"
                             : "bg-white border border-[var(--color-border)]"
                         }`}>
-                          <div
-                            className="response-content"
-                            style={{
-                              fontFamily: '"Instrument Serif", Georgia, serif',
-                              fontSize: '17px',
-                              lineHeight: 1.75,
-                            }}
-                          >
+                          <div className="response-content">
                             <ReactMarkdown remarkPlugins={[remarkBreaks, remarkGfm]}>
                               {message.content}
                             </ReactMarkdown>

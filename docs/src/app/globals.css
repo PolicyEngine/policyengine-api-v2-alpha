@@ -103,9 +103,9 @@ code {
 
 /* Agent response content */
 .response-content {
-  font-family: "Instrument Serif", Georgia, "Times New Roman", serif;
-  font-size: 17px;
-  line-height: 1.75;
+  font-family: Georgia, "Times New Roman", Times, serif;
+  font-size: 16px;
+  line-height: 1.7;
   color: #1e293b;
   -webkit-font-smoothing: antialiased;
 }
@@ -121,10 +121,9 @@ code {
 .response-content h1,
 .response-content h2,
 .response-content h3 {
-  font-family: var(--font-inter), -apple-system, sans-serif;
   font-weight: 600;
   color: #0f172a;
-  margin-top: 1.5em;
+  margin-top: 1.25em;
   margin-bottom: 0.5em;
   line-height: 1.3;
 }
