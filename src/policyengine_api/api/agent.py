@@ -12,9 +12,17 @@ from datetime import datetime
 
 import logfire
 from fastapi import APIRouter, HTTPException
+from opentelemetry.trace.propagation.tracecontext import TraceContextTextMapPropagator
 from pydantic import BaseModel
 
 from policyengine_api.config import settings
+
+
+def get_traceparent() -> str | None:
+    """Get the current W3C traceparent header for distributed tracing."""
+    carrier: dict[str, str] = {}
+    TraceContextTextMapPropagator().inject(carrier)
+    return carrier.get("traceparent")
 
 router = APIRouter(prefix="/agent", tags=["agent"])
 
@@ -126,9 +134,12 @@ async def run_agent(request: RunRequest) -> RunResponse:
         # Production: use Modal
         import modal
 
+        traceparent = get_traceparent()
         run_fn = modal.Function.from_name("policyengine-sandbox", "run_agent")
         history_dicts = [{"role": m.role, "content": m.content} for m in request.history]
-        call = run_fn.spawn(request.question, api_base_url, call_id, history_dicts)
+        call = run_fn.spawn(
+            request.question, api_base_url, call_id, history_dicts, traceparent=traceparent
+        )
 
         _calls[call_id] = {
             "call": call,
@@ -137,6 +148,7 @@ async def run_agent(request: RunRequest) -> RunResponse:
             "started_at": datetime.utcnow().isoformat(),
             "status": "running",
             "result": None,
+            "trace_id": traceparent,  # Store for linking
         }
         logfire.info("agent_spawned", call_id=call_id, modal_call_id=call.object_id)
     else:

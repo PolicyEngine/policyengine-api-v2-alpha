@@ -9,6 +9,7 @@ from uuid import UUID
 
 import logfire
 from fastapi import APIRouter, Depends, HTTPException
+from opentelemetry.trace.propagation.tracecontext import TraceContextTextMapPropagator
 from pydantic import BaseModel, Field
 from sqlmodel import Session
 
@@ -19,6 +20,13 @@ from policyengine_api.models import (
     Policy,
 )
 from policyengine_api.services.database import get_session
+
+
+def get_traceparent() -> str | None:
+    """Get the current W3C traceparent header for distributed tracing."""
+    carrier: dict[str, str] = {}
+    TraceContextTextMapPropagator().inject(carrier)
+    return carrier.get("traceparent")
 
 router = APIRouter(prefix="/household", tags=["household"])
 
@@ -400,6 +408,8 @@ def _trigger_modal_household(
         # Use Modal
         import modal
 
+        traceparent = get_traceparent()
+
         if request.tax_benefit_model_name == "policyengine_uk":
             fn = modal.Function.from_name("policyengine", "simulate_household_uk")
             fn.spawn(
@@ -410,6 +420,7 @@ def _trigger_modal_household(
                 year=request.year or 2026,
                 policy_data=policy_data,
                 dynamic_data=dynamic_data,
+                traceparent=traceparent,
             )
         else:
             fn = modal.Function.from_name("policyengine", "simulate_household_us")
@@ -424,6 +435,7 @@ def _trigger_modal_household(
                 year=request.year or 2024,
                 policy_data=policy_data,
                 dynamic_data=dynamic_data,
+                traceparent=traceparent,
             )
 
 
