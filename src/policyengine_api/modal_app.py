@@ -110,7 +110,7 @@ def download_dataset(
     return str(cache_path)
 
 
-@app.function(image=uk_image, secrets=[secrets], memory=4096, timeout=600)
+@app.function(image=uk_image, secrets=[secrets], memory=4096, cpu=4, timeout=600)
 def simulate_household_uk(
     job_id: str,
     people: list[dict],
@@ -232,7 +232,7 @@ def simulate_household_uk(
         raise
 
 
-@app.function(image=us_image, secrets=[secrets], memory=4096, timeout=600)
+@app.function(image=us_image, secrets=[secrets], memory=4096, cpu=4, timeout=600)
 def simulate_household_us(
     job_id: str,
     people: list[dict],
@@ -363,7 +363,7 @@ def simulate_household_us(
         raise
 
 
-@app.function(image=uk_image, secrets=[secrets], memory=8192, timeout=1800)
+@app.function(image=uk_image, secrets=[secrets], memory=8192, cpu=8, timeout=1800)
 def simulate_economy_uk(simulation_id: str) -> None:
     """Run a single UK economy simulation and write results to database."""
     import os
@@ -483,7 +483,7 @@ def simulate_economy_uk(simulation_id: str) -> None:
         raise
 
 
-@app.function(image=us_image, secrets=[secrets], memory=8192, timeout=1800)
+@app.function(image=us_image, secrets=[secrets], memory=8192, cpu=8, timeout=1800)
 def simulate_economy_us(simulation_id: str) -> None:
     """Run a single US economy simulation and write results to database."""
     import os
@@ -603,7 +603,7 @@ def simulate_economy_us(simulation_id: str) -> None:
         raise
 
 
-@app.function(image=uk_image, secrets=[secrets], memory=8192, timeout=1800)
+@app.function(image=uk_image, secrets=[secrets], memory=8192, cpu=8, timeout=1800)
 def economy_comparison_uk(job_id: str) -> None:
     """Run UK economy comparison analysis (decile impacts, budget impact, etc)."""
     import os
@@ -835,7 +835,7 @@ def economy_comparison_uk(job_id: str) -> None:
         raise
 
 
-@app.function(image=us_image, secrets=[secrets], memory=8192, timeout=1800)
+@app.function(image=us_image, secrets=[secrets], memory=8192, cpu=8, timeout=1800)
 def economy_comparison_us(job_id: str) -> None:
     """Run US economy comparison analysis (decile impacts, budget impact, etc)."""
     import os
