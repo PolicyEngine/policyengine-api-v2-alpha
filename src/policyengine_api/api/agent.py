@@ -127,7 +127,8 @@ async def run_agent(request: RunRequest) -> RunResponse:
         import modal
 
         run_fn = modal.Function.from_name("policyengine-sandbox", "run_agent")
-        call = run_fn.spawn(request.question, api_base_url, call_id)
+        history_dicts = [{"role": m.role, "content": m.content} for m in request.history]
+        call = run_fn.spawn(request.question, api_base_url, call_id, history_dicts)
 
         _calls[call_id] = {
             "call": call,

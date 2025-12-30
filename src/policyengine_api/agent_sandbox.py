@@ -3,7 +3,7 @@
 import json
 import re
 import time
-from typing import Any, Callable
+from typing import Callable
 
 import anthropic
 import modal
@@ -469,10 +469,17 @@ def run_agent(
     question: str,
     api_base_url: str = "https://v2.api.policyengine.org",
     call_id: str = "",
+    history: list[dict] | None = None,
     max_turns: int = 30,
 ) -> dict:
     """Run agentic loop to answer a policy question (Modal wrapper)."""
-    return _run_agent_impl(question, api_base_url, call_id, max_turns)
+    return _run_agent_impl(
+        question,
+        api_base_url,
+        call_id,
+        history=history,
+        max_turns=max_turns,
+    )
 
 
 if __name__ == "__main__":

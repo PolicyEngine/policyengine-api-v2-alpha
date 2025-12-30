@@ -17,7 +17,8 @@ from policyengine_api.services.database import init_db
 console = Console()
 
 # Configure Logfire (only if token is set)
-if settings.logfire_token:
+_logfire_enabled = bool(settings.logfire_token)
+if _logfire_enabled:
 
     def _scrubbing_callback(m: logfire.ScrubMatch):
         """Allow 'session' through for Claude stream debugging."""
@@ -67,8 +68,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Instrument FastAPI with Logfire
-logfire.instrument_fastapi(app)
+# Instrument FastAPI with Logfire (only if configured)
+if _logfire_enabled:
+    logfire.instrument_fastapi(app)
 
 app.include_router(api_router)
 
