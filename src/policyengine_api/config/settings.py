@@ -31,6 +31,7 @@ class Settings(BaseSettings):
 
     # Seeding
     limit_seed_parameters: bool = False
+    hugging_face_token: str = ""
 
     # Agent
     anthropic_api_key: str = ""
