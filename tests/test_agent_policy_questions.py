@@ -13,8 +13,10 @@ pytestmark = pytest.mark.integration
 
 from policyengine_api.agent_sandbox import _run_agent_impl
 
-# Use production API for now - tests are read-only
-API_BASE = "https://v2.api.policyengine.org"
+import os
+
+# Use local API by default, override with POLICYENGINE_API_URL env var
+API_BASE = os.environ.get("POLICYENGINE_API_URL", "http://localhost:8000")
 
 
 class TestParameterLookup:
