@@ -529,7 +529,7 @@ def run_agent(
     configure_logfire(traceparent)
 
     with logfire.span("run_agent", call_id=call_id, question=question[:200]):
-        return _run_agent_impl(
+        result = _run_agent_impl(
             question,
             api_base_url,
             call_id,
@@ -537,6 +537,10 @@ def run_agent(
             max_turns=max_turns,
             traceparent=traceparent,
         )
+
+    # Ensure logfire sends all spans before Modal container exits
+    logfire.force_flush()
+    return result
 
 
 if __name__ == "__main__":
