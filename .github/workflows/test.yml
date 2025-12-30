@@ -27,7 +27,7 @@ jobs:
           version: latest
 
       - name: Start Supabase
-        run: supabase start
+        run: supabase start || true
 
       - name: Initialise database
         run: echo "yes" | uv run python scripts/init.py
