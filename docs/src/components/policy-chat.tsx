@@ -3,12 +3,14 @@
 import { useState, useRef, useEffect, useMemo } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkBreaks from "remark-breaks";
+import remarkGfm from "remark-gfm";
 import { useApi } from "./api-context";
 
 interface Message {
   role: "user" | "assistant";
   content: string;
   status?: "pending" | "running" | "completed" | "failed";
+  steps?: ParsedStep[];
 }
 
 interface LogEntry {
@@ -60,13 +62,46 @@ function parseLogEntry(message: string): ParsedStep {
       } catch {
         // Not valid JSON
       }
-      // Clean up tool name for display
-      const displayName = toolName
-        .replace(/_/g, " ")
-        .replace(/parameters get$/, "")
-        .replace(/parameters post$/, "")
-        .replace(/household calculate post$/, "Calculate household")
-        .replace(/list /g, "Search ");
+      // Map tool names to human-readable labels
+      const toolNameMap: Record<string, string> = {
+        // Parameters
+        "list_parameters_parameters__get": "Search parameters",
+        "get_parameter_parameters__parameter_id__get": "Get parameter",
+        "list_parameter_values_parameter_values__get": "Get parameter values",
+        "get_parameter_value_parameter_values__parameter_value_id__get": "Get parameter value",
+        // Variables
+        "list_variables_variables__get": "Search variables",
+        "get_variable_variables__variable_id__get": "Get variable",
+        // Policies
+        "create_policy_policies__post": "Create policy",
+        "get_policy_policies__policy_id__get": "Get policy",
+        "list_policies_policies__get": "List policies",
+        // Household
+        "calculate_household_household_calculate_post": "Calculate household",
+        "get_household_job_status_household_calculate__job_id__get": "Poll household job",
+        // Household impact
+        "calculate_household_impact_comparison_household_impact_post": "Calculate household impact",
+        "get_household_impact_job_status_household_impact__job_id__get": "Poll household impact",
+        // Economic impact
+        "economic_impact_analysis_economic_impact_post": "Run economic analysis",
+        "get_economic_impact_status_analysis_economic_impact__report_id__get": "Poll economic analysis",
+        // Datasets
+        "list_datasets_datasets__get": "List datasets",
+        "get_dataset_datasets__dataset_id__get": "Get dataset",
+        // Models
+        "list_tax_benefit_models_tax_benefit_models__get": "List models",
+        "get_tax_benefit_model_tax_benefit_models__model_id__get": "Get model",
+        // Simulations
+        "list_simulations_simulations__get": "List simulations",
+        "get_simulation_simulations__simulation_id__get": "Get simulation",
+        // Utility
+        "sleep": "Wait",
+      };
+      const displayName = toolNameMap[toolName] || toolName
+        .replace(/_+/g, " ")
+        .replace(/\s+(get|post|put|delete)$/i, "")
+        .replace(/\s+/g, " ")
+        .trim();
       return {
         type: "tool_use",
         title: displayName,
@@ -145,7 +180,7 @@ function ToolCard({ step }: { step: ParsedStep }) {
   const [isExpanded, setIsExpanded] = useState(false);
 
   if (step.type === "agent") {
-    return null; // Hide agent messages, they're redundant with progress indicator
+    return null;
   }
 
   if (step.type === "tool_use") {
@@ -153,13 +188,13 @@ function ToolCard({ step }: { step: ParsedStep }) {
       <div className="py-1 animate-fadeIn">
         <button
           onClick={() => setIsExpanded(!isExpanded)}
-          className="flex items-center gap-2 hover:text-[var(--color-pe-green)] transition-colors font-mono"
+          className="flex items-center gap-2 hover:text-[var(--color-pe-green)] transition-colors group w-full text-left font-mono"
         >
           <span className="w-1.5 h-1.5 rounded-full bg-[var(--color-pe-green)] shrink-0" />
-          <span className="text-sm text-[var(--color-text-secondary)]">{step.title}</span>
+          <span className="text-[12px] text-[var(--color-text-secondary)]">{step.title}</span>
           {step.params && Object.keys(step.params).length > 0 && (
             <svg
-              className={`w-3.5 h-3.5 text-[var(--color-text-muted)] transition-transform shrink-0 ${isExpanded ? "rotate-90" : ""}`}
+              className={`w-3 h-3 text-[var(--color-text-muted)] transition-transform shrink-0 ${isExpanded ? "rotate-90" : ""}`}
               fill="none"
               viewBox="0 0 24 24"
               stroke="currentColor"
@@ -169,11 +204,11 @@ function ToolCard({ step }: { step: ParsedStep }) {
           )}
         </button>
         {isExpanded && step.params && Object.keys(step.params).length > 0 && (
-          <div className="ml-3.5 mt-1.5 font-mono text-xs text-[var(--color-text-muted)] bg-[var(--color-surface)] rounded-lg px-3 py-2 animate-slideDown">
+          <div className="ml-3.5 mt-1.5 text-[11px] bg-[var(--color-code-bg)] text-[var(--color-code-text)] rounded-md px-3 py-2 animate-slideDown font-mono">
             {Object.entries(step.params).map(([key, value]) => (
-              <div key={key} className="flex gap-1">
-                <span className="text-[var(--color-pe-green)]">{key}:</span>
-                <span className="text-[var(--color-text-secondary)]">
+              <div key={key} className="flex gap-2 py-0.5">
+                <span className="text-[var(--color-pe-green-light)]">{key}:</span>
+                <span className="text-[var(--color-code-text)]/80">
                   {typeof value === "string" ? value : JSON.stringify(value)}
                 </span>
               </div>
@@ -184,7 +219,6 @@ function ToolCard({ step }: { step: ParsedStep }) {
     );
   }
 
-  // Hide API details - too noisy
   if (step.type === "api_call" || step.type === "api_response") {
     return null;
   }
@@ -194,16 +228,16 @@ function ToolCard({ step }: { step: ParsedStep }) {
       <div className="py-1 ml-3.5 animate-fadeIn">
         <button
           onClick={() => setIsExpanded(!isExpanded)}
-          className="flex items-center gap-1.5 text-sm text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)] font-mono"
+          className="flex items-center gap-1.5 text-[11px] text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)] font-mono"
         >
-          <svg className={`w-3.5 h-3.5 transition-transform ${isExpanded ? "rotate-90" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <svg className={`w-3 h-3 transition-transform ${isExpanded ? "rotate-90" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
           </svg>
-          <span>Result</span>
+          <span>result</span>
         </button>
         {isExpanded && (
-          <div className="mt-1.5 font-mono text-xs bg-[var(--color-code-bg)] text-[var(--color-code-text)] rounded p-2 overflow-x-auto max-h-64 overflow-y-auto animate-slideDown">
-            <pre className="whitespace-pre-wrap">{step.content}</pre>
+          <div className="mt-1.5 text-[11px] bg-[var(--color-code-bg)] text-[var(--color-code-text)] rounded-md p-2.5 overflow-x-auto max-h-48 overflow-y-auto animate-slideDown font-mono">
+            <pre className="whitespace-pre-wrap leading-relaxed">{step.content}</pre>
           </div>
         )}
       </div>
@@ -213,7 +247,7 @@ function ToolCard({ step }: { step: ParsedStep }) {
   if (step.type === "assistant") {
     return (
       <div className="py-1.5 animate-fadeIn">
-        <p className="text-sm text-[var(--color-text-muted)] leading-relaxed">{step.content}</p>
+        <p className="text-[12px] text-[var(--color-text-muted)] leading-relaxed italic">{step.content}</p>
       </div>
     );
   }
@@ -229,22 +263,29 @@ function ProgressIndicator({ logs }: { logs: LogEntry[] }) {
     const hasHousehold = logs.some(l => l.message.includes("household"));
     const isComplete = logs.some(l => l.message.includes("Completed"));
 
-    if (isComplete) return "Complete";
-    if (hasAnalysis) return "Running analysis...";
-    if (hasPolicy) return "Creating policy...";
-    if (hasHousehold) return "Calculating...";
-    if (hasSearch) return "Searching parameters...";
-    return "Starting...";
+    if (isComplete) return "complete";
+    if (hasAnalysis) return "running analysis...";
+    if (hasPolicy) return "creating policy...";
+    if (hasHousehold) return "calculating...";
+    if (hasSearch) return "searching parameters...";
+    return "starting...";
   }, [logs]);
 
   if (logs.length === 0) return null;
 
   return (
-    <div className="flex items-center gap-2 mb-3 text-sm text-[var(--color-text-muted)] font-mono">
-      {stage !== "Complete" && (
-        <div className="w-3.5 h-3.5 border-2 border-[var(--color-pe-green)] border-t-transparent rounded-full animate-spin" />
+    <div className="flex items-center gap-2 mb-3 pb-2.5 border-b border-[var(--color-border)]">
+      {stage !== "complete" && (
+        <div className="w-3 h-3 border-2 border-[var(--color-pe-green)] border-t-transparent rounded-full animate-spin" />
       )}
-      <span>{stage}</span>
+      {stage === "complete" && (
+        <div className="w-3 h-3 rounded-full bg-[var(--color-success)] flex items-center justify-center">
+          <svg className="w-2 h-2 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+          </svg>
+        </div>
+      )}
+      <span className="text-[11px] font-mono text-[var(--color-text-muted)]">{stage}</span>
     </div>
   );
 }
@@ -308,6 +349,11 @@ export function PolicyChat() {
               : "Analysis failed. Please try again.";
         }
 
+        // Parse and store steps with the message so they persist
+        const finalSteps = (data.logs || [])
+          .map((log: LogEntry) => parseLogEntry(log.message))
+          .filter((step: ParsedStep) => step.type !== "unknown");
+
         setMessages((prev) => {
           const newMessages = [...prev];
           const lastIndex = newMessages.length - 1;
@@ -316,6 +362,7 @@ export function PolicyChat() {
               ...newMessages[lastIndex],
               content: finalContent,
               status: data.status,
+              steps: finalSteps,
             };
           }
           return newMessages;
@@ -396,9 +443,9 @@ export function PolicyChat() {
 
   const exampleQuestions = [
     "What is the UK personal allowance for 2026?",
-    "Calculate tax for someone earning £50,000 in the UK",
-    "What would happen if we increased child benefit by 10%?",
-    "What benefits would a single parent with two children receive?",
+    "Calculate tax for someone earning £50,000",
+    "What if we increased child benefit by 10%?",
+    "What benefits would a single parent receive?",
   ];
 
   return (
@@ -443,7 +490,7 @@ export function PolicyChat() {
                 <button
                   key={i}
                   onClick={() => setInput(q)}
-                  className="text-left p-4 rounded-xl bg-[var(--color-surface-sunken)] hover:bg-[var(--color-surface)] border border-transparent hover:border-[var(--color-border)] text-sm text-[var(--color-text-secondary)] transition-all group font-mono"
+                  className="text-left px-4 py-3 rounded-lg bg-[var(--color-surface-sunken)] hover:bg-white border border-transparent hover:border-[var(--color-border)] hover:shadow-sm text-[13px] text-[var(--color-text-secondary)] transition-all group font-mono"
                 >
                   <span className="group-hover:text-[var(--color-pe-green)] transition-colors">{q}</span>
                 </button>
@@ -457,24 +504,24 @@ export function PolicyChat() {
                 {message.role === "user" ? (
                   <div className="flex justify-end">
                     <div className="max-w-[80%] bg-[var(--color-pe-green)] text-white rounded-2xl rounded-br-md px-4 py-3">
-                      <p className="text-sm font-mono">{message.content}</p>
+                      <p className="text-[14px] leading-relaxed">{message.content}</p>
                     </div>
                   </div>
                 ) : (
                   <div className="space-y-3">
                     {/* Running state with live steps */}
                     {(message.status === "pending" || message.status === "running") && (
-                      <div className="bg-[var(--color-surface-sunken)] rounded-2xl p-4">
+                      <div className="bg-[var(--color-surface-sunken)] rounded-xl p-4">
                         <ProgressIndicator logs={logs} />
 
                         {message.status === "pending" ? (
-                          <div className="flex items-center gap-3">
-                            <div className="w-5 h-5 border-2 border-[var(--color-pe-green)] border-t-transparent rounded-full animate-spin" />
-                            <span className="text-sm text-[var(--color-text-secondary)] font-mono">Starting analysis...</span>
+                          <div className="flex items-center gap-2">
+                            <div className="w-3 h-3 border-2 border-[var(--color-pe-green)] border-t-transparent rounded-full animate-spin" />
+                            <span className="text-[11px] font-mono text-[var(--color-text-muted)]">starting...</span>
                           </div>
                         ) : (
                           <div className="space-y-0">
-                            {parsedSteps.slice(-10).map((step, j) => (
+                            {parsedSteps.slice(-12).map((step, j) => (
                               <ToolCard key={j} step={step} />
                             ))}
                           </div>
@@ -484,18 +531,18 @@ export function PolicyChat() {
 
                     {/* Completed/failed state */}
                     {(message.status === "completed" || message.status === "failed") && (
-                      <div className="space-y-4">
+                      <div className="space-y-3">
                         {/* Collapsible steps summary */}
-                        {parsedSteps.length > 0 && (
+                        {message.steps && message.steps.length > 0 && (
                           <details className="group">
-                            <summary className="cursor-pointer list-none flex items-center gap-2 text-sm text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)] font-mono">
-                              <svg className="w-3.5 h-3.5 group-open:rotate-90 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <summary className="cursor-pointer list-none flex items-center gap-2 text-[11px] text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)] font-mono">
+                              <svg className="w-3 h-3 group-open:rotate-90 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                               </svg>
-                              <span>{parsedSteps.filter(s => s.type === "tool_use").length} tool calls executed</span>
+                              <span>{message.steps.filter(s => s.type === "tool_use").length} tool calls</span>
                             </summary>
-                            <div className="mt-3 bg-[var(--color-surface-sunken)] rounded-xl p-4 space-y-0">
-                              {parsedSteps.map((step, j) => (
+                            <div className="mt-2 bg-[var(--color-surface-sunken)] rounded-lg p-3 space-y-0">
+                              {message.steps.map((step, j) => (
                                 <ToolCard key={j} step={step} />
                               ))}
                             </div>
@@ -503,13 +550,13 @@ export function PolicyChat() {
                         )}
 
                         {/* Final response */}
-                        <div className={`rounded-2xl rounded-bl-md px-5 py-4 ${
+                        <div className={`rounded-lg px-4 py-3 ${
                           message.status === "failed"
                             ? "bg-red-50 border border-red-200"
                             : "bg-white border border-[var(--color-border)]"
                         }`}>
-                          <div className="prose prose-sm max-w-none text-[var(--color-text-primary)] [&_strong]:font-semibold [&_code]:bg-[var(--color-surface-sunken)] [&_code]:px-1.5 [&_code]:py-0.5 [&_code]:rounded [&_code]:text-sm [&_code]:font-mono [&_h1]:text-lg [&_h1]:mt-4 [&_h1]:mb-2 [&_h2]:text-base [&_h2]:mt-3 [&_h2]:mb-2 [&_h3]:text-sm [&_h3]:mt-2 [&_h3]:mb-1 [&_p]:my-3 [&_p]:leading-relaxed [&_ul]:my-3 [&_ul]:space-y-1 [&_ol]:my-3 [&_ol]:space-y-1 [&_li]:my-0 [&_li]:leading-relaxed [&_blockquote]:border-l-2 [&_blockquote]:border-[var(--color-pe-green)] [&_blockquote]:pl-4 [&_blockquote]:my-3 [&_blockquote]:text-[var(--color-text-secondary)]">
-                            <ReactMarkdown remarkPlugins={[remarkBreaks]}>
+                          <div className="response-content">
+                            <ReactMarkdown remarkPlugins={[remarkBreaks, remarkGfm]}>
                               {message.content}
                             </ReactMarkdown>
                           </div>
@@ -534,12 +581,12 @@ export function PolicyChat() {
             onChange={(e) => setInput(e.target.value)}
             placeholder="Ask a policy question..."
             disabled={isLoading}
-            className="flex-1 px-4 py-3 text-sm font-mono border border-[var(--color-border)] rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-[var(--color-pe-green)] focus:border-transparent disabled:opacity-50 placeholder:text-[var(--color-text-muted)]"
+            className="flex-1 px-4 py-2.5 text-[13px] font-mono border border-[var(--color-border)] rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-[var(--color-pe-green)] focus:border-transparent disabled:opacity-50 placeholder:text-[var(--color-text-muted)]"
           />
           <button
             type="submit"
             disabled={isLoading || !input.trim()}
-            className="px-6 py-3 bg-[var(--color-pe-green)] hover:bg-[var(--color-pe-green-dark)] text-white rounded-xl text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
+            className="px-4 py-2.5 bg-[var(--color-pe-green)] hover:bg-[var(--color-pe-green-dark)] text-white rounded-lg text-[13px] font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
           >
             {isLoading ? (
               <>
@@ -558,7 +605,7 @@ export function PolicyChat() {
         </div>
       </form>
 
-      <style jsx>{`
+      <style jsx global>{`
         @keyframes fadeIn {
           from { opacity: 0; transform: translateY(4px); }
           to { opacity: 1; transform: translateY(0); }
@@ -572,6 +619,108 @@ export function PolicyChat() {
         }
         .animate-slideDown {
           animation: slideDown 0.2s ease-out forwards;
+        }
+
+        /* Response content typography */
+        .response-content {
+          font-family: var(--font-sans);
+          font-size: 14px;
+          line-height: 1.6;
+          color: var(--color-text-primary);
+        }
+        .response-content p {
+          margin: 0.75em 0;
+        }
+        .response-content p:first-child {
+          margin-top: 0;
+        }
+        .response-content p:last-child {
+          margin-bottom: 0;
+        }
+        .response-content h1, .response-content h2, .response-content h3 {
+          font-weight: 600;
+          margin-top: 1.25em;
+          margin-bottom: 0.5em;
+          line-height: 1.3;
+        }
+        .response-content h1 { font-size: 1.25em; }
+        .response-content h2 { font-size: 1.1em; }
+        .response-content h3 { font-size: 1em; }
+        .response-content h1:first-child,
+        .response-content h2:first-child,
+        .response-content h3:first-child {
+          margin-top: 0;
+        }
+        .response-content strong {
+          font-weight: 600;
+        }
+        .response-content ul, .response-content ol {
+          margin: 0.75em 0;
+          padding-left: 1.5em;
+        }
+        .response-content li {
+          margin: 0.25em 0;
+        }
+        .response-content code {
+          font-family: var(--font-mono);
+          font-size: 0.9em;
+          background: var(--color-surface-sunken);
+          padding: 0.15em 0.4em;
+          border-radius: 4px;
+        }
+        .response-content pre {
+          font-family: var(--font-mono);
+          font-size: 12px;
+          background: var(--color-code-bg);
+          color: var(--color-code-text);
+          padding: 1em;
+          border-radius: 8px;
+          overflow-x: auto;
+          margin: 1em 0;
+        }
+        .response-content pre code {
+          background: none;
+          padding: 0;
+          font-size: inherit;
+        }
+        .response-content table {
+          width: 100%;
+          border-collapse: collapse;
+          margin: 1em 0;
+          font-size: 13px;
+        }
+        .response-content th {
+          background: var(--color-surface-sunken);
+          border: 1px solid var(--color-border);
+          padding: 0.5em 0.75em;
+          text-align: left;
+          font-weight: 600;
+        }
+        .response-content td {
+          border: 1px solid var(--color-border);
+          padding: 0.5em 0.75em;
+        }
+        .response-content tr:hover td {
+          background: var(--color-surface-sunken);
+        }
+        .response-content blockquote {
+          border-left: 3px solid var(--color-pe-green);
+          padding-left: 1em;
+          margin: 1em 0;
+          color: var(--color-text-secondary);
+          font-style: italic;
+        }
+        .response-content a {
+          color: var(--color-pe-green);
+          text-decoration: underline;
+        }
+        .response-content a:hover {
+          color: var(--color-pe-green-dark);
+        }
+        .response-content hr {
+          border: none;
+          border-top: 1px solid var(--color-border);
+          margin: 1.5em 0;
         }
       `}</style>
     </div>

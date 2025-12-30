@@ -385,7 +385,8 @@ def seed_datasets(session, lite: bool = False):
 
         # UK datasets
         console.print("  Creating UK datasets...")
-        uk_datasets = ensure_uk_datasets()
+        data_folder = str(Path(__file__).parent.parent / "data")
+        uk_datasets = ensure_uk_datasets(data_folder=data_folder)
 
         # In lite mode, only upload FRS 2026
         if lite:
@@ -439,7 +440,7 @@ def seed_datasets(session, lite: bool = False):
 
         # US datasets
         console.print("  Creating US datasets...")
-        us_datasets = ensure_us_datasets()
+        us_datasets = ensure_us_datasets(data_folder=data_folder)
 
         # In lite mode, only upload CPS 2026
         if lite:
