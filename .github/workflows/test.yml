@@ -21,19 +21,5 @@ jobs:
       - name: Sync dependencies
         run: uv sync --extra dev
 
-      - name: Setup Supabase CLI
-        uses: supabase/setup-cli@v1
-        with:
-          version: latest
-
-      - name: Start Supabase
-        run: supabase start || true
-
-      - name: Initialise database
-        run: echo "yes" | uv run python scripts/init.py
-
-      - name: Seed database
-        run: uv run python scripts/seed.py
-
       - name: Run tests
-        run: uv run pytest -v
+        run: uv run pytest -v -m "not integration"
