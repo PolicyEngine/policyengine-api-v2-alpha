@@ -27,6 +27,8 @@ base_image = (
         "supabase>=2.10.0 "
         "rich>=13.9.4"
     )
+    # Include the policyengine_api models package (copy=True allows subsequent build steps)
+    .add_local_python_source("policyengine_api", copy=True)
 )
 
 
@@ -383,13 +385,12 @@ def simulate_economy_uk(simulation_id: str) -> None:
 
     engine = create_engine(database_url)
 
-    from policyengine_api.models import (
-        Dataset,
-        Simulation,
-        SimulationStatus,
-    )
-
     try:
+        from policyengine_api.models import (
+            Dataset,
+            Simulation,
+            SimulationStatus,
+        )
         with Session(engine) as session:
             simulation = session.get(Simulation, UUID(simulation_id))
             if not simulation:
@@ -464,13 +465,21 @@ def simulate_economy_uk(simulation_id: str) -> None:
         console.print(
             f"[bold red]UK economy simulation {simulation_id} failed: {e}[/bold red]"
         )
-        with Session(engine) as session:
-            simulation = session.get(Simulation, UUID(simulation_id))
-            if simulation:
-                simulation.status = SimulationStatus.FAILED
-                simulation.error_message = str(e)
-                session.add(simulation)
+        # Use raw SQL to mark as failed - models may not be available
+        try:
+            from sqlmodel import text
+
+            with Session(engine) as session:
+                session.execute(
+                    text(
+                        "UPDATE simulations SET status = 'failed', error_message = :error "
+                        "WHERE id = :sim_id"
+                    ),
+                    {"sim_id": simulation_id, "error": str(e)[:1000]},
+                )
                 session.commit()
+        except Exception as db_error:
+            console.print(f"[bold red]Failed to update DB: {db_error}[/bold red]")
         raise
 
 
@@ -496,13 +505,12 @@ def simulate_economy_us(simulation_id: str) -> None:
 
     engine = create_engine(database_url)
 
-    from policyengine_api.models import (
-        Dataset,
-        Simulation,
-        SimulationStatus,
-    )
-
     try:
+        from policyengine_api.models import (
+            Dataset,
+            Simulation,
+            SimulationStatus,
+        )
         with Session(engine) as session:
             simulation = session.get(Simulation, UUID(simulation_id))
             if not simulation:
@@ -577,13 +585,21 @@ def simulate_economy_us(simulation_id: str) -> None:
         console.print(
             f"[bold red]US economy simulation {simulation_id} failed: {e}[/bold red]"
         )
-        with Session(engine) as session:
-            simulation = session.get(Simulation, UUID(simulation_id))
-            if simulation:
-                simulation.status = SimulationStatus.FAILED
-                simulation.error_message = str(e)
-                session.add(simulation)
+        # Use raw SQL to mark as failed - models may not be available
+        try:
+            from sqlmodel import text
+
+            with Session(engine) as session:
+                session.execute(
+                    text(
+                        "UPDATE simulations SET status = 'failed', error_message = :error "
+                        "WHERE id = :sim_id"
+                    ),
+                    {"sim_id": simulation_id, "error": str(e)[:1000]},
+                )
                 session.commit()
+        except Exception as db_error:
+            console.print(f"[bold red]Failed to update DB: {db_error}[/bold red]")
         raise
 
 
@@ -607,19 +623,18 @@ def economy_comparison_uk(job_id: str) -> None:
 
     engine = create_engine(database_url)
 
-    # Import models inline to avoid import issues
-    from policyengine_api.models import (
-        Dataset,
-        DecileImpact,
-        ProgramStatistics,
-        Report,
-        ReportStatus,
-        Simulation,
-        SimulationStatus,
-        TaxBenefitModelVersion,
-    )
-
     try:
+        # Import models inline
+        from policyengine_api.models import (
+            Dataset,
+            DecileImpact,
+            ProgramStatistics,
+            Report,
+            ReportStatus,
+            Simulation,
+            SimulationStatus,
+            TaxBenefitModelVersion,
+        )
         with Session(engine) as session:
             # Load report and related data
             report = session.get(Report, UUID(job_id))
@@ -802,13 +817,21 @@ def economy_comparison_uk(job_id: str) -> None:
         console.print(
             f"[bold red]UK economy comparison {job_id} failed: {e}[/bold red]"
         )
-        with Session(engine) as session:
-            report = session.get(Report, UUID(job_id))
-            if report:
-                report.status = ReportStatus.FAILED
-                report.error_message = str(e)
-                session.add(report)
+        # Use raw SQL to mark as failed - models may not be available
+        try:
+            from sqlmodel import text
+
+            with Session(engine) as session:
+                session.execute(
+                    text(
+                        "UPDATE reports SET status = 'failed', error_message = :error "
+                        "WHERE id = :job_id"
+                    ),
+                    {"job_id": job_id, "error": str(e)[:1000]},
+                )
                 session.commit()
+        except Exception as db_error:
+            console.print(f"[bold red]Failed to update DB: {db_error}[/bold red]")
         raise
 
 
@@ -832,18 +855,18 @@ def economy_comparison_us(job_id: str) -> None:
 
     engine = create_engine(database_url)
 
-    # Import models inline
-    from policyengine_api.models import (
-        Dataset,
-        DecileImpact,
-        ProgramStatistics,
-        Report,
-        ReportStatus,
-        Simulation,
-        SimulationStatus,
-    )
-
     try:
+        # Import models inline
+        from policyengine_api.models import (
+            Dataset,
+            DecileImpact,
+            ProgramStatistics,
+            Report,
+            ReportStatus,
+            Simulation,
+            SimulationStatus,
+        )
+
         with Session(engine) as session:
             # Load report and related data
             report = session.get(Report, UUID(job_id))
@@ -1015,13 +1038,21 @@ def economy_comparison_us(job_id: str) -> None:
         console.print(
             f"[bold red]US economy comparison {job_id} failed: {e}[/bold red]"
         )
-        with Session(engine) as session:
-            report = session.get(Report, UUID(job_id))
-            if report:
-                report.status = ReportStatus.FAILED
-                report.error_message = str(e)
-                session.add(report)
+        # Use raw SQL to mark as failed - models may not be available
+        try:
+            from sqlmodel import text
+
+            with Session(engine) as session:
+                session.execute(
+                    text(
+                        "UPDATE reports SET status = 'failed', error_message = :error "
+                        "WHERE id = :job_id"
+                    ),
+                    {"job_id": job_id, "error": str(e)[:1000]},
+                )
                 session.commit()
+        except Exception as db_error:
+            console.print(f"[bold red]Failed to update DB: {db_error}[/bold red]")
         raise
 
 
