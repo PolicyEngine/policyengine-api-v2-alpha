@@ -10,11 +10,42 @@ import modal
 import requests
 
 image = modal.Image.debian_slim(python_version="3.12").pip_install(
-    "anthropic", "requests"
+    "anthropic", "requests", "logfire[httpx]"
 )
 
 app = modal.App("policyengine-sandbox")
 anthropic_secret = modal.Secret.from_name("anthropic-api-key")
+logfire_secrets = modal.Secret.from_name("policyengine-logfire")
+
+
+def configure_logfire(traceparent: str | None = None):
+    """Configure logfire with optional trace context propagation."""
+    import os
+
+    import logfire
+
+    token = os.environ.get("LOGFIRE_TOKEN", "")
+    if not token:
+        return None
+
+    logfire.configure(
+        service_name="policyengine-agent",
+        token=token,
+        environment=os.environ.get("LOGFIRE_ENVIRONMENT", "production"),
+        console=False,
+    )
+
+    # If traceparent provided, attach to the current context
+    if traceparent:
+        from opentelemetry.trace.propagation.tracecontext import (
+            TraceContextTextMapPropagator,
+        )
+
+        propagator = TraceContextTextMapPropagator()
+        ctx = propagator.extract(carrier={"traceparent": traceparent})
+        return ctx
+
+    return None
 
 SYSTEM_PROMPT = """You are a PolicyEngine assistant that helps users understand tax and benefit policies.
 
@@ -256,6 +287,7 @@ def execute_api_tool(
     tool_input: dict,
     api_base_url: str,
     log_fn: Callable,
+    trace_headers: dict | None = None,
 ) -> str:
     """Execute an API tool by making the HTTP request."""
     meta = tool.get("_meta", {})
@@ -267,6 +299,8 @@ def execute_api_tool(
     url = f"{api_base_url}{path}"
     query_params = {}
     headers = {"Content-Type": "application/json"}
+    if trace_headers:
+        headers.update(trace_headers)
 
     # Separate path, query, and body parameters
     body_data = {}
@@ -344,16 +378,26 @@ def _run_agent_impl(
     call_id: str = "",
     history: list[dict] | None = None,
     max_turns: int = 30,
+    traceparent: str | None = None,
 ) -> dict:
     """Core agent implementation."""
+    import logfire
+
+    # Get traceparent for HTTP requests
+    def get_trace_headers() -> dict:
+        if traceparent:
+            return {"traceparent": traceparent}
+        return {}
 
     def log(msg: str) -> None:
+        logfire.info(msg, call_id=call_id)
         print(msg)
         if call_id:
             try:
                 requests.post(
                     f"{api_base_url}/agent/log/{call_id}",
                     json={"message": msg},
+                    headers=get_trace_headers(),
                     timeout=5,
                 )
             except Exception:
@@ -425,7 +469,9 @@ def _run_agent_impl(
                 else:
                     tool = tool_lookup.get(block.name)
                     if tool:
-                        result = execute_api_tool(tool, block.input, api_base_url, log)
+                        result = execute_api_tool(
+                            tool, block.input, api_base_url, log, get_trace_headers()
+                        )
                     else:
                         result = f"Unknown tool: {block.name}"
 
@@ -457,6 +503,7 @@ def _run_agent_impl(
             requests.post(
                 f"{api_base_url}/agent/complete/{call_id}",
                 json=result,
+                headers=get_trace_headers(),
                 timeout=10,
             )
         except Exception:
@@ -465,22 +512,29 @@ def _run_agent_impl(
     return result
 
 
-@app.function(image=image, secrets=[anthropic_secret], timeout=600)
+@app.function(image=image, secrets=[anthropic_secret, logfire_secrets], timeout=600)
 def run_agent(
     question: str,
     api_base_url: str = "https://v2.api.policyengine.org",
     call_id: str = "",
     history: list[dict] | None = None,
     max_turns: int = 30,
+    traceparent: str | None = None,
 ) -> dict:
     """Run agentic loop to answer a policy question (Modal wrapper)."""
-    return _run_agent_impl(
-        question,
-        api_base_url,
-        call_id,
-        history=history,
-        max_turns=max_turns,
-    )
+    import logfire
+
+    ctx = configure_logfire(traceparent)
+
+    with logfire.span("run_agent", call_id=call_id, question=question[:200], _context=ctx):
+        return _run_agent_impl(
+            question,
+            api_base_url,
+            call_id,
+            history=history,
+            max_turns=max_turns,
+            traceparent=traceparent,
+        )
 
 
 if __name__ == "__main__":

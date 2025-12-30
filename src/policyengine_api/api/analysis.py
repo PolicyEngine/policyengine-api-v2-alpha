@@ -21,6 +21,7 @@ from uuid import UUID, uuid5
 
 import logfire
 from fastapi import APIRouter, Depends, HTTPException
+from opentelemetry.trace.propagation.tracecontext import TraceContextTextMapPropagator
 from pydantic import BaseModel, Field
 from sqlmodel import Session, select
 
@@ -38,6 +39,13 @@ from policyengine_api.models import (
     TaxBenefitModelVersion,
 )
 from policyengine_api.services.database import get_session
+
+
+def get_traceparent() -> str | None:
+    """Get the current W3C traceparent header for distributed tracing."""
+    carrier: dict[str, str] = {}
+    TraceContextTextMapPropagator().inject(carrier)
+    return carrier.get("traceparent")
 
 
 def _safe_float(value: float | None) -> float | None:
@@ -522,6 +530,8 @@ def _trigger_economy_comparison(
     """Trigger economy comparison analysis (local or Modal)."""
     from policyengine_api.config import settings
 
+    traceparent = get_traceparent()
+
     if not settings.agent_use_modal and session is not None:
         # Run locally
         if tax_benefit_model_name == "policyengine_uk":
@@ -531,7 +541,7 @@ def _trigger_economy_comparison(
             import modal
 
             fn = modal.Function.from_name("policyengine", "economy_comparison_us")
-            fn.spawn(job_id=job_id)
+            fn.spawn(job_id=job_id, traceparent=traceparent)
     else:
         # Use Modal
         import modal
@@ -541,7 +551,7 @@ def _trigger_economy_comparison(
         else:
             fn = modal.Function.from_name("policyengine", "economy_comparison_us")
 
-        fn.spawn(job_id=job_id)
+        fn.spawn(job_id=job_id, traceparent=traceparent)
 
 
 @router.post("/economic-impact", response_model=EconomicImpactResponse)
