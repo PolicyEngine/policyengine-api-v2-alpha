@@ -26,9 +26,7 @@ def configure_logfire(traceparent: str | None = None):
 
     token = os.environ.get("LOGFIRE_TOKEN", "")
     if not token:
-        print("[LOGFIRE] No LOGFIRE_TOKEN found, skipping configuration")
         return
-    print(f"[LOGFIRE] Configuring with token prefix: {token[:10]}...")
 
     logfire.configure(
         service_name="policyengine-agent",

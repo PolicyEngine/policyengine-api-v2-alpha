@@ -272,6 +272,8 @@ def simulate_household_uk(
                 )
                 session.commit()
             raise
+        finally:
+            logfire.force_flush()
 
 
 @app.function(
@@ -409,6 +411,8 @@ def simulate_household_us(
                 )
                 session.commit()
             raise
+        finally:
+            logfire.force_flush()
 
 
 @app.function(
@@ -525,6 +529,8 @@ def simulate_economy_uk(simulation_id: str, traceparent: str | None = None) -> N
             except Exception as db_error:
                 logfire.error("Failed to update DB", error=str(db_error))
             raise
+        finally:
+            logfire.force_flush()
 
 
 @app.function(
@@ -641,6 +647,8 @@ def simulate_economy_us(simulation_id: str, traceparent: str | None = None) -> N
             except Exception as db_error:
                 logfire.error("Failed to update DB", error=str(db_error))
             raise
+        finally:
+            logfire.force_flush()
 
 
 @app.function(
@@ -873,6 +881,8 @@ def economy_comparison_uk(job_id: str, traceparent: str | None = None) -> None:
             except Exception as db_error:
                 logfire.error("Failed to update DB", error=str(db_error))
             raise
+        finally:
+            logfire.force_flush()
 
 
 @app.function(
@@ -1094,6 +1104,8 @@ def economy_comparison_us(job_id: str, traceparent: str | None = None) -> None:
             except Exception as db_error:
                 logfire.error("Failed to update DB", error=str(db_error))
             raise
+        finally:
+            logfire.force_flush()
 
 
 def _get_pe_policy_uk(policy_id, model_version, session):
