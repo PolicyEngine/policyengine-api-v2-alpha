@@ -619,8 +619,11 @@ def main():
             us_version = seed_model(us_latest, session, lite=args.lite)
             console.print(f"[green]✓[/green] US model seeded: {us_version.id}\n")
 
-            # Seed datasets
-            seed_datasets(session)
+            # Seed datasets (skip in lite mode - requires HF token and slow)
+            if not args.lite:
+                seed_datasets(session)
+            else:
+                console.print("[yellow]Skipping datasets (lite mode)[/yellow]\n")
 
             # Seed example policies
             seed_example_policies(session)
