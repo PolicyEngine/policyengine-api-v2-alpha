@@ -26,7 +26,7 @@ def configure_logfire(traceparent: str | None = None):
 
     token = os.environ.get("LOGFIRE_TOKEN", "")
     if not token:
-        return None
+        return
 
     logfire.configure(
         service_name="policyengine-agent",
@@ -37,15 +37,15 @@ def configure_logfire(traceparent: str | None = None):
 
     # If traceparent provided, attach to the current context
     if traceparent:
+        from opentelemetry import context
         from opentelemetry.trace.propagation.tracecontext import (
             TraceContextTextMapPropagator,
         )
 
         propagator = TraceContextTextMapPropagator()
         ctx = propagator.extract(carrier={"traceparent": traceparent})
-        return ctx
+        context.attach(ctx)
 
-    return None
 
 SYSTEM_PROMPT = """You are a PolicyEngine assistant that helps users understand tax and benefit policies.
 
@@ -524,9 +524,9 @@ def run_agent(
     """Run agentic loop to answer a policy question (Modal wrapper)."""
     import logfire
 
-    ctx = configure_logfire(traceparent)
+    configure_logfire(traceparent)
 
-    with logfire.span("run_agent", call_id=call_id, question=question[:200], _context=ctx):
+    with logfire.span("run_agent", call_id=call_id, question=question[:200]):
         return _run_agent_impl(
             question,
             api_base_url,
