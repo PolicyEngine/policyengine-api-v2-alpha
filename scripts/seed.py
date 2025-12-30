@@ -316,13 +316,21 @@ def seed_model(model_version, session, lite: bool = False) -> TaxBenefitModelVer
                         progress.advance(task)
                         continue
 
+                    # Source data has dates swapped (start > end), fix ordering
+                    # Only swap if both dates are set, otherwise keep original
+                    if pv.start_date and pv.end_date:
+                        start = pv.end_date  # Swap: source end is our start
+                        end = pv.start_date  # Swap: source start is our end
+                    else:
+                        start = pv.start_date
+                        end = pv.end_date
                     pv_rows.append(
                         {
                             "id": uuid4(),
                             "parameter_id": param_id_map[pv.parameter.id],
                             "value_json": json.dumps(pv.value),
-                            "start_date": pv.start_date,
-                            "end_date": pv.end_date,
+                            "start_date": start,
+                            "end_date": end,
                             "policy_id": None,
                             "dynamic_id": None,
                             "created_at": datetime.now(timezone.utc),

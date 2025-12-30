@@ -15,11 +15,49 @@ on:
         description: "Type 'reset-prod' to confirm"
         required: true
         type: string
+  pull_request:
+    paths:
+      - ".github/workflows/db-reset.yml"
 
 jobs:
+  # Validation job - runs on PR to test connectivity (no environment = no approval needed)
+  validate:
+    name: Validate database connectivity
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Setup Python
+        run: uv python install 3.13
+
+      - name: Sync dependencies
+        run: uv sync
+
+      - name: Test database connectivity
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_POOLER_URL }}
+        run: |
+          echo "Testing database connectivity..."
+          uv run python -c "
+          from policyengine_api.config.settings import settings
+          from sqlmodel import create_engine, text
+          engine = create_engine(settings.database_url, echo=False)
+          with engine.connect() as conn:
+              result = conn.execute(text('SELECT 1'))
+              print('✅ Database connection successful')
+          "
+
+  # Reset job - only runs on manual trigger with confirmation
   reset-db:
     name: Reset and reseed database
     runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch'
     environment: production
 
     steps:
@@ -43,9 +81,10 @@ jobs:
 
       - name: Reset database (init)
         env:
-          DATABASE_URL: ${{ secrets.SUPABASE_DB_URL }}
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_POOLER_URL }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
           LOGFIRE_TOKEN: ${{ secrets.LOGFIRE_TOKEN }}
           LOGFIRE_ENVIRONMENT: prod
         run: |
@@ -55,9 +94,10 @@ jobs:
       - name: Seed database (lite)
         if: ${{ github.event.inputs.mode == 'lite' }}
         env:
-          DATABASE_URL: ${{ secrets.SUPABASE_DB_URL }}
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_POOLER_URL }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
           STORAGE_BUCKET: ${{ vars.STORAGE_BUCKET }}
           LOGFIRE_TOKEN: ${{ secrets.LOGFIRE_TOKEN }}
           LOGFIRE_ENVIRONMENT: prod
@@ -68,9 +108,10 @@ jobs:
       - name: Seed database (full)
         if: ${{ github.event.inputs.mode == 'full' }}
         env:
-          DATABASE_URL: ${{ secrets.SUPABASE_DB_URL }}
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_POOLER_URL }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
           STORAGE_BUCKET: ${{ vars.STORAGE_BUCKET }}
           LOGFIRE_TOKEN: ${{ secrets.LOGFIRE_TOKEN }}
           LOGFIRE_ENVIRONMENT: prod
