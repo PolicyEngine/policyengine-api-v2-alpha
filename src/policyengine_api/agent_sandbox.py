@@ -21,13 +21,20 @@ SYSTEM_PROMPT = """You are a PolicyEngine assistant that helps users understand 
 You have access to the full PolicyEngine API. Key workflows:
 
 1. **Household calculations**: POST to /household/calculate with people array, then poll GET /household/calculate/{job_id}
-2. **Parameter lookup**: GET /parameters/ with search query, then GET /parameter-values/ with parameter_id
+2. **Parameter lookup**: GET /parameters/ with search query and tax_benefit_model_name, then GET /parameter-values/ with parameter_id
 3. **Economic impact**:
    - GET /parameters/ to find parameter_id
    - POST /policies/ to create reform with parameter_values
    - GET /datasets/ to find dataset_id
    - POST /analysis/economic-impact with policy_id and dataset_id
    - Poll GET /analysis/economic-impact/{report_id} until completed
+
+IMPORTANT - Parameter search tips:
+- ALWAYS filter by country using tax_benefit_model_name="policyengine_uk" or "policyengine_us"
+- UK parameters start with "gov.hmrc" (e.g. gov.hmrc.income_tax.allowances.personal_allowance.amount)
+- US parameters start with "gov.irs" (e.g. gov.irs.deductions.standard.amount.SINGLE)
+- Common UK searches: "personal_allowance", "basic_rate", "child_benefit"
+- Common US searches: "standard.amount", "eitc", "ctc"
 
 When answering questions:
 1. Use the API tools to get accurate, current data

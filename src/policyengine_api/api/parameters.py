@@ -11,7 +11,12 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel import Session, select
 
-from policyengine_api.models import Parameter, ParameterRead
+from policyengine_api.models import (
+    Parameter,
+    ParameterRead,
+    TaxBenefitModel,
+    TaxBenefitModelVersion,
+)
 from policyengine_api.services.database import get_session
 
 router = APIRouter(prefix="/parameters", tags=["parameters"])
@@ -22,6 +27,7 @@ def list_parameters(
     skip: int = 0,
     limit: int = 100,
     search: str | None = None,
+    tax_benefit_model_name: str | None = None,
     session: Session = Depends(get_session),
 ):
     """List available parameters with pagination and search.
@@ -29,10 +35,23 @@ def list_parameters(
     Parameters are policy levers (e.g. tax rates, thresholds, benefit amounts)
     that can be modified in reforms. Use parameter names when creating policies.
 
-    Use the `search` parameter to filter by parameter name, label, or description.
-    For example: search="basic_rate" or search="income tax"
+    Args:
+        search: Filter by parameter name, label, or description.
+            For UK parameters, try: "hmrc" or "gov.hmrc"
+            For US parameters, try: "irs" or "gov.irs"
+        tax_benefit_model_name: Filter by country model.
+            Use "policyengine_uk" for UK parameters.
+            Use "policyengine_us" for US parameters.
     """
     query = select(Parameter)
+
+    # Filter by tax benefit model name (country)
+    if tax_benefit_model_name:
+        query = (
+            query.join(TaxBenefitModelVersion)
+            .join(TaxBenefitModel)
+            .where(TaxBenefitModel.name == tax_benefit_model_name)
+        )
 
     if search:
         search_filter = (
