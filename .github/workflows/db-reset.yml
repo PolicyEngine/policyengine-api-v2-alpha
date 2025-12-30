@@ -101,8 +101,9 @@ jobs:
           STORAGE_BUCKET: ${{ vars.STORAGE_BUCKET }}
           LOGFIRE_TOKEN: ${{ secrets.LOGFIRE_TOKEN }}
           LOGFIRE_ENVIRONMENT: prod
+          HUGGING_FACE_TOKEN: ${{ secrets.HUGGING_FACE_TOKEN }}
         run: |
-          echo "Seeding database (lite mode - no datasets, no state params)..."
+          echo "Seeding database (lite mode - fewer params, includes datasets)..."
           uv run python scripts/seed.py --lite
 
       - name: Seed database (full)
@@ -112,6 +113,7 @@ jobs:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          HUGGING_FACE_TOKEN: ${{ secrets.HUGGING_FACE_TOKEN }}
           STORAGE_BUCKET: ${{ vars.STORAGE_BUCKET }}
           LOGFIRE_TOKEN: ${{ secrets.LOGFIRE_TOKEN }}
           LOGFIRE_ENVIRONMENT: prod
