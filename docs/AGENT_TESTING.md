@@ -146,12 +146,35 @@ Tests are in `tests/test_agent_policy_questions.py` (integration tests requiring
 | Seed script | Deduplicate parameters by name |
 | System prompt | Fixed model names (hyphen not underscore) |
 
+### Issue 8: Agent not using country filter in economy-wide analysis
+
+**Problem**: When answering economic impact questions, agent didn't use `tax_benefit_model_name` filter despite it being in the system prompt. This led to 18 turns for UK budgetary impact question (12 turns just searching for parameter).
+
+**Root cause**: System prompt mentioned the filter but didn't emphasize it enough; economic impact workflow didn't show the filter in example.
+
+**Solution implemented**: Restructured system prompt with:
+- **CRITICAL** section at the top emphasizing country filter
+- Explanation of why filter is needed (mixed results waste turns)
+- Added filter to all workflow examples including economic impact
+
+**Result**: UK budgetary impact question now completes in **6 turns** (down from 18).
+
+### Issue 9: Key US parameters missing from database
+
+**Problem**: Core CTC parameters like `gov.irs.credits.ctc.amount.base[0].amount` have `label=None` in policyengine-us package, so they're not seeded (seed script only includes parameters with labels).
+
+**Impact**: Agent can't find the main CTC amount parameter to double it. Had to use `refundable.individual_max` as a proxy.
+
+**Solution needed**: Add labels to core parameters in policyengine-us package (upstream fix).
+
 ## Measurements
 
 | Question type | Baseline | After improvements | Target |
 |---------------|----------|-------------------|--------|
 | Parameter lookup (UK personal allowance) | 10 turns | **3 turns** | 3-4 |
 | Household calculation (UK £50k income) | 6 turns | - | 5-6 |
+| Economy-wide (UK budgetary impact) | 18 turns | **6 turns** | 5-8 |
+| Economy-wide (US CTC impact) | 20+ turns | - | 8-10 |
 
 ## Progress log
 
@@ -163,3 +186,7 @@ Tests are in `tests/test_agent_policy_questions.py` (integration tests requiring
 - 2024-12-30: Fixed model name mismatch (policyengine-uk with hyphen, not underscore)
 - 2024-12-30: Added case-insensitive search using ILIKE
 - 2024-12-30: Tested personal allowance lookup - **3 turns** (target met!)
+- 2025-12-30: Tested UK economy-wide (budgetary impact) - 18 turns initially
+- 2025-12-30: Restructured system prompt to emphasize country filter at top
+- 2025-12-30: UK economy-wide now **6 turns** (3x improvement)
+- 2025-12-30: Discovered US CTC parameters missing labels (upstream issue in policyengine-us)
