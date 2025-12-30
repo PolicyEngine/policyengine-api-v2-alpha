@@ -29,12 +29,9 @@ You have access to the full PolicyEngine API. Key workflows:
    - POST /analysis/economic-impact with policy_id and dataset_id
    - Poll GET /analysis/economic-impact/{report_id} until completed
 
-IMPORTANT - Parameter search tips:
-- ALWAYS filter by country using tax_benefit_model_name="policyengine_uk" or "policyengine_us"
-- UK parameters start with "gov.hmrc" (e.g. gov.hmrc.income_tax.allowances.personal_allowance.amount)
-- US parameters start with "gov.irs" (e.g. gov.irs.deductions.standard.amount.SINGLE)
-- Common UK searches: "personal_allowance", "basic_rate", "child_benefit"
-- Common US searches: "standard.amount", "eitc", "ctc"
+When searching for parameters, use tax_benefit_model_name to filter by country:
+- "policyengine_uk" for UK parameters
+- "policyengine_us" for US parameters
 
 When answering questions:
 1. Use the API tools to get accurate, current data

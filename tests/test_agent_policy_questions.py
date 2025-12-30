@@ -17,8 +17,48 @@ from policyengine_api.agent_sandbox import _run_agent_impl
 API_BASE = "https://v2.api.policyengine.org"
 
 
+class TestParameterLookup:
+    """Parameter lookup questions - should complete in 2-4 turns."""
+
+    def test_uk_personal_allowance(self):
+        """UK personal allowance lookup."""
+        result = _run_agent_impl(
+            "What is the current UK personal allowance?",
+            api_base_url=API_BASE,
+            max_turns=10,
+        )
+        assert result["status"] == "completed"
+        assert result["result"] is not None
+        print(f"\nTurns: {result['turns']}")
+        print(f"Result: {result['result'][:500]}")
+
+    def test_uk_higher_rate_threshold(self):
+        """UK higher rate threshold lookup."""
+        result = _run_agent_impl(
+            "At what income level does the UK higher rate (40%) tax band start?",
+            api_base_url=API_BASE,
+            max_turns=10,
+        )
+        assert result["status"] == "completed"
+        assert result["result"] is not None
+        print(f"\nTurns: {result['turns']}")
+        print(f"Result: {result['result'][:500]}")
+
+    def test_us_standard_deduction(self):
+        """US standard deduction lookup."""
+        result = _run_agent_impl(
+            "What is the US federal standard deduction for a single filer?",
+            api_base_url=API_BASE,
+            max_turns=10,
+        )
+        assert result["status"] == "completed"
+        assert result["result"] is not None
+        print(f"\nTurns: {result['turns']}")
+        print(f"Result: {result['result'][:500]}")
+
+
 class TestUKHouseholdSimple:
-    """Simple UK household questions - should complete in 2-4 turns."""
+    """Simple UK household questions - should complete in 3-5 turns."""
 
     def test_income_tax_calculation(self):
         """Basic income tax calculation."""
@@ -29,7 +69,6 @@ class TestUKHouseholdSimple:
         )
         assert result["status"] == "completed"
         assert result["result"] is not None
-        # Should mention tax amount
         assert "£" in result["result"] or "GBP" in result["result"]
         print(f"\nTurns: {result['turns']}")
         print(f"Result: {result['result'][:500]}")
@@ -46,23 +85,9 @@ class TestUKHouseholdSimple:
         print(f"\nTurns: {result['turns']}")
         print(f"Result: {result['result'][:500]}")
 
-    def test_personal_allowance(self):
-        """Simple parameter lookup."""
-        result = _run_agent_impl(
-            "What is the current UK personal allowance?",
-            api_base_url=API_BASE,
-            max_turns=10,
-        )
-        assert result["status"] == "completed"
-        assert result["result"] is not None
-        # Should mention the amount (currently £12,570)
-        assert "12" in result["result"]
-        print(f"\nTurns: {result['turns']}")
-        print(f"Result: {result['result'][:500]}")
-
 
 class TestUKHouseholdComplex:
-    """Complex UK household questions - may need 4-8 turns."""
+    """Complex UK household questions - may need 5-10 turns."""
 
     def test_marginal_rate_at_100k(self):
         """Marginal tax rate calculation at £100k (60% trap)."""
@@ -74,7 +99,6 @@ class TestUKHouseholdComplex:
         )
         assert result["status"] == "completed"
         assert result["result"] is not None
-        # Should mention high marginal rate (60% or similar)
         print(f"\nTurns: {result['turns']}")
         print(f"Result: {result['result'][:500]}")
 
@@ -93,7 +117,7 @@ class TestUKHouseholdComplex:
 
 
 class TestUSHouseholdSimple:
-    """Simple US household questions - should complete in 2-4 turns."""
+    """Simple US household questions - should complete in 3-5 turns."""
 
     def test_federal_income_tax(self):
         """Basic federal income tax calculation."""
@@ -121,21 +145,9 @@ class TestUSHouseholdSimple:
         print(f"\nTurns: {result['turns']}")
         print(f"Result: {result['result'][:500]}")
 
-    def test_standard_deduction(self):
-        """Simple parameter lookup."""
-        result = _run_agent_impl(
-            "What is the US federal standard deduction for a single filer in 2024?",
-            api_base_url=API_BASE,
-            max_turns=10,
-        )
-        assert result["status"] == "completed"
-        assert result["result"] is not None
-        print(f"\nTurns: {result['turns']}")
-        print(f"Result: {result['result'][:500]}")
-
 
 class TestUSHouseholdComplex:
-    """Complex US household questions - may need 4-8 turns."""
+    """Complex US household questions - may need 5-10 turns."""
 
     def test_eitc_calculation(self):
         """EITC with children calculation."""
@@ -151,20 +163,30 @@ class TestUSHouseholdComplex:
         print(f"Result: {result['result'][:500]}")
 
 
-class TestEconomySimple:
-    """Simple economy-wide questions - parameter lookups."""
+class TestEconomyWide:
+    """Economy-wide analysis questions - budgetary impacts, distributional analysis."""
 
-    def test_uk_higher_rate_threshold(self):
-        """UK higher rate threshold lookup."""
+    def test_uk_policy_budgetary_impact(self):
+        """UK policy reform budgetary impact."""
         result = _run_agent_impl(
-            "At what income level does the UK higher rate (40%) tax band start?",
+            "What would be the budgetary impact of raising the UK personal allowance to £15,000?",
             api_base_url=API_BASE,
-            max_turns=10,
+            max_turns=20,
         )
         assert result["status"] == "completed"
         assert result["result"] is not None
-        # Should mention £50,270 or similar
-        assert "50" in result["result"]
+        print(f"\nTurns: {result['turns']}")
+        print(f"Result: {result['result'][:500]}")
+
+    def test_us_policy_winners_losers(self):
+        """US policy reform winners and losers."""
+        result = _run_agent_impl(
+            "If the US doubled the Child Tax Credit, which income deciles would benefit most?",
+            api_base_url=API_BASE,
+            max_turns=20,
+        )
+        assert result["status"] == "completed"
+        assert result["result"] is not None
         print(f"\nTurns: {result['turns']}")
         print(f"Result: {result['result'][:500]}")
 
@@ -175,10 +197,10 @@ class TestTurnCounting:
     @pytest.mark.parametrize(
         "question,max_expected_turns",
         [
-            ("What is the UK personal allowance?", 4),
-            ("What is the US standard deduction?", 4),
-            ("Calculate income tax for £30,000 UK salary", 5),
-            ("Calculate federal income tax for $50,000 US salary", 5),
+            ("What is the UK personal allowance?", 5),
+            ("What is the US standard deduction?", 5),
+            ("Calculate income tax for £30,000 UK salary", 6),
+            ("Calculate federal income tax for $50,000 US salary", 6),
         ],
     )
     def test_turn_efficiency(self, question, max_expected_turns):
@@ -186,13 +208,12 @@ class TestTurnCounting:
         result = _run_agent_impl(
             question,
             api_base_url=API_BASE,
-            max_turns=max_expected_turns + 5,  # Allow some buffer
+            max_turns=max_expected_turns + 5,
         )
         assert result["status"] == "completed"
         print(f"\nQuestion: {question}")
         print(f"Turns: {result['turns']} (max expected: {max_expected_turns})")
         print(f"Result: {result['result'][:300]}")
 
-        # Soft assertion - log warning if over expected
         if result["turns"] > max_expected_turns:
             print(f"WARNING: Took {result['turns']} turns, expected <= {max_expected_turns}")

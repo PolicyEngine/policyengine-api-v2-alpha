@@ -89,10 +89,13 @@ Tests are in `tests/test_agent_policy_questions.py` (integration tests requiring
 6. "hmrc income_tax allowances personal" → empty
 7. "hmrc.income_tax.allowances" → found it!
 
-**Solution options**:
-1. Add `tax_benefit_model_name` filter to `/parameters/` endpoint
-2. Improve system prompt with example searches for common parameters
-3. Add UK/US prefix to parameter labels
+**Solution implemented**:
+- Added `tax_benefit_model_name` filter to `/parameters/` endpoint
+- Updated system prompt to instruct agent to use country filter
+
+**NOT acceptable solutions** (test hacking):
+- Adding specific parameter name examples to system prompt
+- Telling agent exactly what to search for
 
 ### Issue 2: [To be discovered]
 
