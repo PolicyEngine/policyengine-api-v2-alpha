@@ -657,15 +657,18 @@ def simulate_economy_us(simulation_id: str, traceparent: str | None = None) -> N
 def economy_comparison_uk(job_id: str, traceparent: str | None = None) -> None:
     """Run UK economy comparison analysis (decile impacts, budget impact, etc)."""
     import os
-    from datetime import datetime, timezone
-    from uuid import UUID
 
     import logfire
-    from sqlmodel import Session, create_engine
 
+    # Configure logfire FIRST to capture all time including imports
     configure_logfire("policyengine-modal-uk", traceparent)
 
     with logfire.span("economy_comparison_uk", job_id=job_id):
+        from datetime import datetime, timezone
+        from uuid import UUID
+
+        from sqlmodel import Session, create_engine
+
         logfire.info("Starting UK economy comparison", job_id=job_id)
 
         database_url = get_database_url()
@@ -742,17 +745,18 @@ def economy_comparison_uk(job_id: str, traceparent: str | None = None) -> None:
                 )
 
                 # Download dataset
-                logfire.info("Loading dataset", filepath=dataset.filepath)
-                local_path = download_dataset(
-                    dataset.filepath, supabase_url, supabase_key, storage_bucket
-                )
+                with logfire.span("download_dataset", filepath=dataset.filepath):
+                    local_path = download_dataset(
+                        dataset.filepath, supabase_url, supabase_key, storage_bucket
+                    )
 
-                pe_dataset = PolicyEngineUKDataset(
-                    name=dataset.name,
-                    description=dataset.description or "",
-                    filepath=local_path,
-                    year=dataset.year,
-                )
+                with logfire.span("load_dataset"):
+                    pe_dataset = PolicyEngineUKDataset(
+                        name=dataset.name,
+                        description=dataset.description or "",
+                        filepath=local_path,
+                        year=dataset.year,
+                    )
 
                 # Create and run simulations
                 with logfire.span("run_baseline_simulation"):
