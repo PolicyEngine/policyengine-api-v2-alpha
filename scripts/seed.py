@@ -206,14 +206,13 @@ def seed_model(model_version, session, lite: bool = False) -> TaxBenefitModelVer
                 f"  [green]✓[/green] Added {len(model_version.variables)} variables"
             )
 
-        # Add parameters (only user-facing ones: those with labels)
-        # Deduplicate by name - keep first occurrence
+        # Add parameters - deduplicate by name (keep first occurrence)
         # In lite mode, exclude US state parameters (gov.states.*)
         seen_names = set()
         parameters_to_add = []
         skipped_state_params = 0
         for p in model_version.parameters:
-            if p.label is None or p.name in seen_names:
+            if p.name in seen_names:
                 continue
             # In lite mode, skip state-level parameters for faster seeding
             if lite and p.name.startswith("gov.states."):
@@ -222,8 +221,10 @@ def seed_model(model_version, session, lite: bool = False) -> TaxBenefitModelVer
             parameters_to_add.append(p)
             seen_names.add(p.name)
 
-        filter_msg = f"  Filtered to {len(parameters_to_add)} user-facing parameters"
-        filter_msg += f" (from {len(model_version.parameters)} total, deduplicated by name)"
+        filter_msg = f"  Filtered to {len(parameters_to_add)} parameters"
+        filter_msg += (
+            f" (from {len(model_version.parameters)} total, deduplicated by name)"
+        )
         if lite and skipped_state_params > 0:
             filter_msg += f", skipped {skipped_state_params} state params (lite mode)"
         console.print(filter_msg)
@@ -626,7 +627,9 @@ def main():
 
     with logfire.span("database_seeding"):
         mode_str = " (lite mode)" if args.lite else ""
-        console.print(f"[bold green]PolicyEngine database seeding{mode_str}[/bold green]\n")
+        console.print(
+            f"[bold green]PolicyEngine database seeding{mode_str}[/bold green]\n"
+        )
 
         with next(get_quiet_session()) as session:
             # Seed UK model

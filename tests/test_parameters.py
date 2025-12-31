@@ -42,6 +42,60 @@ def test__given_nonexistent_parameter_id__then_returns_404(client):
     assert response.status_code == 404
 
 
+def test__given_parameter_without_label__then_can_create_and_retrieve(
+    client,
+    session,
+    model_version,  # noqa: F811
+):
+    """Parameters without labels can be created and retrieved via API.
+
+    This tests that the API supports parameters with label=None, which is
+    important for bracket parameters (e.g., [0].rate) and breakdown parameters
+    (e.g., .SINGLE, .CA) that don't have explicit labels in their YAML files.
+    """
+    # Given - create a parameter without a label (simulating bracket/breakdown params)
+    param = create_parameter(
+        session, model_version, "gov.test.rates[0].rate", label=None
+    )
+
+    # When
+    response = client.get(f"/parameters/{param.id}")
+
+    # Then
+    assert response.status_code == 200
+    data = response.json()
+    assert data["name"] == "gov.test.rates[0].rate"
+    assert data["label"] is None
+
+
+def test__given_mixed_label_parameters__then_returns_all(
+    client,
+    session,
+    model_version,  # noqa: F811
+):
+    """Parameters with and without labels are both returned in list queries.
+
+    This ensures the API doesn't filter out parameters based on label presence.
+    """
+    # Given - create parameters with and without labels
+    param_with_label = create_parameter(
+        session, model_version, "gov.test.labeled", label="Test labeled param"
+    )
+    param_without_label = create_parameter(
+        session, model_version, "gov.test.unlabeled", label=None
+    )
+
+    # When
+    response = client.get("/parameters")
+
+    # Then
+    assert response.status_code == 200
+    data = response.json()
+    param_names = [p["name"] for p in data]
+    assert param_with_label.name in param_names
+    assert param_without_label.name in param_names
+
+
 # -----------------------------------------------------------------------------
 # Parameter Value Endpoint Tests
 # -----------------------------------------------------------------------------

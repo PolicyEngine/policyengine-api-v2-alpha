@@ -218,4 +218,6 @@ class TestTurnCounting:
         print(f"Result: {result['result'][:300]}")
 
         if result["turns"] > max_expected_turns:
-            print(f"WARNING: Took {result['turns']} turns, expected <= {max_expected_turns}")
+            print(
+                f"WARNING: Took {result['turns']} turns, expected <= {max_expected_turns}"
+            )
