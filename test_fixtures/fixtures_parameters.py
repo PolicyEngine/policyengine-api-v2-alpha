@@ -41,8 +41,17 @@ def model_version(session):
 # -----------------------------------------------------------------------------
 
 
-def create_parameter(session, model_version, name: str, label: str) -> Parameter:
-    """Create and persist a Parameter."""
+def create_parameter(
+    session, model_version, name: str, label: str | None = None
+) -> Parameter:
+    """Create and persist a Parameter.
+
+    Args:
+        session: The database session.
+        model_version: The TaxBenefitModelVersion to associate with.
+        name: The parameter name (e.g., "gov.irs.income.bracket.rates.1").
+        label: Optional human-readable label. If None, parameter has no label.
+    """
     param = Parameter(
         name=name,
         label=label,

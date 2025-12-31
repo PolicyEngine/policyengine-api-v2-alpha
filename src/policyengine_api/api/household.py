@@ -28,6 +28,7 @@ def get_traceparent() -> str | None:
     TraceContextTextMapPropagator().inject(carrier)
     return carrier.get("traceparent")
 
+
 router = APIRouter(prefix="/household", tags=["household"])
 
 

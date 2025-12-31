@@ -147,7 +147,11 @@ def download_dataset(
 
 
 @app.function(
-    image=uk_image, secrets=[db_secrets, logfire_secrets], memory=4096, cpu=4, timeout=600
+    image=uk_image,
+    secrets=[db_secrets, logfire_secrets],
+    memory=4096,
+    cpu=4,
+    timeout=600,
 )
 def simulate_household_uk(
     job_id: str,
@@ -277,7 +281,11 @@ def simulate_household_uk(
 
 
 @app.function(
-    image=us_image, secrets=[db_secrets, logfire_secrets], memory=4096, cpu=4, timeout=600
+    image=us_image,
+    secrets=[db_secrets, logfire_secrets],
+    memory=4096,
+    cpu=4,
+    timeout=600,
 )
 def simulate_household_us(
     job_id: str,
@@ -416,7 +424,11 @@ def simulate_household_us(
 
 
 @app.function(
-    image=uk_image, secrets=[db_secrets, logfire_secrets], memory=8192, cpu=8, timeout=1800
+    image=uk_image,
+    secrets=[db_secrets, logfire_secrets],
+    memory=8192,
+    cpu=8,
+    timeout=1800,
 )
 def simulate_economy_uk(simulation_id: str, traceparent: str | None = None) -> None:
     """Run a single UK economy simulation and write results to database."""
@@ -445,6 +457,7 @@ def simulate_economy_uk(simulation_id: str, traceparent: str | None = None) -> N
                 Simulation,
                 SimulationStatus,
             )
+
             with Session(engine) as session:
                 simulation = session.get(Simulation, UUID(simulation_id))
                 if not simulation:
@@ -452,7 +465,9 @@ def simulate_economy_uk(simulation_id: str, traceparent: str | None = None) -> N
 
                 # Skip if already completed
                 if simulation.status == SimulationStatus.COMPLETED:
-                    logfire.info("Simulation already completed", simulation_id=simulation_id)
+                    logfire.info(
+                        "Simulation already completed", simulation_id=simulation_id
+                    )
                     return
 
                 # Update status to running
@@ -475,7 +490,9 @@ def simulate_economy_uk(simulation_id: str, traceparent: str | None = None) -> N
                 pe_model_version = uk_latest
 
                 # Get policy and dynamic
-                policy = _get_pe_policy_uk(simulation.policy_id, pe_model_version, session)
+                policy = _get_pe_policy_uk(
+                    simulation.policy_id, pe_model_version, session
+                )
                 dynamic = _get_pe_dynamic_uk(
                     simulation.dynamic_id, pe_model_version, session
                 )
@@ -512,7 +529,11 @@ def simulate_economy_uk(simulation_id: str, traceparent: str | None = None) -> N
             logfire.info("UK economy simulation completed", simulation_id=simulation_id)
 
         except Exception as e:
-            logfire.error("UK economy simulation failed", simulation_id=simulation_id, error=str(e))
+            logfire.error(
+                "UK economy simulation failed",
+                simulation_id=simulation_id,
+                error=str(e),
+            )
             # Use raw SQL to mark as failed - models may not be available
             try:
                 from sqlmodel import text
@@ -534,7 +555,11 @@ def simulate_economy_uk(simulation_id: str, traceparent: str | None = None) -> N
 
 
 @app.function(
-    image=us_image, secrets=[db_secrets, logfire_secrets], memory=8192, cpu=8, timeout=1800
+    image=us_image,
+    secrets=[db_secrets, logfire_secrets],
+    memory=8192,
+    cpu=8,
+    timeout=1800,
 )
 def simulate_economy_us(simulation_id: str, traceparent: str | None = None) -> None:
     """Run a single US economy simulation and write results to database."""
@@ -563,6 +588,7 @@ def simulate_economy_us(simulation_id: str, traceparent: str | None = None) -> N
                 Simulation,
                 SimulationStatus,
             )
+
             with Session(engine) as session:
                 simulation = session.get(Simulation, UUID(simulation_id))
                 if not simulation:
@@ -570,7 +596,9 @@ def simulate_economy_us(simulation_id: str, traceparent: str | None = None) -> N
 
                 # Skip if already completed
                 if simulation.status == SimulationStatus.COMPLETED:
-                    logfire.info("Simulation already completed", simulation_id=simulation_id)
+                    logfire.info(
+                        "Simulation already completed", simulation_id=simulation_id
+                    )
                     return
 
                 # Update status to running
@@ -593,7 +621,9 @@ def simulate_economy_us(simulation_id: str, traceparent: str | None = None) -> N
                 pe_model_version = us_latest
 
                 # Get policy and dynamic
-                policy = _get_pe_policy_us(simulation.policy_id, pe_model_version, session)
+                policy = _get_pe_policy_us(
+                    simulation.policy_id, pe_model_version, session
+                )
                 dynamic = _get_pe_dynamic_us(
                     simulation.dynamic_id, pe_model_version, session
                 )
@@ -630,7 +660,11 @@ def simulate_economy_us(simulation_id: str, traceparent: str | None = None) -> N
             logfire.info("US economy simulation completed", simulation_id=simulation_id)
 
         except Exception as e:
-            logfire.error("US economy simulation failed", simulation_id=simulation_id, error=str(e))
+            logfire.error(
+                "US economy simulation failed",
+                simulation_id=simulation_id,
+                error=str(e),
+            )
             # Use raw SQL to mark as failed - models may not be available
             try:
                 from sqlmodel import text
@@ -652,7 +686,11 @@ def simulate_economy_us(simulation_id: str, traceparent: str | None = None) -> N
 
 
 @app.function(
-    image=uk_image, secrets=[db_secrets, logfire_secrets], memory=8192, cpu=8, timeout=1800
+    image=uk_image,
+    secrets=[db_secrets, logfire_secrets],
+    memory=8192,
+    cpu=8,
+    timeout=1800,
 )
 def economy_comparison_uk(job_id: str, traceparent: str | None = None) -> None:
     """Run UK economy comparison analysis (decile impacts, budget impact, etc)."""
@@ -690,6 +728,7 @@ def economy_comparison_uk(job_id: str, traceparent: str | None = None) -> None:
                 SimulationStatus,
                 TaxBenefitModelVersion,
             )
+
             with Session(engine) as session:
                 # Load report and related data
                 report = session.get(Report, UUID(job_id))
@@ -851,7 +890,10 @@ def economy_comparison_uk(job_id: str, traceparent: str | None = None) -> None:
                             )
                             session.add(program_stat)
                         except KeyError as e:
-                            logfire.warn(f"Skipping {prog_name}: variable not found", error=str(e))
+                            logfire.warn(
+                                f"Skipping {prog_name}: variable not found",
+                                error=str(e),
+                            )
 
                 # Mark simulations and report as completed
                 baseline_sim.status = SimulationStatus.COMPLETED
@@ -890,7 +932,11 @@ def economy_comparison_uk(job_id: str, traceparent: str | None = None) -> None:
 
 
 @app.function(
-    image=us_image, secrets=[db_secrets, logfire_secrets], memory=8192, cpu=8, timeout=1800
+    image=us_image,
+    secrets=[db_secrets, logfire_secrets],
+    memory=8192,
+    cpu=8,
+    timeout=1800,
 )
 def economy_comparison_us(job_id: str, traceparent: str | None = None) -> None:
     """Run US economy comparison analysis (decile impacts, budget impact, etc)."""
@@ -1036,7 +1082,9 @@ def economy_comparison_us(job_id: str, traceparent: str | None = None) -> None:
 
                 # Calculate program statistics
                 with logfire.span("calculate_program_statistics"):
-                    PEProgramStats.model_rebuild(_types_namespace={"Simulation": PESimulation})
+                    PEProgramStats.model_rebuild(
+                        _types_namespace={"Simulation": PESimulation}
+                    )
 
                     programs = {
                         "income_tax": {"entity": "tax_unit", "is_tax": True},
@@ -1074,7 +1122,10 @@ def economy_comparison_us(job_id: str, traceparent: str | None = None) -> None:
                             )
                             session.add(program_stat)
                         except KeyError as e:
-                            logfire.warn(f"Skipping {prog_name}: variable not found", error=str(e))
+                            logfire.warn(
+                                f"Skipping {prog_name}: variable not found",
+                                error=str(e),
+                            )
 
                 # Mark simulations and report as completed
                 baseline_sim.status = SimulationStatus.COMPLETED
