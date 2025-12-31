@@ -70,7 +70,7 @@ app.add_middleware(
 
 # Instrument FastAPI with Logfire (only if configured)
 if _logfire_enabled:
-    logfire.instrument_fastapi(app)
+    logfire.instrument_fastapi(app, excluded_urls=["/health"])
 
 app.include_router(api_router)
 
