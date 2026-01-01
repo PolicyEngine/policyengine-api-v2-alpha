@@ -35,6 +35,14 @@ if _logfire_enabled:
     )
     logfire.instrument_httpx()
 
+    # Disable noisy SQLAlchemy auto-instrumentation
+    try:
+        from opentelemetry.instrumentation.sqlalchemy import SQLAlchemyInstrumentor
+
+        SQLAlchemyInstrumentor().uninstrument()
+    except ImportError:
+        pass  # Not installed
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):

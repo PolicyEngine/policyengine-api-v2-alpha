@@ -4,12 +4,6 @@ from policyengine_api.config.settings import settings
 
 engine = create_engine(settings.database_url, echo=settings.debug)
 
-# Only instrument with logfire if configured
-if settings.logfire_token:
-    import logfire
-
-    logfire.instrument_sqlalchemy(engine=engine)
-
 
 def get_session():
     """Get database session."""
