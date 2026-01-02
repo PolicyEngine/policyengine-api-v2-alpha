@@ -1,8 +1,26 @@
-"""Tests for the agent sandbox using Claude Agent SDK with MCP."""
+"""Tests for the agent sandbox using direct Claude API with OpenAPI-generated tools."""
 
 import pytest
 
-from policyengine_api.agent_sandbox import _run_agent_impl
+from policyengine_api.agent_sandbox import (
+    _run_agent_impl,
+    fetch_openapi_spec,
+    openapi_to_claude_tools,
+)
+
+
+def test_openapi_tool_generation():
+    """OpenAPI spec generates tools correctly."""
+    spec = fetch_openapi_spec("https://v2.api.policyengine.org")
+    tools = openapi_to_claude_tools(spec)
+
+    assert len(tools) > 30  # Should have many endpoints
+    tool_names = [t["name"] for t in tools]
+
+    # Check key endpoints exist
+    assert any("parameters" in n for n in tool_names)
+    assert any("household" in n for n in tool_names)
+    assert any("policies" in n for n in tool_names)
 
 
 @pytest.mark.integration
@@ -33,6 +51,7 @@ def test_uk_household_calculation():
         max_turns=20,
     )
     assert result["status"] == "completed"
+    # Should mention income tax amount
     assert "tax" in result["result"].lower()
 
 
@@ -46,6 +65,7 @@ def test_economic_impact_personal_allowance():
         max_turns=25,
     )
     assert result["status"] == "completed"
+    # Should mention some impact metric
     assert any(
         word in result["result"].lower()
         for word in ["budget", "cost", "revenue", "billion", "impact", "decile"]
