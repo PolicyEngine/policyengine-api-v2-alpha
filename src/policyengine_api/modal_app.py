@@ -26,7 +26,8 @@ base_image = (
         "psycopg2-binary>=2.9.10 "
         "supabase>=2.10.0 "
         "rich>=13.9.4 "
-        "logfire[httpx]>=3.0.0"
+        "logfire[httpx]>=3.0.0 "
+        "tables>=3.10.0"  # pytables - required for HDF5 dataset operations
     )
     # Include the policyengine_api models package (copy=True allows subsequent build steps)
     .add_local_python_source("policyengine_api", copy=True)
