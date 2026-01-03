@@ -16,6 +16,7 @@ from .household_job import (
     HouseholdJobRead,
     HouseholdJobStatus,
 )
+from .inequality import Inequality, InequalityCreate, InequalityRead
 from .output import (
     AggregateOutput,
     AggregateOutputCreate,
@@ -25,6 +26,7 @@ from .output import (
 from .parameter import Parameter, ParameterCreate, ParameterRead
 from .parameter_value import ParameterValue, ParameterValueCreate, ParameterValueRead
 from .policy import Policy, PolicyCreate, PolicyRead
+from .poverty import Poverty, PovertyCreate, PovertyRead
 from .program_statistics import (
     ProgramStatistics,
     ProgramStatisticsCreate,
@@ -70,6 +72,9 @@ __all__ = [
     "HouseholdJobCreate",
     "HouseholdJobRead",
     "HouseholdJobStatus",
+    "Inequality",
+    "InequalityCreate",
+    "InequalityRead",
     "Parameter",
     "ParameterCreate",
     "ParameterRead",
@@ -79,6 +84,9 @@ __all__ = [
     "Policy",
     "PolicyCreate",
     "PolicyRead",
+    "Poverty",
+    "PovertyCreate",
+    "PovertyRead",
     "ProgramStatistics",
     "ProgramStatisticsCreate",
     "ProgramStatisticsRead",
