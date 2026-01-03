@@ -4,6 +4,7 @@ These endpoints are async - they create jobs that are processed by Modal functio
 Poll the status endpoint until the job is complete.
 """
 
+import math
 from typing import Any, Literal
 from uuid import UUID
 
@@ -22,11 +23,25 @@ from policyengine_api.models import (
 from policyengine_api.services.database import get_session
 
 
+def _sanitize_for_json(obj: Any) -> Any:
+    """Replace NaN/Inf values with None for JSON serialization."""
+    if isinstance(obj, float):
+        if math.isnan(obj) or math.isinf(obj):
+            return None
+        return obj
+    elif isinstance(obj, dict):
+        return {k: _sanitize_for_json(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [_sanitize_for_json(v) for v in obj]
+    return obj
+
+
 def get_traceparent() -> str | None:
     """Get the current W3C traceparent header for distributed tracing."""
     carrier: dict[str, str] = {}
     TraceContextTextMapPropagator().inject(carrier)
     return carrier.get("traceparent")
+
 
 router = APIRouter(prefix="/household", tags=["household"])
 
@@ -254,11 +269,13 @@ def _run_local_household_uk(
         job = session.get(HouseholdJob, job_id)
         if job:
             job.status = HouseholdJobStatus.COMPLETED
-            job.result = {
-                "person": result.person,
-                "benunit": result.benunit,
-                "household": result.household,
-            }
+            job.result = _sanitize_for_json(
+                {
+                    "person": result.person,
+                    "benunit": result.benunit,
+                    "household": result.household,
+                }
+            )
             job.completed_at = datetime.now(timezone.utc)
             session.add(job)
             session.commit()
@@ -343,14 +360,16 @@ def _run_local_household_us(
         job = session.get(HouseholdJob, job_id)
         if job:
             job.status = HouseholdJobStatus.COMPLETED
-            job.result = {
-                "person": result.person,
-                "marital_unit": result.marital_unit,
-                "family": result.family,
-                "spm_unit": result.spm_unit,
-                "tax_unit": result.tax_unit,
-                "household": result.household,
-            }
+            job.result = _sanitize_for_json(
+                {
+                    "person": result.person,
+                    "marital_unit": result.marital_unit,
+                    "family": result.family,
+                    "spm_unit": result.spm_unit,
+                    "tax_unit": result.tax_unit,
+                    "household": result.household,
+                }
+            )
             job.completed_at = datetime.now(timezone.utc)
             session.add(job)
             session.commit()

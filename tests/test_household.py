@@ -1,14 +1,29 @@
 """Tests for household calculation endpoint."""
 
+import time
+
 import pytest
-
-pytestmark = pytest.mark.integration
-
 from fastapi.testclient import TestClient
 
 from policyengine_api.main import app
 
+pytestmark = pytest.mark.integration
+
 client = TestClient(app)
+
+
+def _poll_job(job_id: str, max_attempts: int = 10) -> dict:
+    """Poll for job completion."""
+    for _ in range(max_attempts):
+        response = client.get(f"/household/calculate/{job_id}")
+        assert response.status_code == 200
+        data = response.json()
+        if data["status"] == "completed":
+            return data
+        if data["status"] == "failed":
+            raise AssertionError(f"Job failed: {data.get('error_message')}")
+        time.sleep(0.1)
+    raise AssertionError("Job timed out")
 
 
 class TestUKHouseholdCalculate:
@@ -25,11 +40,15 @@ class TestUKHouseholdCalculate:
             },
         )
         assert response.status_code == 200
-        data = response.json()
-        assert "person" in data
-        assert "benunit" in data
-        assert "household" in data
-        assert len(data["person"]) == 1
+        job_data = response.json()
+        assert "job_id" in job_data
+
+        data = _poll_job(job_data["job_id"])
+        assert data["result"] is not None
+        assert "person" in data["result"]
+        assert "benunit" in data["result"]
+        assert "household" in data["result"]
+        assert len(data["result"]["person"]) == 1
 
     def test_couple_with_children(self):
         """Test calculation for a couple with children."""
@@ -47,8 +66,9 @@ class TestUKHouseholdCalculate:
             },
         )
         assert response.status_code == 200
-        data = response.json()
-        assert len(data["person"]) == 4
+        job_data = response.json()
+        data = _poll_job(job_data["job_id"])
+        assert len(data["result"]["person"]) == 4
 
     def test_with_household_data(self):
         """Test calculation with household-level data."""
@@ -65,8 +85,9 @@ class TestUKHouseholdCalculate:
             },
         )
         assert response.status_code == 200
-        data = response.json()
-        assert "household" in data
+        job_data = response.json()
+        data = _poll_job(job_data["job_id"])
+        assert "household" in data["result"]
 
     def test_output_contains_tax_variables(self):
         """Test that output contains expected tax/benefit variables."""
@@ -79,10 +100,11 @@ class TestUKHouseholdCalculate:
             },
         )
         assert response.status_code == 200
-        data = response.json()
-        assert isinstance(data["person"], list)
-        assert len(data["person"]) > 0
-        person_data = data["person"][0]
+        job_data = response.json()
+        data = _poll_job(job_data["job_id"])
+        assert isinstance(data["result"]["person"], list)
+        assert len(data["result"]["person"]) > 0
+        person_data = data["result"]["person"][0]
         assert isinstance(person_data, dict)
 
 
@@ -100,14 +122,16 @@ class TestUSHouseholdCalculate:
             },
         )
         assert response.status_code == 200
-        data = response.json()
-        assert "person" in data
-        assert "household" in data
-        assert "tax_unit" in data
-        assert "spm_unit" in data
-        assert "family" in data
-        assert "marital_unit" in data
-        assert len(data["person"]) == 1
+        job_data = response.json()
+        data = _poll_job(job_data["job_id"])
+        result = data["result"]
+        assert "person" in result
+        assert "household" in result
+        assert "tax_unit" in result
+        assert "spm_unit" in result
+        assert "family" in result
+        assert "marital_unit" in result
+        assert len(result["person"]) == 1
 
     def test_family_with_children(self):
         """Test calculation for a family with children."""
@@ -125,8 +149,9 @@ class TestUSHouseholdCalculate:
             },
         )
         assert response.status_code == 200
-        data = response.json()
-        assert len(data["person"]) == 4
+        job_data = response.json()
+        data = _poll_job(job_data["job_id"])
+        assert len(data["result"]["person"]) == 4
 
 
 class TestValidation:
