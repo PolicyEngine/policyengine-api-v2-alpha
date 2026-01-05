@@ -377,7 +377,7 @@ def _run_agent_impl(
     api_base_url: str = "https://v2.api.policyengine.org",
     call_id: str = "",
     history: list[dict] | None = None,
-    max_turns: int = 30,
+    max_turns: int = 100,
     traceparent: str | None = None,
 ) -> dict:
     """Core agent implementation."""
