@@ -122,3 +122,23 @@ jobs:
         run: |
           uv run modal deploy src/policyengine_api/modal_app.py
           uv run modal deploy src/policyengine_api/agent_sandbox.py
+
+      - name: Validate Modal secrets
+        env:
+          MODAL_TOKEN_ID: ${{ secrets.MODAL_TOKEN_ID }}
+          MODAL_TOKEN_SECRET: ${{ secrets.MODAL_TOKEN_SECRET }}
+        run: |
+          echo "Validating Modal secrets are correctly configured..."
+          result=$(uv run python -c "
+          import modal
+          f = modal.Function.from_name('policyengine', 'validate_secrets')
+          result = f.remote()
+          import json
+          print(json.dumps(result))
+          ")
+          echo "$result"
+          if echo "$result" | grep -q '"status": "error"'; then
+            echo "::error::Modal secrets validation failed. Check the output above."
+            exit 1
+          fi
+          echo "All Modal secrets validated successfully"

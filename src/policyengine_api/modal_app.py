@@ -65,6 +65,58 @@ app = modal.App("policyengine")
 db_secrets = modal.Secret.from_name("policyengine-db")
 logfire_secrets = modal.Secret.from_name("policyengine-logfire")
 
+# Required environment variables from each secret
+REQUIRED_DB_VARS = ["DATABASE_URL", "SUPABASE_URL", "SUPABASE_KEY"]
+REQUIRED_LOGFIRE_VARS = ["LOGFIRE_TOKEN"]
+
+
+@app.function(
+    image=base_image,
+    secrets=[db_secrets, logfire_secrets],
+    timeout=30,
+)
+def validate_secrets() -> dict:
+    """Validate all required secrets are configured correctly.
+
+    Call this after deploy to verify secrets before running real workloads.
+    Returns a dict with status and any missing variables.
+    """
+    import os
+
+    missing = []
+    present = []
+
+    for var in REQUIRED_DB_VARS:
+        if os.environ.get(var):
+            present.append(var)
+        else:
+            missing.append(f"{var} (from policyengine-db)")
+
+    for var in REQUIRED_LOGFIRE_VARS:
+        if os.environ.get(var):
+            present.append(var)
+        else:
+            missing.append(f"{var} (from policyengine-logfire)")
+
+    if missing:
+        return {
+            "status": "error",
+            "message": f"Missing environment variables: {', '.join(missing)}",
+            "missing": missing,
+            "present": present,
+            "hint": (
+                "Modal secrets must explicitly set env var names. "
+                "Example: modal secret create policyengine-db "
+                "DATABASE_URL=postgresql://... SUPABASE_URL=https://... SUPABASE_KEY=..."
+            ),
+        }
+
+    return {
+        "status": "ok",
+        "message": "All required secrets are configured",
+        "present": present,
+    }
+
 
 def configure_logfire(service_name: str, traceparent: str | None = None):
     """Configure logfire with optional trace context propagation.
@@ -106,7 +158,11 @@ def get_database_url() -> str:
 
     url = os.environ.get("DATABASE_URL", "")
     if not url:
-        raise ValueError("DATABASE_URL environment variable is not set")
+        raise ValueError(
+            "DATABASE_URL environment variable is not set. "
+            "The Modal secret 'policyengine-db' must include DATABASE_URL=postgresql://... "
+            "Run: modal run policyengine::validate_secrets to debug."
+        )
     if not url.startswith(("postgresql://", "postgres://")):
         raise ValueError(
             f"DATABASE_URL must start with postgresql:// or postgres://, got: {url[:50]}..."
