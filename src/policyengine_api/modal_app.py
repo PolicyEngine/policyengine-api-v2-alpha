@@ -483,8 +483,8 @@ def simulate_economy_uk(simulation_id: str, traceparent: str | None = None) -> N
 
                     pe_model_version = uk_latest
 
-                    # Get policy and dynamic
-                    policy = _get_pe_policy_uk(
+                    # Get policy and dynamic (policy returns tuple)
+                    policy, modifier = _get_pe_policy_uk(
                         simulation.policy_id, pe_model_version, session
                     )
                     dynamic = _get_pe_dynamic_uk(
@@ -511,6 +511,9 @@ def simulate_economy_uk(simulation_id: str, traceparent: str | None = None) -> N
                             policy=policy,
                             dynamic=dynamic,
                         )
+                        # Apply simulation modifier if present
+                        if modifier:
+                            _apply_simulation_modifier(pe_sim, modifier)
                         pe_sim.ensure()
 
                     # Mark as completed
@@ -610,8 +613,8 @@ def simulate_economy_us(simulation_id: str, traceparent: str | None = None) -> N
 
                     pe_model_version = us_latest
 
-                    # Get policy and dynamic
-                    policy = _get_pe_policy_us(
+                    # Get policy and dynamic (policy returns tuple)
+                    policy, modifier = _get_pe_policy_us(
                         simulation.policy_id, pe_model_version, session
                     )
                     dynamic = _get_pe_dynamic_us(
@@ -638,6 +641,9 @@ def simulate_economy_us(simulation_id: str, traceparent: str | None = None) -> N
                             policy=policy,
                             dynamic=dynamic,
                         )
+                        # Apply simulation modifier if present
+                        if modifier:
+                            _apply_simulation_modifier(pe_sim, modifier)
                         pe_sim.ensure()
 
                     # Mark as completed
@@ -766,11 +772,11 @@ def economy_comparison_uk(job_id: str, traceparent: str | None = None) -> None:
 
                     pe_model_version = uk_latest
 
-                    # Get policies
-                    baseline_policy = _get_pe_policy_uk(
+                    # Get policies (returns tuple of policy, simulation_modifier)
+                    baseline_policy, baseline_modifier = _get_pe_policy_uk(
                         baseline_sim.policy_id, pe_model_version, session
                     )
-                    reform_policy = _get_pe_policy_uk(
+                    reform_policy, reform_modifier = _get_pe_policy_uk(
                         reform_sim.policy_id, pe_model_version, session
                     )
                     baseline_dynamic = _get_pe_dynamic_uk(
@@ -802,6 +808,12 @@ def economy_comparison_uk(job_id: str, traceparent: str | None = None) -> None:
                             policy=baseline_policy,
                             dynamic=baseline_dynamic,
                         )
+                        # Apply simulation modifier if present
+                        if baseline_modifier:
+                            with logfire.span("apply_baseline_modifier"):
+                                _apply_simulation_modifier(
+                                    pe_baseline_sim, baseline_modifier
+                                )
                         pe_baseline_sim.ensure()
 
                     with logfire.span("run_reform_simulation"):
@@ -811,6 +823,12 @@ def economy_comparison_uk(job_id: str, traceparent: str | None = None) -> None:
                             policy=reform_policy,
                             dynamic=reform_dynamic,
                         )
+                        # Apply simulation modifier if present
+                        if reform_modifier:
+                            with logfire.span("apply_reform_modifier"):
+                                _apply_simulation_modifier(
+                                    pe_reform_sim, reform_modifier
+                                )
                         pe_reform_sim.ensure()
 
                     # Calculate decile impacts
@@ -1048,11 +1066,11 @@ def economy_comparison_us(job_id: str, traceparent: str | None = None) -> None:
 
                     pe_model_version = us_latest
 
-                    # Get policies
-                    baseline_policy = _get_pe_policy_us(
+                    # Get policies (returns tuple of policy, simulation_modifier)
+                    baseline_policy, baseline_modifier = _get_pe_policy_us(
                         baseline_sim.policy_id, pe_model_version, session
                     )
-                    reform_policy = _get_pe_policy_us(
+                    reform_policy, reform_modifier = _get_pe_policy_us(
                         reform_sim.policy_id, pe_model_version, session
                     )
                     baseline_dynamic = _get_pe_dynamic_us(
@@ -1082,6 +1100,12 @@ def economy_comparison_us(job_id: str, traceparent: str | None = None) -> None:
                             policy=baseline_policy,
                             dynamic=baseline_dynamic,
                         )
+                        # Apply simulation modifier if present
+                        if baseline_modifier:
+                            with logfire.span("apply_baseline_modifier"):
+                                _apply_simulation_modifier(
+                                    pe_baseline_sim, baseline_modifier
+                                )
                         pe_baseline_sim.ensure()
 
                     with logfire.span("run_reform_simulation"):
@@ -1091,6 +1115,12 @@ def economy_comparison_us(job_id: str, traceparent: str | None = None) -> None:
                             policy=reform_policy,
                             dynamic=reform_dynamic,
                         )
+                        # Apply simulation modifier if present
+                        if reform_modifier:
+                            with logfire.span("apply_reform_modifier"):
+                                _apply_simulation_modifier(
+                                    pe_reform_sim, reform_modifier
+                                )
                         pe_reform_sim.ensure()
 
                     # Calculate decile impacts
@@ -1244,9 +1274,12 @@ def economy_comparison_us(job_id: str, traceparent: str | None = None) -> None:
 
 
 def _get_pe_policy_uk(policy_id, model_version, session):
-    """Convert database Policy to policyengine Policy for UK."""
+    """Convert database Policy to policyengine Policy for UK.
+
+    Returns a tuple of (policy, simulation_modifier_code).
+    """
     if policy_id is None:
-        return None
+        return None, None
 
     from policyengine.core.policy import ParameterValue as PEParameterValue
     from policyengine.core.policy import Policy as PEPolicy
@@ -1255,7 +1288,7 @@ def _get_pe_policy_uk(policy_id, model_version, session):
 
     db_policy = session.get(Policy, policy_id)
     if not db_policy:
-        return None
+        return None, None
 
     param_lookup = {p.name: p for p in model_version.parameters}
 
@@ -1276,15 +1309,20 @@ def _get_pe_policy_uk(policy_id, model_version, session):
         )
         pe_param_values.append(pe_pv)
 
-    return PEPolicy(
+    policy = PEPolicy(
         name=db_policy.name,
         description=db_policy.description,
         parameter_values=pe_param_values,
     )
 
+    return policy, db_policy.simulation_modifier
+
 
 def _get_pe_policy_us(policy_id, model_version, session):
-    """Convert database Policy to policyengine Policy for US."""
+    """Convert database Policy to policyengine Policy for US.
+
+    Returns a tuple of (policy, simulation_modifier_code).
+    """
     # Same implementation as UK
     return _get_pe_policy_uk(policy_id, model_version, session)
 
@@ -1333,3 +1371,35 @@ def _get_pe_dynamic_us(dynamic_id, model_version, session):
     """Convert database Dynamic to policyengine Dynamic for US."""
     # Same implementation as UK
     return _get_pe_dynamic_uk(dynamic_id, model_version, session)
+
+
+def _apply_simulation_modifier(simulation, modifier_code: str | None):
+    """Apply a simulation modifier (Python code) to a simulation.
+
+    The modifier code should define a function called `modify` that takes
+    a simulation and modifies its tax-benefit system in place.
+
+    Example modifier code:
+    ```python
+    def modify(simulation):
+        # Override income_tax variable
+        @simulation.tax_benefit_system.variable("income_tax")
+        class income_tax(Variable):
+            def formula(person, period, parameters):
+                return person("employment_income", period) * 0.15
+    ```
+    """
+    if not modifier_code:
+        return simulation
+
+    # Create a namespace for executing the modifier code
+    namespace = {"simulation": simulation}
+
+    # Execute the modifier code
+    exec(modifier_code, namespace)
+
+    # Call the modify function if defined
+    if "modify" in namespace and callable(namespace["modify"]):
+        namespace["modify"](simulation)
+
+    return simulation

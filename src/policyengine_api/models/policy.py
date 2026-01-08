@@ -13,7 +13,9 @@ class PolicyBase(SQLModel):
 
     name: str
     description: str | None = None
-    simulation_modifier: str | None = None  # Python code defining custom variable formulas
+    simulation_modifier: str | None = (
+        None  # Python code defining custom variable formulas
+    )
 
 
 class Policy(PolicyBase, table=True):

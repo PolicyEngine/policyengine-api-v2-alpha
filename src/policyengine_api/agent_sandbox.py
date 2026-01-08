@@ -76,6 +76,32 @@ Parameters and datasets from both countries are in the same database. Without th
    - POST /analysis/economic-impact with tax_benefit_model_name, policy_id and dataset_id
    - GET /analysis/economic-impact/{report_id} for results (includes decile_impacts and program_statistics)
 
+4. **Structural reforms** (custom variable formulas):
+   For reforms that can't be expressed as parameter changes (e.g., new benefits, eligibility changes):
+   - POST /agent/results/policy-with-modifier to create a policy with simulation_modifier
+   - The simulation_modifier is Python code defining a `modify(simulation)` function
+   - Then use the policy_id in /analysis/economic-impact as normal
+
+   Example simulation_modifier for a new benefit:
+   ```python
+   def modify(simulation):
+       from policyengine_core.variables import Variable
+       from policyengine_core.periods import YEAR
+
+       Person = simulation.tax_benefit_system.entities_by_name()["person"]
+
+       @simulation.tax_benefit_system.variable("my_new_benefit")
+       class my_new_benefit(Variable):
+           value_type = float
+           entity = Person
+           definition_period = YEAR
+           label = "My new benefit"
+
+           def formula(person, period, parameters):
+               income = person("employment_income", period)
+               return where(income < 20000, 1000, 0)
+   ```
+
 ## Response formatting
 
 Follow PolicyEngine's writing style:
@@ -235,8 +261,7 @@ def openapi_to_claude_tools(spec: dict) -> list[dict]:
 
                 prop = schema_to_json_schema(spec, param_schema)
                 prop["description"] = (
-                    param.get("description", "")
-                    + f" (in: {param_in})"
+                    param.get("description", "") + f" (in: {param_in})"
                 )
                 properties[param_name] = prop
 
@@ -268,16 +293,18 @@ def openapi_to_claude_tools(spec: dict) -> list[dict]:
             if required:
                 input_schema["required"] = list(set(required))
 
-            tools.append({
-                "name": tool_name,
-                "description": full_desc[:1024],  # Claude has limits
-                "input_schema": input_schema,
-                "_meta": {
-                    "path": path,
-                    "method": method,
-                    "parameters": operation.get("parameters", []),
-                },
-            })
+            tools.append(
+                {
+                    "name": tool_name,
+                    "description": full_desc[:1024],  # Claude has limits
+                    "input_schema": input_schema,
+                    "_meta": {
+                        "path": path,
+                        "method": method,
+                        "parameters": operation.get("parameters", []),
+                    },
+                }
+            )
 
     return tools
 
@@ -347,7 +374,9 @@ def execute_api_tool(
                 url, params=query_params, json=body_data, headers=headers, timeout=60
             )
         elif method == "delete":
-            resp = requests.delete(url, params=query_params, headers=headers, timeout=60)
+            resp = requests.delete(
+                url, params=query_params, headers=headers, timeout=60
+            )
         else:
             return f"Unsupported method: {method}"
 
@@ -415,9 +444,7 @@ def _run_agent_impl(
     tool_lookup = {t["name"]: t for t in tools}
 
     # Strip _meta from tools before sending to Claude (it doesn't need it)
-    claude_tools = [
-        {k: v for k, v in t.items() if k != "_meta"} for t in tools
-    ]
+    claude_tools = [{k: v for k, v in t.items() if k != "_meta"} for t in tools]
     # Add the sleep tool
     claude_tools.append(SLEEP_TOOL)
 
@@ -477,11 +504,13 @@ def _run_agent_impl(
 
                 log(f"[TOOL_RESULT] {result[:300]}")
 
-                tool_results.append({
-                    "type": "tool_result",
-                    "tool_use_id": block.id,
-                    "content": result,
-                })
+                tool_results.append(
+                    {
+                        "type": "tool_result",
+                        "tool_use_id": block.id,
+                        "content": result,
+                    }
+                )
 
         messages.append({"role": "assistant", "content": assistant_content})
 
