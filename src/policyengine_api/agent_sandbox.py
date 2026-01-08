@@ -78,15 +78,39 @@ Parameters and datasets from both countries are in the same database. Without th
 
 4. **Structural reforms** (custom variable formulas):
    For reforms that can't be expressed as parameter changes (e.g., new benefits, eligibility changes):
-   - POST /agent/results/policy-with-modifier to create a policy with simulation_modifier
-   - The simulation_modifier is Python code defining a `modify(simulation)` function
-   - Then use the policy_id in /analysis/economic-impact as normal
+
+   **IMPORTANT: Always test your modifier code first using the execute_python tool!**
+
+   Steps:
+   a. Write your simulation_modifier code
+   b. Test it with execute_python to check for syntax errors and basic logic
+   c. POST /agent/results/policy-with-modifier to create the policy
+   d. Use the policy_id in /analysis/economic-impact as normal
+
+   Example test with execute_python:
+   ```python
+   # Test the modifier code compiles and basic logic works
+   from numpy import where
+
+   def modify(simulation):
+       # Your modifier code here
+       pass
+
+   # Test the function exists and is callable
+   print(f"modify function defined: {callable(modify)}")
+
+   # Test any helper logic
+   income = 15000
+   benefit = 1000 if income < 20000 else 0
+   print(f"Test case: income={income} -> benefit={benefit}")
+   ```
 
    Example simulation_modifier for a new benefit:
    ```python
    def modify(simulation):
        from policyengine_core.variables import Variable
        from policyengine_core.periods import YEAR
+       from numpy import where
 
        Person = simulation.tax_benefit_system.entities_by_name()["person"]
 
@@ -149,6 +173,66 @@ SLEEP_TOOL = {
         "required": ["seconds"],
     },
 }
+
+# Python execution tool for testing code
+EXECUTE_PYTHON_TOOL = {
+    "name": "execute_python",
+    "description": "Execute Python code and return the output. Use this to test simulation modifier code before submitting it. The code runs in a sandboxed environment with numpy available. Returns stdout/stderr and any exceptions.",
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "code": {
+                "type": "string",
+                "description": "Python code to execute. Should include print statements to show results.",
+            }
+        },
+        "required": ["code"],
+    },
+}
+
+
+def execute_python_code(code: str) -> str:
+    """Execute Python code in a restricted environment and return output."""
+    import io
+    import sys
+    import traceback
+
+    # Capture stdout/stderr
+    old_stdout = sys.stdout
+    old_stderr = sys.stderr
+    sys.stdout = captured_out = io.StringIO()
+    sys.stderr = captured_err = io.StringIO()
+
+    result = ""
+    try:
+        # Create a restricted namespace with common imports available
+        namespace = {
+            "__builtins__": __builtins__,
+        }
+
+        # Execute the code
+        exec(code, namespace)
+
+        stdout_val = captured_out.getvalue()
+        stderr_val = captured_err.getvalue()
+
+        if stdout_val:
+            result += f"Output:\n{stdout_val}"
+        if stderr_val:
+            result += f"\nStderr:\n{stderr_val}"
+        if not stdout_val and not stderr_val:
+            result = "Code executed successfully (no output)"
+
+    except Exception as e:
+        result = (
+            f"Error: {type(e).__name__}: {e}\n\nTraceback:\n{traceback.format_exc()}"
+        )
+
+    finally:
+        sys.stdout = old_stdout
+        sys.stderr = old_stderr
+
+    return result[:5000]  # Limit output length
 
 
 def fetch_openapi_spec(api_base_url: str) -> dict:
@@ -445,8 +529,9 @@ def _run_agent_impl(
 
     # Strip _meta from tools before sending to Claude (it doesn't need it)
     claude_tools = [{k: v for k, v in t.items() if k != "_meta"} for t in tools]
-    # Add the sleep tool
+    # Add built-in tools
     claude_tools.append(SLEEP_TOOL)
+    claude_tools.append(EXECUTE_PYTHON_TOOL)
 
     client = anthropic.Anthropic()
 
@@ -493,6 +578,12 @@ def _run_agent_impl(
                     log(f"[SLEEP] Waiting {seconds} seconds...")
                     time.sleep(seconds)
                     result = f"Slept for {seconds} seconds"
+                elif block.name == "execute_python":
+                    # Handle Python execution tool
+                    code = block.input.get("code", "")
+                    log(f"[PYTHON] Executing code ({len(code)} chars)...")
+                    result = execute_python_code(code)
+                    log(f"[PYTHON] Result: {result[:200]}")
                 else:
                     tool = tool_lookup.get(block.name)
                     if tool:
