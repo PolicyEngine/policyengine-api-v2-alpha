@@ -223,7 +223,9 @@ def seed_model(model_version, session, lite: bool = False) -> TaxBenefitModelVer
             seen_names.add(p.name)
 
         filter_msg = f"  Filtered to {len(parameters_to_add)} user-facing parameters"
-        filter_msg += f" (from {len(model_version.parameters)} total, deduplicated by name)"
+        filter_msg += (
+            f" (from {len(model_version.parameters)} total, deduplicated by name)"
+        )
         if lite and skipped_state_params > 0:
             filter_msg += f", skipped {skipped_state_params} state params (lite mode)"
         console.print(filter_msg)
@@ -626,7 +628,9 @@ def main():
 
     with logfire.span("database_seeding"):
         mode_str = " (lite mode)" if args.lite else ""
-        console.print(f"[bold green]PolicyEngine database seeding{mode_str}[/bold green]\n")
+        console.print(
+            f"[bold green]PolicyEngine database seeding{mode_str}[/bold green]\n"
+        )
 
         with next(get_quiet_session()) as session:
             # Seed UK model

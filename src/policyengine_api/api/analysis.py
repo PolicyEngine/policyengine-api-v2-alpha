@@ -361,11 +361,12 @@ def _run_local_economy_comparison_uk(job_id: str, session: Session) -> None:
     param_lookup = {p.name: p for p in pe_model_version.parameters}
 
     def build_policy(policy_id):
+        """Build policy and return (policy, simulation_modifier) tuple."""
         if not policy_id:
-            return None
+            return None, None
         db_policy = session.get(DBPolicy, policy_id)
         if not db_policy:
-            return None
+            return None, None
         pe_param_values = []
         for pv in db_policy.parameter_values:
             if not pv.parameter:
@@ -382,11 +383,12 @@ def _run_local_economy_comparison_uk(job_id: str, session: Session) -> None:
                 end_date=pv.end_date,
             )
             pe_param_values.append(pe_pv)
-        return PEPolicy(
+        policy = PEPolicy(
             name=db_policy.name,
             description=db_policy.description,
             parameter_values=pe_param_values,
         )
+        return policy, db_policy.simulation_modifier
 
     def build_dynamic(dynamic_id):
         if not dynamic_id:
@@ -418,8 +420,8 @@ def _run_local_economy_comparison_uk(job_id: str, session: Session) -> None:
             parameter_values=pe_param_values,
         )
 
-    baseline_policy = build_policy(baseline_sim.policy_id)
-    reform_policy = build_policy(reform_sim.policy_id)
+    baseline_policy, baseline_modifier = build_policy(baseline_sim.policy_id)
+    reform_policy, reform_modifier = build_policy(reform_sim.policy_id)
     baseline_dynamic = build_dynamic(baseline_sim.dynamic_id)
     reform_dynamic = build_dynamic(reform_sim.dynamic_id)
 
@@ -432,6 +434,15 @@ def _run_local_economy_comparison_uk(job_id: str, session: Session) -> None:
         year=dataset.year,
     )
 
+    # Helper to apply simulation modifier
+    def apply_modifier(sim, modifier_code):
+        if not modifier_code:
+            return
+        namespace = {"simulation": sim}
+        exec(modifier_code, namespace)
+        if "modify" in namespace and callable(namespace["modify"]):
+            namespace["modify"](sim)
+
     # Run simulations
     pe_baseline_sim = PESimulation(
         dataset=pe_dataset,
@@ -439,6 +450,7 @@ def _run_local_economy_comparison_uk(job_id: str, session: Session) -> None:
         policy=baseline_policy,
         dynamic=baseline_dynamic,
     )
+    apply_modifier(pe_baseline_sim, baseline_modifier)
     pe_baseline_sim.ensure()
 
     pe_reform_sim = PESimulation(
@@ -447,6 +459,7 @@ def _run_local_economy_comparison_uk(job_id: str, session: Session) -> None:
         policy=reform_policy,
         dynamic=reform_dynamic,
     )
+    apply_modifier(pe_reform_sim, reform_modifier)
     pe_reform_sim.ensure()
 
     # Calculate decile impacts

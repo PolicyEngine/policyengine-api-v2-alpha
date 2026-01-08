@@ -9,6 +9,7 @@ import pytest
 pytestmark = pytest.mark.integration
 
 from datetime import datetime, timezone
+
 from rich.console import Console
 from sqlmodel import Session, create_engine, select
 

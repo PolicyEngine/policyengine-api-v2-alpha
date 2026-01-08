@@ -76,6 +76,56 @@ Parameters and datasets from both countries are in the same database. Without th
    - POST /analysis/economic-impact with tax_benefit_model_name, policy_id and dataset_id
    - GET /analysis/economic-impact/{report_id} for results (includes decile_impacts and program_statistics)
 
+4. **Structural reforms** (custom variable formulas):
+   For reforms that can't be expressed as parameter changes (e.g., new benefits, eligibility changes):
+
+   **IMPORTANT: Always test your modifier code first using the execute_python tool!**
+
+   Steps:
+   a. Write your simulation_modifier code
+   b. Test it with execute_python to check for syntax errors and basic logic
+   c. POST /agent/results/policy-with-modifier to create the policy
+   d. Use the policy_id in /analysis/economic-impact as normal
+
+   Example test with execute_python:
+   ```python
+   # Test the modifier code compiles and basic logic works
+   from numpy import where
+
+   def modify(simulation):
+       # Your modifier code here
+       pass
+
+   # Test the function exists and is callable
+   print(f"modify function defined: {callable(modify)}")
+
+   # Test any helper logic
+   income = 15000
+   benefit = 1000 if income < 20000 else 0
+   print(f"Test case: income={income} -> benefit={benefit}")
+   ```
+
+   Example simulation_modifier for a new benefit:
+   ```python
+   def modify(simulation):
+       from policyengine_core.variables import Variable
+       from policyengine_core.periods import YEAR
+       from numpy import where
+
+       Person = simulation.tax_benefit_system.entities_by_name()["person"]
+
+       @simulation.tax_benefit_system.variable("my_new_benefit")
+       class my_new_benefit(Variable):
+           value_type = float
+           entity = Person
+           definition_period = YEAR
+           label = "My new benefit"
+
+           def formula(person, period, parameters):
+               income = person("employment_income", period)
+               return where(income < 20000, 1000, 0)
+   ```
+
 ## Response formatting
 
 Follow PolicyEngine's writing style:
@@ -123,6 +173,66 @@ SLEEP_TOOL = {
         "required": ["seconds"],
     },
 }
+
+# Python execution tool for testing code
+EXECUTE_PYTHON_TOOL = {
+    "name": "execute_python",
+    "description": "Execute Python code and return the output. Use this to test simulation modifier code before submitting it. The code runs in a sandboxed environment with numpy available. Returns stdout/stderr and any exceptions.",
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "code": {
+                "type": "string",
+                "description": "Python code to execute. Should include print statements to show results.",
+            }
+        },
+        "required": ["code"],
+    },
+}
+
+
+def execute_python_code(code: str) -> str:
+    """Execute Python code in a restricted environment and return output."""
+    import io
+    import sys
+    import traceback
+
+    # Capture stdout/stderr
+    old_stdout = sys.stdout
+    old_stderr = sys.stderr
+    sys.stdout = captured_out = io.StringIO()
+    sys.stderr = captured_err = io.StringIO()
+
+    result = ""
+    try:
+        # Create a restricted namespace with common imports available
+        namespace = {
+            "__builtins__": __builtins__,
+        }
+
+        # Execute the code
+        exec(code, namespace)
+
+        stdout_val = captured_out.getvalue()
+        stderr_val = captured_err.getvalue()
+
+        if stdout_val:
+            result += f"Output:\n{stdout_val}"
+        if stderr_val:
+            result += f"\nStderr:\n{stderr_val}"
+        if not stdout_val and not stderr_val:
+            result = "Code executed successfully (no output)"
+
+    except Exception as e:
+        result = (
+            f"Error: {type(e).__name__}: {e}\n\nTraceback:\n{traceback.format_exc()}"
+        )
+
+    finally:
+        sys.stdout = old_stdout
+        sys.stderr = old_stderr
+
+    return result[:5000]  # Limit output length
 
 
 def fetch_openapi_spec(api_base_url: str) -> dict:
@@ -235,8 +345,7 @@ def openapi_to_claude_tools(spec: dict) -> list[dict]:
 
                 prop = schema_to_json_schema(spec, param_schema)
                 prop["description"] = (
-                    param.get("description", "")
-                    + f" (in: {param_in})"
+                    param.get("description", "") + f" (in: {param_in})"
                 )
                 properties[param_name] = prop
 
@@ -268,16 +377,18 @@ def openapi_to_claude_tools(spec: dict) -> list[dict]:
             if required:
                 input_schema["required"] = list(set(required))
 
-            tools.append({
-                "name": tool_name,
-                "description": full_desc[:1024],  # Claude has limits
-                "input_schema": input_schema,
-                "_meta": {
-                    "path": path,
-                    "method": method,
-                    "parameters": operation.get("parameters", []),
-                },
-            })
+            tools.append(
+                {
+                    "name": tool_name,
+                    "description": full_desc[:1024],  # Claude has limits
+                    "input_schema": input_schema,
+                    "_meta": {
+                        "path": path,
+                        "method": method,
+                        "parameters": operation.get("parameters", []),
+                    },
+                }
+            )
 
     return tools
 
@@ -347,7 +458,9 @@ def execute_api_tool(
                 url, params=query_params, json=body_data, headers=headers, timeout=60
             )
         elif method == "delete":
-            resp = requests.delete(url, params=query_params, headers=headers, timeout=60)
+            resp = requests.delete(
+                url, params=query_params, headers=headers, timeout=60
+            )
         else:
             return f"Unsupported method: {method}"
 
@@ -415,11 +528,10 @@ def _run_agent_impl(
     tool_lookup = {t["name"]: t for t in tools}
 
     # Strip _meta from tools before sending to Claude (it doesn't need it)
-    claude_tools = [
-        {k: v for k, v in t.items() if k != "_meta"} for t in tools
-    ]
-    # Add the sleep tool
+    claude_tools = [{k: v for k, v in t.items() if k != "_meta"} for t in tools]
+    # Add built-in tools
     claude_tools.append(SLEEP_TOOL)
+    claude_tools.append(EXECUTE_PYTHON_TOOL)
 
     client = anthropic.Anthropic()
 
@@ -466,6 +578,12 @@ def _run_agent_impl(
                     log(f"[SLEEP] Waiting {seconds} seconds...")
                     time.sleep(seconds)
                     result = f"Slept for {seconds} seconds"
+                elif block.name == "execute_python":
+                    # Handle Python execution tool
+                    code = block.input.get("code", "")
+                    log(f"[PYTHON] Executing code ({len(code)} chars)...")
+                    result = execute_python_code(code)
+                    log(f"[PYTHON] Result: {result[:200]}")
                 else:
                     tool = tool_lookup.get(block.name)
                     if tool:
@@ -477,11 +595,13 @@ def _run_agent_impl(
 
                 log(f"[TOOL_RESULT] {result[:300]}")
 
-                tool_results.append({
-                    "type": "tool_result",
-                    "tool_use_id": block.id,
-                    "content": result,
-                })
+                tool_results.append(
+                    {
+                        "type": "tool_result",
+                        "tool_use_id": block.id,
+                        "content": result,
+                    }
+                )
 
         messages.append({"role": "assistant", "content": assistant_content})
 

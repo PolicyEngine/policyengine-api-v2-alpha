@@ -11,9 +11,9 @@ import pytest
 
 pytestmark = pytest.mark.integration
 
-from policyengine_api.agent_sandbox import _run_agent_impl
-
 import os
+
+from policyengine_api.agent_sandbox import _run_agent_impl
 
 # Use local API by default, override with POLICYENGINE_API_URL env var
 API_BASE = os.environ.get("POLICYENGINE_API_URL", "http://localhost:8000")
@@ -218,4 +218,6 @@ class TestTurnCounting:
         print(f"Result: {result['result'][:300]}")
 
         if result["turns"] > max_expected_turns:
-            print(f"WARNING: Took {result['turns']} turns, expected <= {max_expected_turns}")
+            print(
+                f"WARNING: Took {result['turns']} turns, expected <= {max_expected_turns}"
+            )
