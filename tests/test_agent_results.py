@@ -138,3 +138,37 @@ def test_policy_read_includes_modifier(client: TestClient):
     # The simulation_modifier should be visible in the response
     assert "simulation_modifier" in data
     assert data["simulation_modifier"] == modifier
+
+
+@pytest.mark.integration
+def test_agent_uses_execute_python_tool():
+    """Test that agent can use execute_python tool to test code."""
+    from policyengine_api.agent_sandbox import _run_agent_impl
+
+    result = _run_agent_impl(
+        "Use the execute_python tool to test this code and tell me the output: "
+        "print('Hello from agent test')",
+        max_turns=5,
+    )
+
+    assert result["status"] == "completed"
+    # The agent should have used execute_python and reported the output
+    assert "Hello from agent test" in result["result"]
+
+
+@pytest.mark.integration
+def test_agent_validates_modifier_code():
+    """Test that agent can validate simulation modifier code before using it."""
+    from policyengine_api.agent_sandbox import _run_agent_impl
+
+    result = _run_agent_impl(
+        "Use execute_python to test if this simulation modifier code is valid Python: "
+        "def modify(simulation): return simulation. "
+        "Tell me if it has any syntax errors.",
+        max_turns=5,
+    )
+
+    assert result["status"] == "completed"
+    # The code is valid Python, agent should confirm this
+    response_lower = result["result"].lower()
+    assert "valid" in response_lower or "no" in response_lower and "error" in response_lower

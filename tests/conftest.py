@@ -1,7 +1,11 @@
 """Pytest fixtures for tests."""
 
 import pytest
+from dotenv import load_dotenv
 from fastapi.testclient import TestClient
+
+# Load environment variables from .env file
+load_dotenv()
 from fastapi_cache import FastAPICache
 from fastapi_cache.backends.inmemory import InMemoryBackend
 from sqlmodel import Session, SQLModel, create_engine
