@@ -756,12 +756,9 @@ def economy_comparison_uk(job_id: str, traceparent: str | None = None) -> None:
                     # Import policyengine
                     from policyengine.core import Simulation as PESimulation
                     from policyengine.outputs import DecileImpact as PEDecileImpact
-                    from policyengine.outputs.inequality import (
-                        calculate_uk_inequality,
-                    )
-                    from policyengine.outputs.poverty import (
-                        calculate_uk_poverty_rates,
-                    )
+                    # TODO: Re-enable when policyengine package adds these:
+                    # from policyengine.outputs.inequality import calculate_uk_inequality
+                    # from policyengine.outputs.poverty import calculate_uk_poverty_rates
                     from policyengine.tax_benefit_models.uk import uk_latest
                     from policyengine.tax_benefit_models.uk.datasets import (
                         PolicyEngineUKDataset,
@@ -907,44 +904,45 @@ def economy_comparison_uk(job_id: str, traceparent: str | None = None) -> None:
                             except KeyError:
                                 pass  # Variable not in model, skip silently
 
-                    # Calculate poverty rates
-                    with logfire.span("calculate_poverty"):
-                        for sim, sim_id in [
-                            (pe_baseline_sim, baseline_sim.id),
-                            (pe_reform_sim, reform_sim.id),
-                        ]:
-                            poverty_collection = calculate_uk_poverty_rates(sim)
-                            for pov in poverty_collection.outputs:
-                                poverty_record = Poverty(
-                                    simulation_id=sim_id,
-                                    report_id=report.id,
-                                    poverty_type=pov.poverty_type,
-                                    entity=pov.entity,
-                                    filter_variable=pov.filter_variable,
-                                    headcount=pov.headcount,
-                                    total_population=pov.total_population,
-                                    rate=pov.rate,
-                                )
-                                session.add(poverty_record)
+                    # TODO: Re-enable poverty/inequality when policyengine package adds these functions
+                    # # Calculate poverty rates
+                    # with logfire.span("calculate_poverty"):
+                    #     for sim, sim_id in [
+                    #         (pe_baseline_sim, baseline_sim.id),
+                    #         (pe_reform_sim, reform_sim.id),
+                    #     ]:
+                    #         poverty_collection = calculate_uk_poverty_rates(sim)
+                    #         for pov in poverty_collection.outputs:
+                    #             poverty_record = Poverty(
+                    #                 simulation_id=sim_id,
+                    #                 report_id=report.id,
+                    #                 poverty_type=pov.poverty_type,
+                    #                 entity=pov.entity,
+                    #                 filter_variable=pov.filter_variable,
+                    #                 headcount=pov.headcount,
+                    #                 total_population=pov.total_population,
+                    #                 rate=pov.rate,
+                    #             )
+                    #             session.add(poverty_record)
 
-                    # Calculate inequality
-                    with logfire.span("calculate_inequality"):
-                        for sim, sim_id in [
-                            (pe_baseline_sim, baseline_sim.id),
-                            (pe_reform_sim, reform_sim.id),
-                        ]:
-                            ineq = calculate_uk_inequality(sim)
-                            inequality_record = Inequality(
-                                simulation_id=sim_id,
-                                report_id=report.id,
-                                income_variable=ineq.income_variable,
-                                entity=ineq.entity,
-                                gini=ineq.gini,
-                                top_10_share=ineq.top_10_share,
-                                top_1_share=ineq.top_1_share,
-                                bottom_50_share=ineq.bottom_50_share,
-                            )
-                            session.add(inequality_record)
+                    # # Calculate inequality
+                    # with logfire.span("calculate_inequality"):
+                    #     for sim, sim_id in [
+                    #         (pe_baseline_sim, baseline_sim.id),
+                    #         (pe_reform_sim, reform_sim.id),
+                    #     ]:
+                    #         ineq = calculate_uk_inequality(sim)
+                    #         inequality_record = Inequality(
+                    #             simulation_id=sim_id,
+                    #             report_id=report.id,
+                    #             income_variable=ineq.income_variable,
+                    #             entity=ineq.entity,
+                    #             gini=ineq.gini,
+                    #             top_10_share=ineq.top_10_share,
+                    #             top_1_share=ineq.top_1_share,
+                    #             bottom_50_share=ineq.bottom_50_share,
+                    #         )
+                    #         session.add(inequality_record)
 
                     # Mark simulations and report as completed
                     baseline_sim.status = SimulationStatus.COMPLETED
@@ -1050,12 +1048,9 @@ def economy_comparison_us(job_id: str, traceparent: str | None = None) -> None:
                     # Import policyengine
                     from policyengine.core import Simulation as PESimulation
                     from policyengine.outputs import DecileImpact as PEDecileImpact
-                    from policyengine.outputs.inequality import (
-                        calculate_us_inequality,
-                    )
-                    from policyengine.outputs.poverty import (
-                        calculate_us_poverty_rates,
-                    )
+                    # TODO: Re-enable when policyengine package adds these:
+                    # from policyengine.outputs.inequality import calculate_us_inequality
+                    # from policyengine.outputs.poverty import calculate_us_poverty_rates
                     from policyengine.tax_benefit_models.us import us_latest
                     from policyengine.tax_benefit_models.us.datasets import (
                         PolicyEngineUSDataset,
@@ -1198,44 +1193,45 @@ def economy_comparison_us(job_id: str, traceparent: str | None = None) -> None:
                             except KeyError:
                                 pass  # Variable not in model, skip silently
 
-                    # Calculate poverty rates
-                    with logfire.span("calculate_poverty"):
-                        for sim, sim_id in [
-                            (pe_baseline_sim, baseline_sim.id),
-                            (pe_reform_sim, reform_sim.id),
-                        ]:
-                            poverty_collection = calculate_us_poverty_rates(sim)
-                            for pov in poverty_collection.outputs:
-                                poverty_record = Poverty(
-                                    simulation_id=sim_id,
-                                    report_id=report.id,
-                                    poverty_type=pov.poverty_type,
-                                    entity=pov.entity,
-                                    filter_variable=pov.filter_variable,
-                                    headcount=pov.headcount,
-                                    total_population=pov.total_population,
-                                    rate=pov.rate,
-                                )
-                                session.add(poverty_record)
+                    # TODO: Re-enable poverty/inequality when policyengine package adds these functions
+                    # # Calculate poverty rates
+                    # with logfire.span("calculate_poverty"):
+                    #     for sim, sim_id in [
+                    #         (pe_baseline_sim, baseline_sim.id),
+                    #         (pe_reform_sim, reform_sim.id),
+                    #     ]:
+                    #         poverty_collection = calculate_us_poverty_rates(sim)
+                    #         for pov in poverty_collection.outputs:
+                    #             poverty_record = Poverty(
+                    #                 simulation_id=sim_id,
+                    #                 report_id=report.id,
+                    #                 poverty_type=pov.poverty_type,
+                    #                 entity=pov.entity,
+                    #                 filter_variable=pov.filter_variable,
+                    #                 headcount=pov.headcount,
+                    #                 total_population=pov.total_population,
+                    #                 rate=pov.rate,
+                    #             )
+                    #             session.add(poverty_record)
 
-                    # Calculate inequality
-                    with logfire.span("calculate_inequality"):
-                        for sim, sim_id in [
-                            (pe_baseline_sim, baseline_sim.id),
-                            (pe_reform_sim, reform_sim.id),
-                        ]:
-                            ineq = calculate_us_inequality(sim)
-                            inequality_record = Inequality(
-                                simulation_id=sim_id,
-                                report_id=report.id,
-                                income_variable=ineq.income_variable,
-                                entity=ineq.entity,
-                                gini=ineq.gini,
-                                top_10_share=ineq.top_10_share,
-                                top_1_share=ineq.top_1_share,
-                                bottom_50_share=ineq.bottom_50_share,
-                            )
-                            session.add(inequality_record)
+                    # # Calculate inequality
+                    # with logfire.span("calculate_inequality"):
+                    #     for sim, sim_id in [
+                    #         (pe_baseline_sim, baseline_sim.id),
+                    #         (pe_reform_sim, reform_sim.id),
+                    #     ]:
+                    #         ineq = calculate_us_inequality(sim)
+                    #         inequality_record = Inequality(
+                    #             simulation_id=sim_id,
+                    #             report_id=report.id,
+                    #             income_variable=ineq.income_variable,
+                    #             entity=ineq.entity,
+                    #             gini=ineq.gini,
+                    #             top_10_share=ineq.top_10_share,
+                    #             top_1_share=ineq.top_1_share,
+                    #             bottom_50_share=ineq.bottom_50_share,
+                    #         )
+                    #         session.add(inequality_record)
 
                     # Mark simulations and report as completed
                     baseline_sim.status = SimulationStatus.COMPLETED
