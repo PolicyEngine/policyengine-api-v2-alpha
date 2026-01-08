@@ -756,6 +756,7 @@ def economy_comparison_uk(job_id: str, traceparent: str | None = None) -> None:
                     # Import policyengine
                     from policyengine.core import Simulation as PESimulation
                     from policyengine.outputs import DecileImpact as PEDecileImpact
+
                     # TODO: Re-enable when policyengine package adds these:
                     # from policyengine.outputs.inequality import calculate_uk_inequality
                     # from policyengine.outputs.poverty import calculate_uk_poverty_rates
@@ -1048,6 +1049,7 @@ def economy_comparison_us(job_id: str, traceparent: str | None = None) -> None:
                     # Import policyengine
                     from policyengine.core import Simulation as PESimulation
                     from policyengine.outputs import DecileImpact as PEDecileImpact
+
                     # TODO: Re-enable when policyengine package adds these:
                     # from policyengine.outputs.inequality import calculate_us_inequality
                     # from policyengine.outputs.poverty import calculate_us_poverty_rates

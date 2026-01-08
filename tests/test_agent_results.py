@@ -6,11 +6,11 @@ from fastapi.testclient import TestClient
 
 def test_create_policy_with_modifier(client: TestClient):
     """Test creating a policy with simulation_modifier."""
-    modifier_code = '''
+    modifier_code = """
 def modify(simulation):
     from numpy import where
     print("Modifier applied")
-'''
+"""
 
     response = client.post(
         "/agent/results/policy-with-modifier",
@@ -171,4 +171,8 @@ def test_agent_validates_modifier_code():
     assert result["status"] == "completed"
     # The code is valid Python, agent should confirm this
     response_lower = result["result"].lower()
-    assert "valid" in response_lower or "no" in response_lower and "error" in response_lower
+    assert (
+        "valid" in response_lower
+        or "no" in response_lower
+        and "error" in response_lower
+    )

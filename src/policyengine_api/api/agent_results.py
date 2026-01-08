@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 from typing import Literal
 from uuid import UUID
 
+import modal
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from sqlmodel import Session
@@ -24,10 +25,15 @@ from policyengine_api.models import (
     ReportStatus,
     Simulation,
     SimulationStatus,
+    TaxBenefitModelVersion,
+    Dataset,
 )
 from policyengine_api.services.database import get_session
 
 router = APIRouter(prefix="/agent/results", tags=["agent-results"])
+
+# Also create a router without the /results prefix for structural reform trigger
+agent_router = APIRouter(prefix="/agent", tags=["agent"])
 
 
 # Request schemas
@@ -388,4 +394,132 @@ def create_policy_with_modifier(
         "policy_id": str(policy.id),
         "name": policy.name,
         "has_modifier": policy.simulation_modifier is not None,
+    }
+
+
+# Structural reform trigger endpoint
+
+
+class StructuralReformRequest(BaseModel):
+    """Request to run a structural reform analysis."""
+
+    policy_id: str
+    dataset_id: str
+    country: Literal["uk", "us"]
+
+
+@agent_router.post("/run-structural-reform")
+def run_structural_reform(
+    data: StructuralReformRequest,
+    session: Session = Depends(get_session),
+) -> dict:
+    """Trigger a structural reform analysis.
+
+    This creates the necessary simulation and report records, then triggers
+    the appropriate Modal function to run the analysis with the simulation_modifier.
+    """
+    from uuid import UUID as UUIDType
+
+    # Verify policy exists and has a modifier
+    policy = session.get(Policy, UUIDType(data.policy_id))
+    if not policy:
+        raise HTTPException(
+            status_code=404, detail=f"Policy {data.policy_id} not found"
+        )
+
+    if not policy.simulation_modifier:
+        raise HTTPException(
+            status_code=400,
+            detail="Policy has no simulation_modifier. Use /analysis/economic-impact instead.",
+        )
+
+    # Verify dataset exists
+    dataset = session.get(Dataset, UUIDType(data.dataset_id))
+    if not dataset:
+        raise HTTPException(
+            status_code=404, detail=f"Dataset {data.dataset_id} not found"
+        )
+
+    # Get model version
+    tax_benefit_model_name = (
+        "policyengine-uk" if data.country == "uk" else "policyengine-us"
+    )
+    from sqlmodel import select
+
+    stmt = select(TaxBenefitModelVersion).where(
+        TaxBenefitModelVersion.name == tax_benefit_model_name
+    )
+    model_version = session.exec(stmt).first()
+    if not model_version:
+        raise HTTPException(
+            status_code=404,
+            detail=f"No model version found for {tax_benefit_model_name}",
+        )
+
+    # Create baseline policy
+    baseline_policy = Policy(
+        name="Baseline (current law)",
+        description="Auto-generated baseline for structural reform comparison",
+    )
+    session.add(baseline_policy)
+    session.commit()
+    session.refresh(baseline_policy)
+
+    # Create baseline simulation
+    baseline_sim = Simulation(
+        dataset_id=dataset.id,
+        tax_benefit_model_version_id=model_version.id,
+        policy_id=baseline_policy.id,
+        status=SimulationStatus.PENDING,
+    )
+    session.add(baseline_sim)
+
+    # Create reform simulation
+    reform_sim = Simulation(
+        dataset_id=dataset.id,
+        tax_benefit_model_version_id=model_version.id,
+        policy_id=policy.id,
+        status=SimulationStatus.PENDING,
+    )
+    session.add(reform_sim)
+    session.commit()
+    session.refresh(baseline_sim)
+    session.refresh(reform_sim)
+
+    # Create report
+    report = Report(
+        baseline_simulation_id=baseline_sim.id,
+        reform_simulation_id=reform_sim.id,
+        status=ReportStatus.PENDING,
+    )
+    session.add(report)
+    session.commit()
+    session.refresh(report)
+
+    # Trigger the appropriate Modal function
+    try:
+        if data.country == "uk":
+            from policyengine_api.modal_app import economy_comparison_uk
+
+            economy_comparison_uk.spawn(job_id=str(report.id))
+        else:
+            from policyengine_api.modal_app import economy_comparison_us
+
+            economy_comparison_us.spawn(job_id=str(report.id))
+    except Exception as e:
+        # Mark as failed if Modal trigger fails
+        report.status = ReportStatus.FAILED
+        report.error_message = f"Failed to trigger Modal: {str(e)}"
+        session.add(report)
+        session.commit()
+        raise HTTPException(
+            status_code=500, detail=f"Failed to trigger Modal: {str(e)}"
+        )
+
+    return {
+        "status": "ok",
+        "report_id": str(report.id),
+        "baseline_simulation_id": str(baseline_sim.id),
+        "reform_simulation_id": str(reform_sim.id),
+        "message": "Structural reform analysis triggered. Poll /analysis/economic-impact/{report_id} for results.",
     }

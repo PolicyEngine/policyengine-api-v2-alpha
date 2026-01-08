@@ -85,7 +85,16 @@ Parameters and datasets from both countries are in the same database. Without th
    a. Write your simulation_modifier code
    b. Test it with execute_python to check for syntax errors and basic logic
    c. POST /agent/results/policy-with-modifier to create the policy
-   d. Use the policy_id in /analysis/economic-impact as normal
+   d. GET /datasets/?tax_benefit_model_name=policyengine-uk to find the dataset_id
+   e. Use the **run_structural_reform** tool to run the analysis (NOT /analysis/economic-impact)
+
+   The run_structural_reform tool will:
+   - Download the dataset
+   - Run baseline and reform simulations locally
+   - Apply your simulation_modifier to the reform
+   - Calculate decile impacts
+   - Upload all results to the API
+   - Return the report_id and summary
 
    Example test with execute_python:
    ```python
@@ -233,6 +242,137 @@ def execute_python_code(code: str) -> str:
         sys.stderr = old_stderr
 
     return result[:5000]  # Limit output length
+
+
+# Structural reform execution tool
+RUN_STRUCTURAL_REFORM_TOOL = {
+    "name": "run_structural_reform",
+    "description": """Run a structural reform analysis locally and upload results.
+
+Use this tool INSTEAD of /analysis/economic-impact when you have a policy with a simulation_modifier.
+
+This tool will:
+1. Download the dataset
+2. Run baseline and reform simulations (applying the modifier)
+3. Calculate decile impacts
+4. Upload all results to the API
+
+Returns the report_id and summary of results.""",
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "policy_id": {
+                "type": "string",
+                "description": "UUID of the policy (must have simulation_modifier set)",
+            },
+            "dataset_id": {
+                "type": "string",
+                "description": "UUID of the dataset to use",
+            },
+            "country": {
+                "type": "string",
+                "enum": ["uk", "us"],
+                "description": "Country model to use (uk or us)",
+            },
+        },
+        "required": ["policy_id", "dataset_id", "country"],
+    },
+}
+
+
+def run_structural_reform(
+    policy_id: str,
+    dataset_id: str,
+    country: str,
+    api_base_url: str,
+    log_fn,
+    trace_headers: dict | None = None,
+) -> str:
+    """Trigger a structural reform analysis via API and poll for completion."""
+    try:
+        headers = {"Content-Type": "application/json"}
+        if trace_headers:
+            headers.update(trace_headers)
+
+        # Trigger the structural reform via API endpoint
+        log_fn(f"[REFORM] Triggering structural reform analysis...")
+        resp = requests.post(
+            f"{api_base_url}/agent/run-structural-reform",
+            json={
+                "policy_id": policy_id,
+                "dataset_id": dataset_id,
+                "country": country,
+            },
+            headers=headers,
+            timeout=30,
+        )
+
+        if resp.status_code != 200:
+            return f"Error triggering structural reform: {resp.text}"
+
+        result = resp.json()
+        report_id = result.get("report_id")
+        log_fn(f"[REFORM] Report ID: {report_id}")
+
+        # Poll for completion
+        max_polls = 60  # 5 minutes max
+        for i in range(max_polls):
+            log_fn(f"[REFORM] Polling for completion ({i + 1}/{max_polls})...")
+            time.sleep(5)
+
+            resp = requests.get(
+                f"{api_base_url}/analysis/economic-impact/{report_id}",
+                headers=headers,
+                timeout=30,
+            )
+
+            if resp.status_code != 200:
+                continue
+
+            data = resp.json()
+            status = data.get("status")
+
+            if status == "completed":
+                log_fn("[REFORM] Analysis complete!")
+
+                # Format decile impacts
+                decile_impacts = data.get("decile_impacts", [])
+                decile_summary = []
+                for di in sorted(decile_impacts, key=lambda x: x.get("decile", 0)):
+                    decile_num = di.get("decile", 0)
+                    abs_change = di.get("absolute_change", 0)
+                    rel_change = di.get("relative_change", 0)
+                    currency = "£" if country == "uk" else "$"
+                    decile_summary.append(
+                        f"  Decile {decile_num}: {currency}{abs_change:,.0f} ({rel_change:.1%})"
+                    )
+
+                avg_change = (
+                    sum(di.get("absolute_change", 0) for di in decile_impacts) / 10
+                    if decile_impacts
+                    else 0
+                )
+                currency = "£" if country == "uk" else "$"
+
+                return f"""Structural reform analysis completed successfully!
+
+Report ID: {report_id}
+
+Decile impacts (absolute change in net income):
+{chr(10).join(decile_summary)}
+
+Average impact: {currency}{avg_change:,.0f} per household"""
+
+            elif status == "failed":
+                error = data.get("error_message", "Unknown error")
+                return f"Structural reform analysis failed: {error}"
+
+        return f"Structural reform analysis timed out after 5 minutes. Report ID: {report_id}"
+
+    except Exception as e:
+        import traceback
+
+        return f"Error running structural reform: {type(e).__name__}: {e}\n\n{traceback.format_exc()}"
 
 
 def fetch_openapi_spec(api_base_url: str) -> dict:
@@ -532,6 +672,7 @@ def _run_agent_impl(
     # Add built-in tools
     claude_tools.append(SLEEP_TOOL)
     claude_tools.append(EXECUTE_PYTHON_TOOL)
+    claude_tools.append(RUN_STRUCTURAL_REFORM_TOOL)
 
     client = anthropic.Anthropic()
 
@@ -584,6 +725,21 @@ def _run_agent_impl(
                     log(f"[PYTHON] Executing code ({len(code)} chars)...")
                     result = execute_python_code(code)
                     log(f"[PYTHON] Result: {result[:200]}")
+                elif block.name == "run_structural_reform":
+                    # Handle structural reform execution
+                    policy_id = block.input.get("policy_id", "")
+                    dataset_id = block.input.get("dataset_id", "")
+                    country = block.input.get("country", "uk")
+                    log(f"[REFORM] Running structural reform for policy {policy_id}...")
+                    result = run_structural_reform(
+                        policy_id,
+                        dataset_id,
+                        country,
+                        api_base_url,
+                        log,
+                        get_trace_headers(),
+                    )
+                    log(f"[REFORM] Result: {result[:300]}")
                 else:
                     tool = tool_lookup.get(block.name)
                     if tool:
