@@ -180,52 +180,79 @@ def simulate_household_uk(
 
             try:
                 from policyengine.tax_benefit_models.uk import uk_latest
-                from policyengine.tax_benefit_models.uk.analysis import (
-                    UKHouseholdInput,
-                    calculate_household_impact,
+
+                # Check if we have a simulation modifier
+                simulation_modifier = (
+                    policy_data.get("simulation_modifier") if policy_data else None
                 )
 
-                # Build policy if provided
-                policy = None
-                if policy_data:
-                    from policyengine.core.policy import (
-                        ParameterValue as PEParameterValue,
-                    )
-                    from policyengine.core.policy import (
-                        Policy as PEPolicy,
-                    )
-
-                    pe_param_values = []
-                    param_lookup = {p.name: p for p in uk_latest.parameters}
-                    for pv in policy_data.get("parameter_values", []):
-                        pe_param = param_lookup.get(pv["parameter_name"])
-                        if pe_param:
-                            pe_pv = PEParameterValue(
-                                parameter=pe_param,
-                                value=pv["value"],
-                                start_date=datetime.fromisoformat(pv["start_date"])
-                                if pv.get("start_date")
-                                else None,
-                                end_date=datetime.fromisoformat(pv["end_date"])
-                                if pv.get("end_date")
-                                else None,
-                            )
-                            pe_param_values.append(pe_pv)
-                    policy = PEPolicy(
-                        name=policy_data.get("name", ""),
-                        description=policy_data.get("description", ""),
-                        parameter_values=pe_param_values,
+                if simulation_modifier:
+                    # Use low-level Simulation API for structural reforms
+                    with logfire.span("calculate_with_modifier"):
+                        result = _calculate_uk_household_with_modifier(
+                            people=people,
+                            benunit=benunit,
+                            household_data=household,
+                            year=year,
+                            policy_data=policy_data,
+                            simulation_modifier=simulation_modifier,
+                        )
+                else:
+                    # Use high-level API for parameter-only reforms
+                    from policyengine.tax_benefit_models.uk.analysis import (
+                        UKHouseholdInput,
+                        calculate_household_impact,
                     )
 
-                pe_input = UKHouseholdInput(
-                    people=people,
-                    benunit=benunit,
-                    household=household,
-                    year=year,
-                )
+                    # Build policy if provided
+                    policy = None
+                    if policy_data:
+                        from policyengine.core.policy import (
+                            ParameterValue as PEParameterValue,
+                        )
+                        from policyengine.core.policy import (
+                            Policy as PEPolicy,
+                        )
 
-                with logfire.span("calculate_household_impact"):
-                    result = calculate_household_impact(pe_input, policy=policy)
+                        pe_param_values = []
+                        param_lookup = {p.name: p for p in uk_latest.parameters}
+                        for pv in policy_data.get("parameter_values", []):
+                            pe_param = param_lookup.get(pv["parameter_name"])
+                            if pe_param:
+                                pe_pv = PEParameterValue(
+                                    parameter=pe_param,
+                                    value=pv["value"],
+                                    start_date=datetime.fromisoformat(pv["start_date"])
+                                    if pv.get("start_date")
+                                    else None,
+                                    end_date=datetime.fromisoformat(pv["end_date"])
+                                    if pv.get("end_date")
+                                    else None,
+                                )
+                                pe_param_values.append(pe_pv)
+                        policy = PEPolicy(
+                            name=policy_data.get("name", ""),
+                            description=policy_data.get("description", ""),
+                            parameter_values=pe_param_values,
+                        )
+
+                    pe_input = UKHouseholdInput(
+                        people=people,
+                        benunit=benunit,
+                        household=household,
+                        year=year,
+                    )
+
+                    with logfire.span("calculate_household_impact"):
+                        calc_result = calculate_household_impact(
+                            pe_input, policy=policy
+                        )
+
+                    result = {
+                        "person": calc_result.person,
+                        "benunit": calc_result.benunit,
+                        "household": calc_result.household,
+                    }
 
                 # Write result to database
                 with Session(engine) as session:
@@ -241,13 +268,7 @@ def simulate_household_uk(
                         """),
                         params={
                             "job_id": job_id,
-                            "result": json.dumps(
-                                {
-                                    "person": result.person,
-                                    "benunit": result.benunit,
-                                    "household": result.household,
-                                }
-                            ),
+                            "result": json.dumps(result),
                             "completed_at": datetime.now(timezone.utc),
                         },
                     )
@@ -314,55 +335,88 @@ def simulate_household_us(
 
             try:
                 from policyengine.tax_benefit_models.us import us_latest
-                from policyengine.tax_benefit_models.us.analysis import (
-                    USHouseholdInput,
-                    calculate_household_impact,
+
+                # Check if we have a simulation modifier
+                simulation_modifier = (
+                    policy_data.get("simulation_modifier") if policy_data else None
                 )
 
-                # Build policy if provided
-                policy = None
-                if policy_data:
-                    from policyengine.core.policy import (
-                        ParameterValue as PEParameterValue,
-                    )
-                    from policyengine.core.policy import (
-                        Policy as PEPolicy,
-                    )
-
-                    pe_param_values = []
-                    param_lookup = {p.name: p for p in us_latest.parameters}
-                    for pv in policy_data.get("parameter_values", []):
-                        pe_param = param_lookup.get(pv["parameter_name"])
-                        if pe_param:
-                            pe_pv = PEParameterValue(
-                                parameter=pe_param,
-                                value=pv["value"],
-                                start_date=datetime.fromisoformat(pv["start_date"])
-                                if pv.get("start_date")
-                                else None,
-                                end_date=datetime.fromisoformat(pv["end_date"])
-                                if pv.get("end_date")
-                                else None,
-                            )
-                            pe_param_values.append(pe_pv)
-                    policy = PEPolicy(
-                        name=policy_data.get("name", ""),
-                        description=policy_data.get("description", ""),
-                        parameter_values=pe_param_values,
+                if simulation_modifier:
+                    # Use low-level Simulation API for structural reforms
+                    with logfire.span("calculate_with_modifier"):
+                        result = _calculate_us_household_with_modifier(
+                            people=people,
+                            marital_unit=marital_unit,
+                            family=family,
+                            spm_unit=spm_unit,
+                            tax_unit=tax_unit,
+                            household_data=household,
+                            year=year,
+                            policy_data=policy_data,
+                            simulation_modifier=simulation_modifier,
+                        )
+                else:
+                    # Use high-level API for parameter-only reforms
+                    from policyengine.tax_benefit_models.us.analysis import (
+                        USHouseholdInput,
+                        calculate_household_impact,
                     )
 
-                pe_input = USHouseholdInput(
-                    people=people,
-                    marital_unit=marital_unit,
-                    family=family,
-                    spm_unit=spm_unit,
-                    tax_unit=tax_unit,
-                    household=household,
-                    year=year,
-                )
+                    # Build policy if provided
+                    policy = None
+                    if policy_data:
+                        from policyengine.core.policy import (
+                            ParameterValue as PEParameterValue,
+                        )
+                        from policyengine.core.policy import (
+                            Policy as PEPolicy,
+                        )
 
-                with logfire.span("calculate_household_impact"):
-                    result = calculate_household_impact(pe_input, policy=policy)
+                        pe_param_values = []
+                        param_lookup = {p.name: p for p in us_latest.parameters}
+                        for pv in policy_data.get("parameter_values", []):
+                            pe_param = param_lookup.get(pv["parameter_name"])
+                            if pe_param:
+                                pe_pv = PEParameterValue(
+                                    parameter=pe_param,
+                                    value=pv["value"],
+                                    start_date=datetime.fromisoformat(pv["start_date"])
+                                    if pv.get("start_date")
+                                    else None,
+                                    end_date=datetime.fromisoformat(pv["end_date"])
+                                    if pv.get("end_date")
+                                    else None,
+                                )
+                                pe_param_values.append(pe_pv)
+                        policy = PEPolicy(
+                            name=policy_data.get("name", ""),
+                            description=policy_data.get("description", ""),
+                            parameter_values=pe_param_values,
+                        )
+
+                    pe_input = USHouseholdInput(
+                        people=people,
+                        marital_unit=marital_unit,
+                        family=family,
+                        spm_unit=spm_unit,
+                        tax_unit=tax_unit,
+                        household=household,
+                        year=year,
+                    )
+
+                    with logfire.span("calculate_household_impact"):
+                        calc_result = calculate_household_impact(
+                            pe_input, policy=policy
+                        )
+
+                    result = {
+                        "person": calc_result.person,
+                        "marital_unit": calc_result.marital_unit,
+                        "family": calc_result.family,
+                        "spm_unit": calc_result.spm_unit,
+                        "tax_unit": calc_result.tax_unit,
+                        "household": calc_result.household,
+                    }
 
                 # Write result to database
                 with Session(engine) as session:
@@ -378,16 +432,7 @@ def simulate_household_us(
                         """),
                         params={
                             "job_id": job_id,
-                            "result": json.dumps(
-                                {
-                                    "person": result.person,
-                                    "marital_unit": result.marital_unit,
-                                    "family": result.family,
-                                    "spm_unit": result.spm_unit,
-                                    "tax_unit": result.tax_unit,
-                                    "household": result.household,
-                                }
-                            ),
+                            "result": json.dumps(result),
                             "completed_at": datetime.now(timezone.utc),
                         },
                     )
@@ -756,12 +801,10 @@ def economy_comparison_uk(job_id: str, traceparent: str | None = None) -> None:
                     # Import policyengine
                     from policyengine.core import Simulation as PESimulation
                     from policyengine.outputs import DecileImpact as PEDecileImpact
-                    from policyengine.outputs.inequality import (
-                        calculate_uk_inequality,
-                    )
-                    from policyengine.outputs.poverty import (
-                        calculate_uk_poverty_rates,
-                    )
+
+                    # TODO: Re-enable when policyengine package adds these:
+                    # from policyengine.outputs.inequality import calculate_uk_inequality
+                    # from policyengine.outputs.poverty import calculate_uk_poverty_rates
                     from policyengine.tax_benefit_models.uk import uk_latest
                     from policyengine.tax_benefit_models.uk.datasets import (
                         PolicyEngineUKDataset,
@@ -907,44 +950,45 @@ def economy_comparison_uk(job_id: str, traceparent: str | None = None) -> None:
                             except KeyError:
                                 pass  # Variable not in model, skip silently
 
-                    # Calculate poverty rates
-                    with logfire.span("calculate_poverty"):
-                        for sim, sim_id in [
-                            (pe_baseline_sim, baseline_sim.id),
-                            (pe_reform_sim, reform_sim.id),
-                        ]:
-                            poverty_collection = calculate_uk_poverty_rates(sim)
-                            for pov in poverty_collection.outputs:
-                                poverty_record = Poverty(
-                                    simulation_id=sim_id,
-                                    report_id=report.id,
-                                    poverty_type=pov.poverty_type,
-                                    entity=pov.entity,
-                                    filter_variable=pov.filter_variable,
-                                    headcount=pov.headcount,
-                                    total_population=pov.total_population,
-                                    rate=pov.rate,
-                                )
-                                session.add(poverty_record)
+                    # TODO: Re-enable poverty/inequality when policyengine package adds these functions
+                    # # Calculate poverty rates
+                    # with logfire.span("calculate_poverty"):
+                    #     for sim, sim_id in [
+                    #         (pe_baseline_sim, baseline_sim.id),
+                    #         (pe_reform_sim, reform_sim.id),
+                    #     ]:
+                    #         poverty_collection = calculate_uk_poverty_rates(sim)
+                    #         for pov in poverty_collection.outputs:
+                    #             poverty_record = Poverty(
+                    #                 simulation_id=sim_id,
+                    #                 report_id=report.id,
+                    #                 poverty_type=pov.poverty_type,
+                    #                 entity=pov.entity,
+                    #                 filter_variable=pov.filter_variable,
+                    #                 headcount=pov.headcount,
+                    #                 total_population=pov.total_population,
+                    #                 rate=pov.rate,
+                    #             )
+                    #             session.add(poverty_record)
 
-                    # Calculate inequality
-                    with logfire.span("calculate_inequality"):
-                        for sim, sim_id in [
-                            (pe_baseline_sim, baseline_sim.id),
-                            (pe_reform_sim, reform_sim.id),
-                        ]:
-                            ineq = calculate_uk_inequality(sim)
-                            inequality_record = Inequality(
-                                simulation_id=sim_id,
-                                report_id=report.id,
-                                income_variable=ineq.income_variable,
-                                entity=ineq.entity,
-                                gini=ineq.gini,
-                                top_10_share=ineq.top_10_share,
-                                top_1_share=ineq.top_1_share,
-                                bottom_50_share=ineq.bottom_50_share,
-                            )
-                            session.add(inequality_record)
+                    # # Calculate inequality
+                    # with logfire.span("calculate_inequality"):
+                    #     for sim, sim_id in [
+                    #         (pe_baseline_sim, baseline_sim.id),
+                    #         (pe_reform_sim, reform_sim.id),
+                    #     ]:
+                    #         ineq = calculate_uk_inequality(sim)
+                    #         inequality_record = Inequality(
+                    #             simulation_id=sim_id,
+                    #             report_id=report.id,
+                    #             income_variable=ineq.income_variable,
+                    #             entity=ineq.entity,
+                    #             gini=ineq.gini,
+                    #             top_10_share=ineq.top_10_share,
+                    #             top_1_share=ineq.top_1_share,
+                    #             bottom_50_share=ineq.bottom_50_share,
+                    #         )
+                    #         session.add(inequality_record)
 
                     # Mark simulations and report as completed
                     baseline_sim.status = SimulationStatus.COMPLETED
@@ -1050,12 +1094,10 @@ def economy_comparison_us(job_id: str, traceparent: str | None = None) -> None:
                     # Import policyengine
                     from policyengine.core import Simulation as PESimulation
                     from policyengine.outputs import DecileImpact as PEDecileImpact
-                    from policyengine.outputs.inequality import (
-                        calculate_us_inequality,
-                    )
-                    from policyengine.outputs.poverty import (
-                        calculate_us_poverty_rates,
-                    )
+
+                    # TODO: Re-enable when policyengine package adds these:
+                    # from policyengine.outputs.inequality import calculate_us_inequality
+                    # from policyengine.outputs.poverty import calculate_us_poverty_rates
                     from policyengine.tax_benefit_models.us import us_latest
                     from policyengine.tax_benefit_models.us.datasets import (
                         PolicyEngineUSDataset,
@@ -1198,44 +1240,45 @@ def economy_comparison_us(job_id: str, traceparent: str | None = None) -> None:
                             except KeyError:
                                 pass  # Variable not in model, skip silently
 
-                    # Calculate poverty rates
-                    with logfire.span("calculate_poverty"):
-                        for sim, sim_id in [
-                            (pe_baseline_sim, baseline_sim.id),
-                            (pe_reform_sim, reform_sim.id),
-                        ]:
-                            poverty_collection = calculate_us_poverty_rates(sim)
-                            for pov in poverty_collection.outputs:
-                                poverty_record = Poverty(
-                                    simulation_id=sim_id,
-                                    report_id=report.id,
-                                    poverty_type=pov.poverty_type,
-                                    entity=pov.entity,
-                                    filter_variable=pov.filter_variable,
-                                    headcount=pov.headcount,
-                                    total_population=pov.total_population,
-                                    rate=pov.rate,
-                                )
-                                session.add(poverty_record)
+                    # TODO: Re-enable poverty/inequality when policyengine package adds these functions
+                    # # Calculate poverty rates
+                    # with logfire.span("calculate_poverty"):
+                    #     for sim, sim_id in [
+                    #         (pe_baseline_sim, baseline_sim.id),
+                    #         (pe_reform_sim, reform_sim.id),
+                    #     ]:
+                    #         poverty_collection = calculate_us_poverty_rates(sim)
+                    #         for pov in poverty_collection.outputs:
+                    #             poverty_record = Poverty(
+                    #                 simulation_id=sim_id,
+                    #                 report_id=report.id,
+                    #                 poverty_type=pov.poverty_type,
+                    #                 entity=pov.entity,
+                    #                 filter_variable=pov.filter_variable,
+                    #                 headcount=pov.headcount,
+                    #                 total_population=pov.total_population,
+                    #                 rate=pov.rate,
+                    #             )
+                    #             session.add(poverty_record)
 
-                    # Calculate inequality
-                    with logfire.span("calculate_inequality"):
-                        for sim, sim_id in [
-                            (pe_baseline_sim, baseline_sim.id),
-                            (pe_reform_sim, reform_sim.id),
-                        ]:
-                            ineq = calculate_us_inequality(sim)
-                            inequality_record = Inequality(
-                                simulation_id=sim_id,
-                                report_id=report.id,
-                                income_variable=ineq.income_variable,
-                                entity=ineq.entity,
-                                gini=ineq.gini,
-                                top_10_share=ineq.top_10_share,
-                                top_1_share=ineq.top_1_share,
-                                bottom_50_share=ineq.bottom_50_share,
-                            )
-                            session.add(inequality_record)
+                    # # Calculate inequality
+                    # with logfire.span("calculate_inequality"):
+                    #     for sim, sim_id in [
+                    #         (pe_baseline_sim, baseline_sim.id),
+                    #         (pe_reform_sim, reform_sim.id),
+                    #     ]:
+                    #         ineq = calculate_us_inequality(sim)
+                    #         inequality_record = Inequality(
+                    #             simulation_id=sim_id,
+                    #             report_id=report.id,
+                    #             income_variable=ineq.income_variable,
+                    #             entity=ineq.entity,
+                    #             gini=ineq.gini,
+                    #             top_10_share=ineq.top_10_share,
+                    #             top_1_share=ineq.top_1_share,
+                    #             bottom_50_share=ineq.bottom_50_share,
+                    #         )
+                    #         session.add(inequality_record)
 
                     # Mark simulations and report as completed
                     baseline_sim.status = SimulationStatus.COMPLETED
@@ -1403,3 +1446,193 @@ def _apply_simulation_modifier(simulation, modifier_code: str | None):
         namespace["modify"](simulation)
 
     return simulation
+
+
+def _calculate_uk_household_with_modifier(
+    people: list[dict],
+    benunit: dict,
+    household_data: dict,
+    year: int,
+    policy_data: dict | None,
+    simulation_modifier: str,
+) -> dict:
+    """Calculate UK household with a simulation modifier using low-level API."""
+    from policyengine_uk import Simulation
+
+    # Build situation dict
+    situation = {
+        "people": {},
+        "benunits": {"benunit": {"members": [], **benunit}},
+        "households": {"household": {"members": [], **household_data}},
+    }
+
+    # Add people
+    for i, person in enumerate(people):
+        person_id = f"person_{i}"
+        situation["people"][person_id] = person
+        situation["benunits"]["benunit"]["members"].append(person_id)
+        situation["households"]["household"]["members"].append(person_id)
+
+    # Create simulation
+    sim = Simulation(situation=situation)
+
+    # Apply the simulation modifier
+    _apply_simulation_modifier(sim, simulation_modifier)
+
+    # Calculate variables for the year
+    period = year
+
+    # Get person-level results
+    person_results = []
+    for i in range(len(people)):
+        person_result = {}
+        # Calculate common variables
+        for var in [
+            "employment_income",
+            "self_employment_income",
+            "income_tax",
+            "national_insurance",
+            "total_tax",
+            "universal_credit",
+            "child_benefit",
+            "state_pension",
+            "household_net_income",
+        ]:
+            try:
+                values = sim.calculate(var, period)
+                if hasattr(values, "__len__") and len(values) > i:
+                    person_result[var] = float(values[i])
+            except Exception:
+                pass
+        person_results.append(person_result)
+
+    # Get household-level results
+    household_result = {}
+    for var in [
+        "household_net_income",
+        "household_benefits",
+        "household_tax",
+        "equiv_household_net_income",
+    ]:
+        try:
+            values = sim.calculate(var, period)
+            if hasattr(values, "__len__") and len(values) > 0:
+                household_result[var] = float(values[0])
+        except Exception:
+            pass
+
+    # Get benunit-level results
+    benunit_result = {}
+    for var in ["universal_credit", "child_benefit", "housing_benefit"]:
+        try:
+            values = sim.calculate(var, period)
+            if hasattr(values, "__len__") and len(values) > 0:
+                benunit_result[var] = float(values[0])
+        except Exception:
+            pass
+
+    return {
+        "person": person_results,
+        "benunit": [benunit_result],
+        "household": household_result,
+    }
+
+
+def _calculate_us_household_with_modifier(
+    people: list[dict],
+    marital_unit: dict,
+    family: dict,
+    spm_unit: dict,
+    tax_unit: dict,
+    household_data: dict,
+    year: int,
+    policy_data: dict | None,
+    simulation_modifier: str,
+) -> dict:
+    """Calculate US household with a simulation modifier using low-level API."""
+    from policyengine_us import Simulation
+
+    # Build situation dict
+    member_ids = [f"person_{i}" for i in range(len(people))]
+
+    situation = {
+        "people": {},
+        "marital_units": {"marital_unit": {"members": member_ids, **marital_unit}},
+        "families": {"family": {"members": member_ids, **family}},
+        "spm_units": {"spm_unit": {"members": member_ids, **spm_unit}},
+        "tax_units": {"tax_unit": {"members": member_ids, **tax_unit}},
+        "households": {"household": {"members": member_ids, **household_data}},
+    }
+
+    # Add people
+    for i, person in enumerate(people):
+        situation["people"][member_ids[i]] = person
+
+    # Create simulation
+    sim = Simulation(situation=situation)
+
+    # Apply the simulation modifier
+    _apply_simulation_modifier(sim, simulation_modifier)
+
+    # Calculate variables for the year
+    period = year
+
+    # Get person-level results
+    person_results = []
+    for i in range(len(people)):
+        person_result = {}
+        for var in [
+            "employment_income",
+            "self_employment_income",
+            "income_tax",
+            "employee_payroll_tax",
+            "snap",
+            "ssi",
+            "social_security",
+        ]:
+            try:
+                values = sim.calculate(var, period)
+                if hasattr(values, "__len__") and len(values) > i:
+                    person_result[var] = float(values[i])
+            except Exception:
+                pass
+        person_results.append(person_result)
+
+    # Get tax_unit-level results
+    tax_unit_result = {}
+    for var in ["income_tax", "income_tax_before_credits", "eitc", "ctc"]:
+        try:
+            values = sim.calculate(var, period)
+            if hasattr(values, "__len__") and len(values) > 0:
+                tax_unit_result[var] = float(values[0])
+        except Exception:
+            pass
+
+    # Get spm_unit-level results
+    spm_unit_result = {}
+    for var in ["snap", "spm_unit_net_income", "spm_unit_benefits", "spm_unit_taxes"]:
+        try:
+            values = sim.calculate(var, period)
+            if hasattr(values, "__len__") and len(values) > 0:
+                spm_unit_result[var] = float(values[0])
+        except Exception:
+            pass
+
+    # Get household-level results
+    household_result = {}
+    for var in ["household_net_income", "household_benefits", "household_tax"]:
+        try:
+            values = sim.calculate(var, period)
+            if hasattr(values, "__len__") and len(values) > 0:
+                household_result[var] = float(values[0])
+        except Exception:
+            pass
+
+    return {
+        "person": person_results,
+        "marital_unit": [{}],
+        "family": [{}],
+        "spm_unit": [spm_unit_result],
+        "tax_unit": [tax_unit_result],
+        "household": household_result,
+    }

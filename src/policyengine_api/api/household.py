@@ -470,6 +470,7 @@ def _get_policy_data(policy_id: UUID | None, session: Session) -> dict | None:
     return {
         "name": db_policy.name,
         "description": db_policy.description,
+        "simulation_modifier": db_policy.simulation_modifier,
         "parameter_values": [
             {
                 "parameter_name": pv.parameter.name if pv.parameter else None,
