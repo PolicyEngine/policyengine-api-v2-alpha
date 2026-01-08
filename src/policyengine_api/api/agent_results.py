@@ -25,6 +25,7 @@ from policyengine_api.models import (
     ReportStatus,
     Simulation,
     SimulationStatus,
+    TaxBenefitModel,
     TaxBenefitModelVersion,
     Dataset,
 )
@@ -446,8 +447,17 @@ def run_structural_reform(
     )
     from sqlmodel import select
 
+    # First find the model by name, then get its latest version
+    stmt = select(TaxBenefitModel).where(TaxBenefitModel.name == tax_benefit_model_name)
+    model = session.exec(stmt).first()
+    if not model:
+        raise HTTPException(
+            status_code=404,
+            detail=f"No model found for {tax_benefit_model_name}",
+        )
+
     stmt = select(TaxBenefitModelVersion).where(
-        TaxBenefitModelVersion.name == tax_benefit_model_name
+        TaxBenefitModelVersion.model_id == model.id
     )
     model_version = session.exec(stmt).first()
     if not model_version:
