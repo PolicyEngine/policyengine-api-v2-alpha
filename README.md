@@ -16,7 +16,7 @@ FastAPI service for UK and US tax-benefit microsimulations. Uses Supabase for st
 │  Level 0: Simulations                                       │
 │  Single world-state calculations                            │
 │  /household/calculate → simulate_household_*                │
-└─────────────────────────────────────────────────────────────┘
+└─────────────────────────────────────────────────────────────┘ 
         │
         ▼
 ┌──────────────────────────┐
