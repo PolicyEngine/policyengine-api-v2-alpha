@@ -115,6 +115,22 @@ jobs:
       - name: Sync dependencies
         run: uv sync
 
+      - name: Sync Modal secrets from GitHub
+        env:
+          MODAL_TOKEN_ID: ${{ secrets.MODAL_TOKEN_ID }}
+          MODAL_TOKEN_SECRET: ${{ secrets.MODAL_TOKEN_SECRET }}
+        run: |
+          echo "Syncing Modal secrets from GitHub..."
+          uv run modal secret create policyengine-db \
+            "DATABASE_URL=${{ secrets.SUPABASE_DB_URL }}" \
+            "SUPABASE_URL=${{ secrets.SUPABASE_URL }}" \
+            "SUPABASE_KEY=${{ secrets.SUPABASE_KEY }}" \
+            --force
+          uv run modal secret create policyengine-logfire \
+            "LOGFIRE_TOKEN=${{ secrets.LOGFIRE_TOKEN }}" \
+            --force
+          echo "Modal secrets synced"
+
       - name: Deploy Modal functions
         env:
           MODAL_TOKEN_ID: ${{ secrets.MODAL_TOKEN_ID }}
@@ -128,7 +144,7 @@ jobs:
           MODAL_TOKEN_ID: ${{ secrets.MODAL_TOKEN_ID }}
           MODAL_TOKEN_SECRET: ${{ secrets.MODAL_TOKEN_SECRET }}
         run: |
-          echo "Validating Modal secrets are correctly configured..."
+          echo "Validating Modal secrets..."
           result=$(uv run python -c "
           import modal
           f = modal.Function.from_name('policyengine', 'validate_secrets')
@@ -138,7 +154,7 @@ jobs:
           ")
           echo "$result"
           if echo "$result" | grep -q '"status": "error"'; then
-            echo "::error::Modal secrets validation failed. Check the output above."
+            echo "::error::Modal secrets validation failed"
             exit 1
           fi
-          echo "All Modal secrets validated successfully"
+          echo "Modal secrets validated"
