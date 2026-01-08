@@ -37,5 +37,6 @@ api_router.include_router(household.router)
 api_router.include_router(analysis.router)
 api_router.include_router(agent.router)
 api_router.include_router(agent_results.router)
+api_router.include_router(agent_results.agent_router)
 
 __all__ = ["api_router"]
