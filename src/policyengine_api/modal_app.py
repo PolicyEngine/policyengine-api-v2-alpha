@@ -1414,7 +1414,7 @@ def compute_aggregate_uk(aggregate_id: str, traceparent: str | None = None) -> N
                         # Get variable values from output dataset
                         entity = aggregate.entity or "person"
                         entity_data = getattr(pe_sim.output_dataset.data, entity)
-                        values = entity_data[aggregate.variable]
+                        values = np.asarray(entity_data[aggregate.variable])
 
                         # Apply filter if configured
                         if aggregate.filter_config:
@@ -1423,7 +1423,7 @@ def compute_aggregate_uk(aggregate_id: str, traceparent: str | None = None) -> N
                                 filter_var,
                                 filter_val,
                             ) in aggregate.filter_config.items():
-                                filter_values = entity_data[filter_var]
+                                filter_values = np.asarray(entity_data[filter_var])
                                 if isinstance(filter_val, dict):
                                     if "gte" in filter_val:
                                         mask &= filter_values >= filter_val["gte"]
@@ -1594,7 +1594,7 @@ def compute_aggregate_us(aggregate_id: str, traceparent: str | None = None) -> N
                         # Get variable values from output dataset
                         entity = aggregate.entity or "person"
                         entity_data = getattr(pe_sim.output_dataset.data, entity)
-                        values = entity_data[aggregate.variable]
+                        values = np.asarray(entity_data[aggregate.variable])
 
                         # Apply filter if configured
                         if aggregate.filter_config:
@@ -1603,7 +1603,7 @@ def compute_aggregate_us(aggregate_id: str, traceparent: str | None = None) -> N
                                 filter_var,
                                 filter_val,
                             ) in aggregate.filter_config.items():
-                                filter_values = entity_data[filter_var]
+                                filter_values = np.asarray(entity_data[filter_var])
                                 if isinstance(filter_val, dict):
                                     if "gte" in filter_val:
                                         mask &= filter_values >= filter_val["gte"]
@@ -1807,8 +1807,12 @@ def compute_change_aggregate_uk(
                             pe_reform_sim.output_dataset.data, entity
                         )
 
-                        baseline_values = baseline_entity_data[change_agg.variable]
-                        reform_values = reform_entity_data[change_agg.variable]
+                        baseline_values = np.asarray(
+                            baseline_entity_data[change_agg.variable]
+                        )
+                        reform_values = np.asarray(
+                            reform_entity_data[change_agg.variable]
+                        )
 
                         # Calculate change
                         change_values = reform_values - baseline_values
@@ -1820,7 +1824,9 @@ def compute_change_aggregate_uk(
                                 filter_var,
                                 filter_val,
                             ) in change_agg.filter_config.items():
-                                filter_values = baseline_entity_data[filter_var]
+                                filter_values = np.asarray(
+                                    baseline_entity_data[filter_var]
+                                )
                                 if isinstance(filter_val, dict):
                                     if "gte" in filter_val:
                                         mask &= filter_values >= filter_val["gte"]
@@ -2038,8 +2044,12 @@ def compute_change_aggregate_us(
                             pe_reform_sim.output_dataset.data, entity
                         )
 
-                        baseline_values = baseline_entity_data[change_agg.variable]
-                        reform_values = reform_entity_data[change_agg.variable]
+                        baseline_values = np.asarray(
+                            baseline_entity_data[change_agg.variable]
+                        )
+                        reform_values = np.asarray(
+                            reform_entity_data[change_agg.variable]
+                        )
 
                         # Calculate change
                         change_values = reform_values - baseline_values
@@ -2051,7 +2061,9 @@ def compute_change_aggregate_us(
                                 filter_var,
                                 filter_val,
                             ) in change_agg.filter_config.items():
-                                filter_values = baseline_entity_data[filter_var]
+                                filter_values = np.asarray(
+                                    baseline_entity_data[filter_var]
+                                )
                                 if isinstance(filter_val, dict):
                                     if "gte" in filter_val:
                                         mask &= filter_values >= filter_val["gte"]
