@@ -15,7 +15,7 @@ Deploy with: modal deploy src/policyengine_api/modal_app.py
 import modal
 
 # Base image with common dependencies using uv for fast installs
-# Cache bust: 2026-01-10
+# Cache bust: 2026-01-11-aggregate-workers
 base_image = (
     modal.Image.debian_slim(python_version="3.13")
     .apt_install("libhdf5-dev")
@@ -1296,3 +1296,823 @@ def _get_pe_dynamic_us(dynamic_id, model_version, session):
     """Convert database Dynamic to policyengine Dynamic for US."""
     # Same implementation as UK
     return _get_pe_dynamic_uk(dynamic_id, model_version, session)
+
+
+@app.function(
+    image=uk_image,
+    secrets=[db_secrets, logfire_secrets],
+    memory=8192,
+    cpu=8,
+    timeout=1800,
+)
+def compute_aggregate_uk(aggregate_id: str, traceparent: str | None = None) -> None:
+    """Compute a UK aggregate output and write result to database."""
+    import os
+    from uuid import UUID
+
+    import logfire
+    from sqlmodel import Session, create_engine
+
+    configure_logfire("policyengine-modal-uk", traceparent)
+
+    try:
+        with logfire.span("compute_aggregate_uk", aggregate_id=aggregate_id):
+            database_url = get_database_url()
+            supabase_url = os.environ["SUPABASE_URL"]
+            supabase_key = os.environ["SUPABASE_KEY"]
+            storage_bucket = os.environ.get("STORAGE_BUCKET", "datasets")
+
+            engine = create_engine(database_url)
+
+            try:
+                from policyengine_api.models import (
+                    AggregateOutput,
+                    AggregateStatus,
+                    AggregateType,
+                    Dataset,
+                    Simulation,
+                )
+
+                with Session(engine) as session:
+                    aggregate = session.get(AggregateOutput, UUID(aggregate_id))
+                    if not aggregate:
+                        raise ValueError(f"Aggregate {aggregate_id} not found")
+
+                    # Skip if already completed
+                    if aggregate.status == AggregateStatus.COMPLETED:
+                        logfire.info(
+                            "Aggregate already completed", aggregate_id=aggregate_id
+                        )
+                        return
+
+                    # Update status to running
+                    aggregate.status = AggregateStatus.RUNNING
+                    session.add(aggregate)
+                    session.commit()
+
+                    # Get simulation
+                    simulation = session.get(Simulation, aggregate.simulation_id)
+                    if not simulation:
+                        raise ValueError(
+                            f"Simulation {aggregate.simulation_id} not found"
+                        )
+
+                    # Get dataset
+                    dataset = session.get(Dataset, simulation.dataset_id)
+                    if not dataset:
+                        raise ValueError(f"Dataset {simulation.dataset_id} not found")
+
+                    # Import policyengine
+                    from policyengine.core import Simulation as PESimulation
+                    from policyengine.tax_benefit_models.uk import uk_latest
+                    from policyengine.tax_benefit_models.uk.datasets import (
+                        PolicyEngineUKDataset,
+                    )
+
+                    pe_model_version = uk_latest
+
+                    # Get policy and dynamic
+                    policy = _get_pe_policy_uk(
+                        simulation.policy_id, pe_model_version, session
+                    )
+                    dynamic = _get_pe_dynamic_uk(
+                        simulation.dynamic_id, pe_model_version, session
+                    )
+
+                    # Download dataset
+                    with logfire.span("download_dataset", filepath=dataset.filepath):
+                        local_path = download_dataset(
+                            dataset.filepath, supabase_url, supabase_key, storage_bucket
+                        )
+
+                    with logfire.span("load_dataset"):
+                        pe_dataset = PolicyEngineUKDataset(
+                            name=dataset.name,
+                            description=dataset.description or "",
+                            filepath=local_path,
+                            year=dataset.year,
+                        )
+
+                    # Create and run simulation
+                    with logfire.span("run_simulation"):
+                        pe_sim = PESimulation(
+                            dataset=pe_dataset,
+                            tax_benefit_model_version=pe_model_version,
+                            policy=policy,
+                            dynamic=dynamic,
+                        )
+                        pe_sim.ensure()
+
+                    # Calculate aggregate
+                    with logfire.span(
+                        "calculate_aggregate",
+                        variable=aggregate.variable,
+                        aggregate_type=aggregate.aggregate_type,
+                    ):
+                        import numpy as np
+
+                        # Get variable values
+                        entity = aggregate.entity or "person"
+                        values = pe_sim.calculate(aggregate.variable, entity=entity)
+
+                        # Apply filter if configured
+                        if aggregate.filter_config:
+                            mask = np.ones(len(values), dtype=bool)
+                            for (
+                                filter_var,
+                                filter_val,
+                            ) in aggregate.filter_config.items():
+                                filter_values = pe_sim.calculate(
+                                    filter_var, entity=entity
+                                )
+                                if isinstance(filter_val, dict):
+                                    if "gte" in filter_val:
+                                        mask &= filter_values >= filter_val["gte"]
+                                    if "lte" in filter_val:
+                                        mask &= filter_values <= filter_val["lte"]
+                                    if "eq" in filter_val:
+                                        mask &= filter_values == filter_val["eq"]
+                                else:
+                                    mask &= filter_values == filter_val
+                            values = values[mask]
+
+                        # Calculate aggregate
+                        if aggregate.aggregate_type == AggregateType.SUM:
+                            result = float(np.sum(values))
+                        elif aggregate.aggregate_type == AggregateType.MEAN:
+                            result = float(np.mean(values)) if len(values) > 0 else 0.0
+                        elif aggregate.aggregate_type == AggregateType.COUNT:
+                            result = float(len(values))
+                        else:
+                            raise ValueError(
+                                f"Unknown aggregate type: {aggregate.aggregate_type}"
+                            )
+
+                    # Update aggregate with result
+                    aggregate.result = result
+                    aggregate.status = AggregateStatus.COMPLETED
+                    session.add(aggregate)
+                    session.commit()
+
+            except Exception as e:
+                logfire.error(
+                    "UK aggregate computation failed",
+                    aggregate_id=aggregate_id,
+                    error=str(e),
+                )
+                try:
+                    from sqlmodel import text
+
+                    with Session(engine) as session:
+                        session.execute(
+                            text(
+                                "UPDATE aggregates SET status = 'failed', error_message = :error "
+                                "WHERE id = :agg_id"
+                            ),
+                            {"agg_id": aggregate_id, "error": str(e)[:1000]},
+                        )
+                        session.commit()
+                except Exception as db_error:
+                    logfire.error("Failed to update DB", error=str(db_error))
+                raise
+    finally:
+        logfire.force_flush()
+
+
+@app.function(
+    image=us_image,
+    secrets=[db_secrets, logfire_secrets],
+    memory=8192,
+    cpu=8,
+    timeout=1800,
+)
+def compute_aggregate_us(aggregate_id: str, traceparent: str | None = None) -> None:
+    """Compute a US aggregate output and write result to database."""
+    import os
+    from uuid import UUID
+
+    import logfire
+    from sqlmodel import Session, create_engine
+
+    configure_logfire("policyengine-modal-us", traceparent)
+
+    try:
+        with logfire.span("compute_aggregate_us", aggregate_id=aggregate_id):
+            database_url = get_database_url()
+            supabase_url = os.environ["SUPABASE_URL"]
+            supabase_key = os.environ["SUPABASE_KEY"]
+            storage_bucket = os.environ.get("STORAGE_BUCKET", "datasets")
+
+            engine = create_engine(database_url)
+
+            try:
+                from policyengine_api.models import (
+                    AggregateOutput,
+                    AggregateStatus,
+                    AggregateType,
+                    Dataset,
+                    Simulation,
+                )
+
+                with Session(engine) as session:
+                    aggregate = session.get(AggregateOutput, UUID(aggregate_id))
+                    if not aggregate:
+                        raise ValueError(f"Aggregate {aggregate_id} not found")
+
+                    # Skip if already completed
+                    if aggregate.status == AggregateStatus.COMPLETED:
+                        logfire.info(
+                            "Aggregate already completed", aggregate_id=aggregate_id
+                        )
+                        return
+
+                    # Update status to running
+                    aggregate.status = AggregateStatus.RUNNING
+                    session.add(aggregate)
+                    session.commit()
+
+                    # Get simulation
+                    simulation = session.get(Simulation, aggregate.simulation_id)
+                    if not simulation:
+                        raise ValueError(
+                            f"Simulation {aggregate.simulation_id} not found"
+                        )
+
+                    # Get dataset
+                    dataset = session.get(Dataset, simulation.dataset_id)
+                    if not dataset:
+                        raise ValueError(f"Dataset {simulation.dataset_id} not found")
+
+                    # Import policyengine
+                    from policyengine.core import Simulation as PESimulation
+                    from policyengine.tax_benefit_models.us import us_latest
+                    from policyengine.tax_benefit_models.us.datasets import (
+                        PolicyEngineUSDataset,
+                    )
+
+                    pe_model_version = us_latest
+
+                    # Get policy and dynamic
+                    policy = _get_pe_policy_us(
+                        simulation.policy_id, pe_model_version, session
+                    )
+                    dynamic = _get_pe_dynamic_us(
+                        simulation.dynamic_id, pe_model_version, session
+                    )
+
+                    # Download dataset
+                    with logfire.span("download_dataset", filepath=dataset.filepath):
+                        local_path = download_dataset(
+                            dataset.filepath, supabase_url, supabase_key, storage_bucket
+                        )
+
+                    with logfire.span("load_dataset"):
+                        pe_dataset = PolicyEngineUSDataset(
+                            name=dataset.name,
+                            description=dataset.description or "",
+                            filepath=local_path,
+                            year=dataset.year,
+                        )
+
+                    # Create and run simulation
+                    with logfire.span("run_simulation"):
+                        pe_sim = PESimulation(
+                            dataset=pe_dataset,
+                            tax_benefit_model_version=pe_model_version,
+                            policy=policy,
+                            dynamic=dynamic,
+                        )
+                        pe_sim.ensure()
+
+                    # Calculate aggregate
+                    with logfire.span(
+                        "calculate_aggregate",
+                        variable=aggregate.variable,
+                        aggregate_type=aggregate.aggregate_type,
+                    ):
+                        import numpy as np
+
+                        # Get variable values
+                        entity = aggregate.entity or "person"
+                        values = pe_sim.calculate(aggregate.variable, entity=entity)
+
+                        # Apply filter if configured
+                        if aggregate.filter_config:
+                            mask = np.ones(len(values), dtype=bool)
+                            for (
+                                filter_var,
+                                filter_val,
+                            ) in aggregate.filter_config.items():
+                                filter_values = pe_sim.calculate(
+                                    filter_var, entity=entity
+                                )
+                                if isinstance(filter_val, dict):
+                                    if "gte" in filter_val:
+                                        mask &= filter_values >= filter_val["gte"]
+                                    if "lte" in filter_val:
+                                        mask &= filter_values <= filter_val["lte"]
+                                    if "eq" in filter_val:
+                                        mask &= filter_values == filter_val["eq"]
+                                else:
+                                    mask &= filter_values == filter_val
+                            values = values[mask]
+
+                        # Calculate aggregate
+                        if aggregate.aggregate_type == AggregateType.SUM:
+                            result = float(np.sum(values))
+                        elif aggregate.aggregate_type == AggregateType.MEAN:
+                            result = float(np.mean(values)) if len(values) > 0 else 0.0
+                        elif aggregate.aggregate_type == AggregateType.COUNT:
+                            result = float(len(values))
+                        else:
+                            raise ValueError(
+                                f"Unknown aggregate type: {aggregate.aggregate_type}"
+                            )
+
+                    # Update aggregate with result
+                    aggregate.result = result
+                    aggregate.status = AggregateStatus.COMPLETED
+                    session.add(aggregate)
+                    session.commit()
+
+            except Exception as e:
+                logfire.error(
+                    "US aggregate computation failed",
+                    aggregate_id=aggregate_id,
+                    error=str(e),
+                )
+                try:
+                    from sqlmodel import text
+
+                    with Session(engine) as session:
+                        session.execute(
+                            text(
+                                "UPDATE aggregates SET status = 'failed', error_message = :error "
+                                "WHERE id = :agg_id"
+                            ),
+                            {"agg_id": aggregate_id, "error": str(e)[:1000]},
+                        )
+                        session.commit()
+                except Exception as db_error:
+                    logfire.error("Failed to update DB", error=str(db_error))
+                raise
+    finally:
+        logfire.force_flush()
+
+
+@app.function(
+    image=uk_image,
+    secrets=[db_secrets, logfire_secrets],
+    memory=8192,
+    cpu=8,
+    timeout=1800,
+)
+def compute_change_aggregate_uk(
+    change_aggregate_id: str, traceparent: str | None = None
+) -> None:
+    """Compute a UK change aggregate and write result to database."""
+    import os
+    from uuid import UUID
+
+    import logfire
+    from sqlmodel import Session, create_engine
+
+    configure_logfire("policyengine-modal-uk", traceparent)
+
+    try:
+        with logfire.span(
+            "compute_change_aggregate_uk", change_aggregate_id=change_aggregate_id
+        ):
+            database_url = get_database_url()
+            supabase_url = os.environ["SUPABASE_URL"]
+            supabase_key = os.environ["SUPABASE_KEY"]
+            storage_bucket = os.environ.get("STORAGE_BUCKET", "datasets")
+
+            engine = create_engine(database_url)
+
+            try:
+                from policyengine_api.models import (
+                    ChangeAggregate,
+                    ChangeAggregateStatus,
+                    ChangeAggregateType,
+                    Dataset,
+                    Simulation,
+                )
+
+                with Session(engine) as session:
+                    change_agg = session.get(ChangeAggregate, UUID(change_aggregate_id))
+                    if not change_agg:
+                        raise ValueError(
+                            f"ChangeAggregate {change_aggregate_id} not found"
+                        )
+
+                    # Skip if already completed
+                    if change_agg.status == ChangeAggregateStatus.COMPLETED:
+                        logfire.info(
+                            "Change aggregate already completed",
+                            change_aggregate_id=change_aggregate_id,
+                        )
+                        return
+
+                    # Update status to running
+                    change_agg.status = ChangeAggregateStatus.RUNNING
+                    session.add(change_agg)
+                    session.commit()
+
+                    # Get simulations
+                    baseline_sim = session.get(
+                        Simulation, change_agg.baseline_simulation_id
+                    )
+                    reform_sim = session.get(
+                        Simulation, change_agg.reform_simulation_id
+                    )
+
+                    if not baseline_sim or not reform_sim:
+                        raise ValueError("Simulations not found")
+
+                    # Get dataset (assuming same dataset for both)
+                    dataset = session.get(Dataset, baseline_sim.dataset_id)
+                    if not dataset:
+                        raise ValueError(f"Dataset {baseline_sim.dataset_id} not found")
+
+                    # Import policyengine
+                    from policyengine.core import Simulation as PESimulation
+                    from policyengine.tax_benefit_models.uk import uk_latest
+                    from policyengine.tax_benefit_models.uk.datasets import (
+                        PolicyEngineUKDataset,
+                    )
+
+                    pe_model_version = uk_latest
+
+                    # Get policies and dynamics
+                    baseline_policy = _get_pe_policy_uk(
+                        baseline_sim.policy_id, pe_model_version, session
+                    )
+                    reform_policy = _get_pe_policy_uk(
+                        reform_sim.policy_id, pe_model_version, session
+                    )
+                    baseline_dynamic = _get_pe_dynamic_uk(
+                        baseline_sim.dynamic_id, pe_model_version, session
+                    )
+                    reform_dynamic = _get_pe_dynamic_uk(
+                        reform_sim.dynamic_id, pe_model_version, session
+                    )
+
+                    # Download dataset
+                    with logfire.span("download_dataset", filepath=dataset.filepath):
+                        local_path = download_dataset(
+                            dataset.filepath, supabase_url, supabase_key, storage_bucket
+                        )
+
+                    with logfire.span("load_dataset"):
+                        pe_dataset = PolicyEngineUKDataset(
+                            name=dataset.name,
+                            description=dataset.description or "",
+                            filepath=local_path,
+                            year=dataset.year,
+                        )
+
+                    # Create and run simulations
+                    with logfire.span("run_baseline_simulation"):
+                        pe_baseline_sim = PESimulation(
+                            dataset=pe_dataset,
+                            tax_benefit_model_version=pe_model_version,
+                            policy=baseline_policy,
+                            dynamic=baseline_dynamic,
+                        )
+                        pe_baseline_sim.ensure()
+
+                    with logfire.span("run_reform_simulation"):
+                        pe_reform_sim = PESimulation(
+                            dataset=pe_dataset,
+                            tax_benefit_model_version=pe_model_version,
+                            policy=reform_policy,
+                            dynamic=reform_dynamic,
+                        )
+                        pe_reform_sim.ensure()
+
+                    # Calculate change aggregate
+                    with logfire.span(
+                        "calculate_change_aggregate",
+                        variable=change_agg.variable,
+                        aggregate_type=change_agg.aggregate_type,
+                    ):
+                        import numpy as np
+
+                        entity = change_agg.entity or "person"
+
+                        baseline_values = pe_baseline_sim.calculate(
+                            change_agg.variable, entity=entity
+                        )
+                        reform_values = pe_reform_sim.calculate(
+                            change_agg.variable, entity=entity
+                        )
+
+                        # Calculate change
+                        change_values = reform_values - baseline_values
+
+                        # Apply filter if configured
+                        if change_agg.filter_config:
+                            mask = np.ones(len(change_values), dtype=bool)
+                            for (
+                                filter_var,
+                                filter_val,
+                            ) in change_agg.filter_config.items():
+                                filter_values = pe_baseline_sim.calculate(
+                                    filter_var, entity=entity
+                                )
+                                if isinstance(filter_val, dict):
+                                    if "gte" in filter_val:
+                                        mask &= filter_values >= filter_val["gte"]
+                                    if "lte" in filter_val:
+                                        mask &= filter_values <= filter_val["lte"]
+                                    if "eq" in filter_val:
+                                        mask &= filter_values == filter_val["eq"]
+                                else:
+                                    mask &= filter_values == filter_val
+                            change_values = change_values[mask]
+
+                        # Apply change_geq/change_leq filters
+                        if change_agg.change_geq is not None:
+                            change_values = change_values[
+                                change_values >= change_agg.change_geq
+                            ]
+                        if change_agg.change_leq is not None:
+                            change_values = change_values[
+                                change_values <= change_agg.change_leq
+                            ]
+
+                        # Calculate aggregate
+                        if change_agg.aggregate_type == ChangeAggregateType.SUM:
+                            result = float(np.sum(change_values))
+                        elif change_agg.aggregate_type == ChangeAggregateType.MEAN:
+                            result = (
+                                float(np.mean(change_values))
+                                if len(change_values) > 0
+                                else 0.0
+                            )
+                        elif change_agg.aggregate_type == ChangeAggregateType.COUNT:
+                            result = float(len(change_values))
+                        else:
+                            raise ValueError(
+                                f"Unknown aggregate type: {change_agg.aggregate_type}"
+                            )
+
+                    # Update change aggregate with result
+                    change_agg.result = result
+                    change_agg.status = ChangeAggregateStatus.COMPLETED
+                    session.add(change_agg)
+                    session.commit()
+
+            except Exception as e:
+                logfire.error(
+                    "UK change aggregate computation failed",
+                    change_aggregate_id=change_aggregate_id,
+                    error=str(e),
+                )
+                try:
+                    from sqlmodel import text
+
+                    with Session(engine) as session:
+                        session.execute(
+                            text(
+                                "UPDATE change_aggregates SET status = 'failed', error_message = :error "
+                                "WHERE id = :agg_id"
+                            ),
+                            {"agg_id": change_aggregate_id, "error": str(e)[:1000]},
+                        )
+                        session.commit()
+                except Exception as db_error:
+                    logfire.error("Failed to update DB", error=str(db_error))
+                raise
+    finally:
+        logfire.force_flush()
+
+
+@app.function(
+    image=us_image,
+    secrets=[db_secrets, logfire_secrets],
+    memory=8192,
+    cpu=8,
+    timeout=1800,
+)
+def compute_change_aggregate_us(
+    change_aggregate_id: str, traceparent: str | None = None
+) -> None:
+    """Compute a US change aggregate and write result to database."""
+    import os
+    from uuid import UUID
+
+    import logfire
+    from sqlmodel import Session, create_engine
+
+    configure_logfire("policyengine-modal-us", traceparent)
+
+    try:
+        with logfire.span(
+            "compute_change_aggregate_us", change_aggregate_id=change_aggregate_id
+        ):
+            database_url = get_database_url()
+            supabase_url = os.environ["SUPABASE_URL"]
+            supabase_key = os.environ["SUPABASE_KEY"]
+            storage_bucket = os.environ.get("STORAGE_BUCKET", "datasets")
+
+            engine = create_engine(database_url)
+
+            try:
+                from policyengine_api.models import (
+                    ChangeAggregate,
+                    ChangeAggregateStatus,
+                    ChangeAggregateType,
+                    Dataset,
+                    Simulation,
+                )
+
+                with Session(engine) as session:
+                    change_agg = session.get(ChangeAggregate, UUID(change_aggregate_id))
+                    if not change_agg:
+                        raise ValueError(
+                            f"ChangeAggregate {change_aggregate_id} not found"
+                        )
+
+                    # Skip if already completed
+                    if change_agg.status == ChangeAggregateStatus.COMPLETED:
+                        logfire.info(
+                            "Change aggregate already completed",
+                            change_aggregate_id=change_aggregate_id,
+                        )
+                        return
+
+                    # Update status to running
+                    change_agg.status = ChangeAggregateStatus.RUNNING
+                    session.add(change_agg)
+                    session.commit()
+
+                    # Get simulations
+                    baseline_sim = session.get(
+                        Simulation, change_agg.baseline_simulation_id
+                    )
+                    reform_sim = session.get(
+                        Simulation, change_agg.reform_simulation_id
+                    )
+
+                    if not baseline_sim or not reform_sim:
+                        raise ValueError("Simulations not found")
+
+                    # Get dataset (assuming same dataset for both)
+                    dataset = session.get(Dataset, baseline_sim.dataset_id)
+                    if not dataset:
+                        raise ValueError(f"Dataset {baseline_sim.dataset_id} not found")
+
+                    # Import policyengine
+                    from policyengine.core import Simulation as PESimulation
+                    from policyengine.tax_benefit_models.us import us_latest
+                    from policyengine.tax_benefit_models.us.datasets import (
+                        PolicyEngineUSDataset,
+                    )
+
+                    pe_model_version = us_latest
+
+                    # Get policies and dynamics
+                    baseline_policy = _get_pe_policy_us(
+                        baseline_sim.policy_id, pe_model_version, session
+                    )
+                    reform_policy = _get_pe_policy_us(
+                        reform_sim.policy_id, pe_model_version, session
+                    )
+                    baseline_dynamic = _get_pe_dynamic_us(
+                        baseline_sim.dynamic_id, pe_model_version, session
+                    )
+                    reform_dynamic = _get_pe_dynamic_us(
+                        reform_sim.dynamic_id, pe_model_version, session
+                    )
+
+                    # Download dataset
+                    with logfire.span("download_dataset", filepath=dataset.filepath):
+                        local_path = download_dataset(
+                            dataset.filepath, supabase_url, supabase_key, storage_bucket
+                        )
+
+                    with logfire.span("load_dataset"):
+                        pe_dataset = PolicyEngineUSDataset(
+                            name=dataset.name,
+                            description=dataset.description or "",
+                            filepath=local_path,
+                            year=dataset.year,
+                        )
+
+                    # Create and run simulations
+                    with logfire.span("run_baseline_simulation"):
+                        pe_baseline_sim = PESimulation(
+                            dataset=pe_dataset,
+                            tax_benefit_model_version=pe_model_version,
+                            policy=baseline_policy,
+                            dynamic=baseline_dynamic,
+                        )
+                        pe_baseline_sim.ensure()
+
+                    with logfire.span("run_reform_simulation"):
+                        pe_reform_sim = PESimulation(
+                            dataset=pe_dataset,
+                            tax_benefit_model_version=pe_model_version,
+                            policy=reform_policy,
+                            dynamic=reform_dynamic,
+                        )
+                        pe_reform_sim.ensure()
+
+                    # Calculate change aggregate
+                    with logfire.span(
+                        "calculate_change_aggregate",
+                        variable=change_agg.variable,
+                        aggregate_type=change_agg.aggregate_type,
+                    ):
+                        import numpy as np
+
+                        entity = change_agg.entity or "person"
+
+                        baseline_values = pe_baseline_sim.calculate(
+                            change_agg.variable, entity=entity
+                        )
+                        reform_values = pe_reform_sim.calculate(
+                            change_agg.variable, entity=entity
+                        )
+
+                        # Calculate change
+                        change_values = reform_values - baseline_values
+
+                        # Apply filter if configured
+                        if change_agg.filter_config:
+                            mask = np.ones(len(change_values), dtype=bool)
+                            for (
+                                filter_var,
+                                filter_val,
+                            ) in change_agg.filter_config.items():
+                                filter_values = pe_baseline_sim.calculate(
+                                    filter_var, entity=entity
+                                )
+                                if isinstance(filter_val, dict):
+                                    if "gte" in filter_val:
+                                        mask &= filter_values >= filter_val["gte"]
+                                    if "lte" in filter_val:
+                                        mask &= filter_values <= filter_val["lte"]
+                                    if "eq" in filter_val:
+                                        mask &= filter_values == filter_val["eq"]
+                                else:
+                                    mask &= filter_values == filter_val
+                            change_values = change_values[mask]
+
+                        # Apply change_geq/change_leq filters
+                        if change_agg.change_geq is not None:
+                            change_values = change_values[
+                                change_values >= change_agg.change_geq
+                            ]
+                        if change_agg.change_leq is not None:
+                            change_values = change_values[
+                                change_values <= change_agg.change_leq
+                            ]
+
+                        # Calculate aggregate
+                        if change_agg.aggregate_type == ChangeAggregateType.SUM:
+                            result = float(np.sum(change_values))
+                        elif change_agg.aggregate_type == ChangeAggregateType.MEAN:
+                            result = (
+                                float(np.mean(change_values))
+                                if len(change_values) > 0
+                                else 0.0
+                            )
+                        elif change_agg.aggregate_type == ChangeAggregateType.COUNT:
+                            result = float(len(change_values))
+                        else:
+                            raise ValueError(
+                                f"Unknown aggregate type: {change_agg.aggregate_type}"
+                            )
+
+                    # Update change aggregate with result
+                    change_agg.result = result
+                    change_agg.status = ChangeAggregateStatus.COMPLETED
+                    session.add(change_agg)
+                    session.commit()
+
+            except Exception as e:
+                logfire.error(
+                    "US change aggregate computation failed",
+                    change_aggregate_id=change_aggregate_id,
+                    error=str(e),
+                )
+                try:
+                    from sqlmodel import text
+
+                    with Session(engine) as session:
+                        session.execute(
+                            text(
+                                "UPDATE change_aggregates SET status = 'failed', error_message = :error "
+                                "WHERE id = :agg_id"
+                            ),
+                            {"agg_id": change_aggregate_id, "error": str(e)[:1000]},
+                        )
+                        session.commit()
+                except Exception as db_error:
+                    logfire.error("Failed to update DB", error=str(db_error))
+                raise
+    finally:
+        logfire.force_flush()

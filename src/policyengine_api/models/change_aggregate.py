@@ -13,6 +13,15 @@ class ChangeAggregateType(str, Enum):
     COUNT = "count"
 
 
+class ChangeAggregateStatus(str, Enum):
+    """Change aggregate execution status."""
+
+    PENDING = "pending"
+    RUNNING = "running"
+    COMPLETED = "completed"
+    FAILED = "failed"
+
+
 class ChangeAggregateBase(SQLModel):
     """Base change aggregate fields."""
 
@@ -26,6 +35,8 @@ class ChangeAggregateBase(SQLModel):
     filter_config: dict = Field(default_factory=dict, sa_column=Column(JSON))
     change_geq: float | None = None
     change_leq: float | None = None
+    status: ChangeAggregateStatus = ChangeAggregateStatus.PENDING
+    error_message: str | None = None
     result: float | None = None
 
 
