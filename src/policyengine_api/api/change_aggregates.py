@@ -63,11 +63,9 @@ def _trigger_change_aggregate_computation(
         )
         return
 
-    model = session.get(TaxBenefitModel, model_version.tax_benefit_model_id)
+    model = session.get(TaxBenefitModel, model_version.model_id)
     if not model:
-        logfire.error(
-            "Model not found", model_id=str(model_version.tax_benefit_model_id)
-        )
+        logfire.error("Model not found", model_id=str(model_version.model_id))
         return
 
     traceparent = _get_traceparent()
