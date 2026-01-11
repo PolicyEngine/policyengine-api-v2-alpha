@@ -13,6 +13,15 @@ class AggregateType(str, Enum):
     COUNT = "count"
 
 
+class AggregateStatus(str, Enum):
+    """Aggregate execution status."""
+
+    PENDING = "pending"
+    RUNNING = "running"
+    COMPLETED = "completed"
+    FAILED = "failed"
+
+
 class AggregateOutputBase(SQLModel):
     """Base aggregate fields."""
 
@@ -25,6 +34,8 @@ class AggregateOutputBase(SQLModel):
     filter_config: dict = Field(
         default_factory=dict, sa_column=Column(JSON)
     )  # Filter parameters
+    status: AggregateStatus = AggregateStatus.PENDING
+    error_message: str | None = None
     result: float | None = None
 
 

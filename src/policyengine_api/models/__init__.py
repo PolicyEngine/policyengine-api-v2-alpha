@@ -4,6 +4,7 @@ from .change_aggregate import (
     ChangeAggregate,
     ChangeAggregateCreate,
     ChangeAggregateRead,
+    ChangeAggregateStatus,
     ChangeAggregateType,
 )
 from .dataset import Dataset, DatasetCreate, DatasetRead
@@ -21,6 +22,7 @@ from .output import (
     AggregateOutput,
     AggregateOutputCreate,
     AggregateOutputRead,
+    AggregateStatus,
     AggregateType,
 )
 from .parameter import Parameter, ParameterCreate, ParameterRead
@@ -51,10 +53,12 @@ __all__ = [
     "AggregateOutput",
     "AggregateOutputCreate",
     "AggregateOutputRead",
+    "AggregateStatus",
     "AggregateType",
     "ChangeAggregate",
     "ChangeAggregateCreate",
     "ChangeAggregateRead",
+    "ChangeAggregateStatus",
     "ChangeAggregateType",
     "Dataset",
     "DatasetCreate",
