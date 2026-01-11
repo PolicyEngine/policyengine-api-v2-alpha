@@ -15,7 +15,7 @@ Deploy with: modal deploy src/policyengine_api/modal_app.py
 import modal
 
 # Base image with common dependencies using uv for fast installs
-# Cache bust: 2026-01-11-store-outputs-v2
+# Cache bust: 2026-01-11-v6-use-pe-aggregate
 base_image = (
     modal.Image.debian_slim(python_version="3.13")
     .apt_install("libhdf5-dev")
@@ -836,6 +836,17 @@ def economy_comparison_uk(job_id: str, traceparent: str | None = None) -> None:
             supabase_key = os.environ["SUPABASE_KEY"]
             storage_bucket = os.environ.get("STORAGE_BUCKET", "datasets")
 
+            # Debug: log the key role
+            import base64
+            import json
+            try:
+                payload = supabase_key.split('.')[1]
+                payload += '=' * (4 - len(payload) % 4)
+                decoded = json.loads(base64.urlsafe_b64decode(payload))
+                logfire.info("Supabase key info", role=decoded.get('role', 'unknown'))
+            except Exception as e:
+                logfire.warn("Could not decode key", error=str(e))
+
             engine = create_engine(database_url)
 
             try:
@@ -940,6 +951,95 @@ def economy_comparison_uk(job_id: str, traceparent: str | None = None) -> None:
                             dynamic=reform_dynamic,
                         )
                         pe_reform_sim.ensure()
+
+                    # Pre-calculate key UK variables to include in output
+                    # (PolicyEngine is lazy - variables only calculated when accessed)
+                    uk_key_variables = [
+                        "hbai_household_net_income",
+                        "household_net_income",
+                        "equiv_household_net_income",
+                        "income_tax",
+                        "national_insurance",
+                        "universal_credit",
+                        "child_benefit",
+                        "pension_credit",
+                        "housing_benefit",
+                        "council_tax",
+                        "household_benefits",
+                        "household_tax",
+                    ]
+                    with logfire.span("precalculate_variables"):
+                        for var in uk_key_variables:
+                            try:
+                                pe_baseline_sim[var]
+                                pe_reform_sim[var]
+                            except Exception:
+                                pass  # Variable may not exist in model
+
+                    # Save output datasets for both simulations
+                    from supabase import create_client
+
+                    supabase = create_client(supabase_url, supabase_key)
+
+                    # Save baseline output
+                    with logfire.span("save_baseline_output"):
+                        baseline_output_filename = f"output_{baseline_sim.id}.h5"
+                        baseline_output_path = f"/tmp/{baseline_output_filename}"
+                        pe_baseline_sim.output_dataset.filepath = baseline_output_path
+                        pe_baseline_sim.output_dataset.save()
+
+                        with open(baseline_output_path, "rb") as f:
+                            supabase.storage.from_(storage_bucket).upload(
+                                baseline_output_filename,
+                                f,
+                                {
+                                    "content-type": "application/octet-stream",
+                                    "upsert": "true",
+                                },
+                            )
+
+                        baseline_output_dataset = Dataset(
+                            name=f"Output: {dataset.name} (baseline)",
+                            description=f"Output from baseline simulation {baseline_sim.id}",
+                            filepath=baseline_output_filename,
+                            year=dataset.year,
+                            is_output_dataset=True,
+                            tax_benefit_model_id=dataset.tax_benefit_model_id,
+                        )
+                        session.add(baseline_output_dataset)
+                        session.commit()
+                        session.refresh(baseline_output_dataset)
+                        baseline_sim.output_dataset_id = baseline_output_dataset.id
+
+                    # Save reform output
+                    with logfire.span("save_reform_output"):
+                        reform_output_filename = f"output_{reform_sim.id}.h5"
+                        reform_output_path = f"/tmp/{reform_output_filename}"
+                        pe_reform_sim.output_dataset.filepath = reform_output_path
+                        pe_reform_sim.output_dataset.save()
+
+                        with open(reform_output_path, "rb") as f:
+                            supabase.storage.from_(storage_bucket).upload(
+                                reform_output_filename,
+                                f,
+                                {
+                                    "content-type": "application/octet-stream",
+                                    "upsert": "true",
+                                },
+                            )
+
+                        reform_output_dataset = Dataset(
+                            name=f"Output: {dataset.name} (reform)",
+                            description=f"Output from reform simulation {reform_sim.id}",
+                            filepath=reform_output_filename,
+                            year=dataset.year,
+                            is_output_dataset=True,
+                            tax_benefit_model_id=dataset.tax_benefit_model_id,
+                        )
+                        session.add(reform_output_dataset)
+                        session.commit()
+                        session.refresh(reform_output_dataset)
+                        reform_sim.output_dataset_id = reform_output_dataset.id
 
                     # Calculate decile impacts
                     with logfire.span("calculate_decile_impacts"):
@@ -1174,6 +1274,71 @@ def economy_comparison_us(job_id: str, traceparent: str | None = None) -> None:
                         )
                         pe_reform_sim.ensure()
 
+                    # Save output datasets for both simulations
+                    from supabase import create_client
+
+                    supabase = create_client(supabase_url, supabase_key)
+
+                    # Save baseline output
+                    with logfire.span("save_baseline_output"):
+                        baseline_output_filename = f"output_{baseline_sim.id}.h5"
+                        baseline_output_path = f"/tmp/{baseline_output_filename}"
+                        pe_baseline_sim.output_dataset.filepath = baseline_output_path
+                        pe_baseline_sim.output_dataset.save()
+
+                        with open(baseline_output_path, "rb") as f:
+                            supabase.storage.from_(storage_bucket).upload(
+                                baseline_output_filename,
+                                f,
+                                {
+                                    "content-type": "application/octet-stream",
+                                    "upsert": "true",
+                                },
+                            )
+
+                        baseline_output_dataset = Dataset(
+                            name=f"Output: {dataset.name} (baseline)",
+                            description=f"Output from baseline simulation {baseline_sim.id}",
+                            filepath=baseline_output_filename,
+                            year=dataset.year,
+                            is_output_dataset=True,
+                            tax_benefit_model_id=dataset.tax_benefit_model_id,
+                        )
+                        session.add(baseline_output_dataset)
+                        session.commit()
+                        session.refresh(baseline_output_dataset)
+                        baseline_sim.output_dataset_id = baseline_output_dataset.id
+
+                    # Save reform output
+                    with logfire.span("save_reform_output"):
+                        reform_output_filename = f"output_{reform_sim.id}.h5"
+                        reform_output_path = f"/tmp/{reform_output_filename}"
+                        pe_reform_sim.output_dataset.filepath = reform_output_path
+                        pe_reform_sim.output_dataset.save()
+
+                        with open(reform_output_path, "rb") as f:
+                            supabase.storage.from_(storage_bucket).upload(
+                                reform_output_filename,
+                                f,
+                                {
+                                    "content-type": "application/octet-stream",
+                                    "upsert": "true",
+                                },
+                            )
+
+                        reform_output_dataset = Dataset(
+                            name=f"Output: {dataset.name} (reform)",
+                            description=f"Output from reform simulation {reform_sim.id}",
+                            filepath=reform_output_filename,
+                            year=dataset.year,
+                            is_output_dataset=True,
+                            tax_benefit_model_id=dataset.tax_benefit_model_id,
+                        )
+                        session.add(reform_output_dataset)
+                        session.commit()
+                        session.refresh(reform_output_dataset)
+                        reform_sim.output_dataset_id = reform_output_dataset.id
+
                     # Calculate decile impacts
                     with logfire.span("calculate_decile_impacts"):
                         for decile_num in range(1, 11):
@@ -1404,10 +1569,17 @@ def compute_aggregate_uk(aggregate_id: str, traceparent: str | None = None) -> N
             engine = create_engine(database_url)
 
             try:
+                from policyengine.core import Simulation as PESimulation
+                from policyengine.outputs import Aggregate as PEAggregate
+                from policyengine.outputs import AggregateType as PEAggregateType
+                from policyengine.tax_benefit_models.uk import uk_latest
+                from policyengine.tax_benefit_models.uk.datasets import (
+                    PolicyEngineUKDataset,
+                )
+
                 from policyengine_api.models import (
                     AggregateOutput,
                     AggregateStatus,
-                    AggregateType,
                     Dataset,
                     Simulation,
                 )
@@ -1449,9 +1621,7 @@ def compute_aggregate_uk(aggregate_id: str, traceparent: str | None = None) -> N
                             f"Output dataset {simulation.output_dataset_id} not found"
                         )
 
-                    # Download and load output dataset
-                    import pandas as pd
-
+                    # Download output dataset
                     with logfire.span(
                         "download_output", filepath=output_dataset.filepath
                     ):
@@ -1462,51 +1632,36 @@ def compute_aggregate_uk(aggregate_id: str, traceparent: str | None = None) -> N
                             storage_bucket,
                         )
 
+                    # Create policyengine simulation with loaded output
                     with logfire.span("load_output"):
-                        with pd.HDFStore(local_path, mode="r") as store:
-                            entity = aggregate.entity or "person"
-                            entity_df = store[entity]
+                        pe_output_dataset = PolicyEngineUKDataset(
+                            name=output_dataset.name or "output",
+                            description=output_dataset.description or "",
+                            filepath=local_path,
+                            year=output_dataset.year,
+                            is_output_dataset=True,
+                        )
 
-                    # Calculate aggregate
+                        pe_sim = PESimulation(
+                            dataset=pe_output_dataset,  # Use output as dataset
+                            tax_benefit_model_version=uk_latest,
+                        )
+                        pe_sim.output_dataset = pe_output_dataset
+
+                    # Calculate aggregate using policyengine
                     with logfire.span(
                         "calculate_aggregate",
                         variable=aggregate.variable,
-                        aggregate_type=aggregate.aggregate_type,
+                        aggregate_type=str(aggregate.aggregate_type),
                     ):
-                        values = entity_df[aggregate.variable].values
-
-                        # Apply filter if configured
-                        if aggregate.filter_config:
-                            import numpy as np
-
-                            mask = np.ones(len(values), dtype=bool)
-                            for (
-                                filter_var,
-                                filter_val,
-                            ) in aggregate.filter_config.items():
-                                filter_values = entity_df[filter_var].values
-                                if isinstance(filter_val, dict):
-                                    if "gte" in filter_val:
-                                        mask &= filter_values >= filter_val["gte"]
-                                    if "lte" in filter_val:
-                                        mask &= filter_values <= filter_val["lte"]
-                                    if "eq" in filter_val:
-                                        mask &= filter_values == filter_val["eq"]
-                                else:
-                                    mask &= filter_values == filter_val
-                            values = values[mask]
-
-                        # Calculate aggregate
-                        if aggregate.aggregate_type == AggregateType.SUM:
-                            result = float(values.sum())
-                        elif aggregate.aggregate_type == AggregateType.MEAN:
-                            result = float(values.mean()) if len(values) > 0 else 0.0
-                        elif aggregate.aggregate_type == AggregateType.COUNT:
-                            result = float(len(values))
-                        else:
-                            raise ValueError(
-                                f"Unknown aggregate type: {aggregate.aggregate_type}"
-                            )
+                        pe_aggregate = PEAggregate(
+                            simulation=pe_sim,
+                            variable=aggregate.variable,
+                            aggregate_type=PEAggregateType(aggregate.aggregate_type.value),
+                            entity=aggregate.entity,
+                        )
+                        pe_aggregate.run()
+                        result = float(pe_aggregate.result)
 
                     # Update aggregate with result
                     aggregate.result = result
@@ -1566,10 +1721,17 @@ def compute_aggregate_us(aggregate_id: str, traceparent: str | None = None) -> N
             engine = create_engine(database_url)
 
             try:
+                from policyengine.core import Simulation as PESimulation
+                from policyengine.outputs import Aggregate as PEAggregate
+                from policyengine.outputs import AggregateType as PEAggregateType
+                from policyengine.tax_benefit_models.us import us_latest
+                from policyengine.tax_benefit_models.us.datasets import (
+                    PolicyEngineUSDataset,
+                )
+
                 from policyengine_api.models import (
                     AggregateOutput,
                     AggregateStatus,
-                    AggregateType,
                     Dataset,
                     Simulation,
                 )
@@ -1579,30 +1741,25 @@ def compute_aggregate_us(aggregate_id: str, traceparent: str | None = None) -> N
                     if not aggregate:
                         raise ValueError(f"Aggregate {aggregate_id} not found")
 
-                    # Skip if already completed
                     if aggregate.status == AggregateStatus.COMPLETED:
                         logfire.info(
                             "Aggregate already completed", aggregate_id=aggregate_id
                         )
                         return
 
-                    # Update status to running
                     aggregate.status = AggregateStatus.RUNNING
                     session.add(aggregate)
                     session.commit()
 
-                    # Get simulation
                     simulation = session.get(Simulation, aggregate.simulation_id)
                     if not simulation:
                         raise ValueError(
                             f"Simulation {aggregate.simulation_id} not found"
                         )
 
-                    # Check if simulation has stored output
                     if not simulation.output_dataset_id:
                         raise ValueError(
-                            f"Simulation {aggregate.simulation_id} has no stored output. "
-                            "Re-run the simulation to generate output."
+                            f"Simulation {aggregate.simulation_id} has no stored output."
                         )
 
                     output_dataset = session.get(Dataset, simulation.output_dataset_id)
@@ -1610,9 +1767,6 @@ def compute_aggregate_us(aggregate_id: str, traceparent: str | None = None) -> N
                         raise ValueError(
                             f"Output dataset {simulation.output_dataset_id} not found"
                         )
-
-                    # Download and load output dataset
-                    import pandas as pd
 
                     with logfire.span(
                         "download_output", filepath=output_dataset.filepath
@@ -1625,52 +1779,34 @@ def compute_aggregate_us(aggregate_id: str, traceparent: str | None = None) -> N
                         )
 
                     with logfire.span("load_output"):
-                        with pd.HDFStore(local_path, mode="r") as store:
-                            entity = aggregate.entity or "person"
-                            entity_df = store[entity]
+                        pe_output_dataset = PolicyEngineUSDataset(
+                            name=output_dataset.name or "output",
+                            description=output_dataset.description or "",
+                            filepath=local_path,
+                            year=output_dataset.year,
+                            is_output_dataset=True,
+                        )
 
-                    # Calculate aggregate
+                        pe_sim = PESimulation(
+                            dataset=pe_output_dataset,
+                            tax_benefit_model_version=us_latest,
+                        )
+                        pe_sim.output_dataset = pe_output_dataset
+
                     with logfire.span(
                         "calculate_aggregate",
                         variable=aggregate.variable,
-                        aggregate_type=aggregate.aggregate_type,
+                        aggregate_type=str(aggregate.aggregate_type),
                     ):
-                        values = entity_df[aggregate.variable].values
+                        pe_aggregate = PEAggregate(
+                            simulation=pe_sim,
+                            variable=aggregate.variable,
+                            aggregate_type=PEAggregateType(aggregate.aggregate_type.value),
+                            entity=aggregate.entity,
+                        )
+                        pe_aggregate.run()
+                        result = float(pe_aggregate.result)
 
-                        # Apply filter if configured
-                        if aggregate.filter_config:
-                            import numpy as np
-
-                            mask = np.ones(len(values), dtype=bool)
-                            for (
-                                filter_var,
-                                filter_val,
-                            ) in aggregate.filter_config.items():
-                                filter_values = entity_df[filter_var].values
-                                if isinstance(filter_val, dict):
-                                    if "gte" in filter_val:
-                                        mask &= filter_values >= filter_val["gte"]
-                                    if "lte" in filter_val:
-                                        mask &= filter_values <= filter_val["lte"]
-                                    if "eq" in filter_val:
-                                        mask &= filter_values == filter_val["eq"]
-                                else:
-                                    mask &= filter_values == filter_val
-                            values = values[mask]
-
-                        # Calculate aggregate
-                        if aggregate.aggregate_type == AggregateType.SUM:
-                            result = float(values.sum())
-                        elif aggregate.aggregate_type == AggregateType.MEAN:
-                            result = float(values.mean()) if len(values) > 0 else 0.0
-                        elif aggregate.aggregate_type == AggregateType.COUNT:
-                            result = float(len(values))
-                        else:
-                            raise ValueError(
-                                f"Unknown aggregate type: {aggregate.aggregate_type}"
-                            )
-
-                    # Update aggregate with result
                     aggregate.result = result
                     aggregate.status = AggregateStatus.COMPLETED
                     session.add(aggregate)
