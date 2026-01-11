@@ -589,7 +589,7 @@ def simulate_economy_uk(simulation_id: str, traceparent: str | None = None) -> N
                     with Session(engine) as session:
                         session.execute(
                             text(
-                                "UPDATE simulations SET status = 'failed', error_message = :error "
+                                "UPDATE simulations SET status = 'FAILED', error_message = :error "
                                 "WHERE id = :sim_id"
                             ),
                             {"sim_id": simulation_id, "error": str(e)[:1000]},
@@ -716,7 +716,7 @@ def simulate_economy_us(simulation_id: str, traceparent: str | None = None) -> N
                     with Session(engine) as session:
                         session.execute(
                             text(
-                                "UPDATE simulations SET status = 'failed', error_message = :error "
+                                "UPDATE simulations SET status = 'FAILED', error_message = :error "
                                 "WHERE id = :sim_id"
                             ),
                             {"sim_id": simulation_id, "error": str(e)[:1000]},
@@ -961,7 +961,7 @@ def economy_comparison_uk(job_id: str, traceparent: str | None = None) -> None:
                     with Session(engine) as session:
                         session.execute(
                             text(
-                                "UPDATE reports SET status = 'failed', error_message = :error "
+                                "UPDATE reports SET status = 'FAILED', error_message = :error "
                                 "WHERE id = :job_id"
                             ),
                             {"job_id": job_id, "error": str(e)[:1000]},
@@ -1193,7 +1193,7 @@ def economy_comparison_us(job_id: str, traceparent: str | None = None) -> None:
                     with Session(engine) as session:
                         session.execute(
                             text(
-                                "UPDATE reports SET status = 'failed', error_message = :error "
+                                "UPDATE reports SET status = 'FAILED', error_message = :error "
                                 "WHERE id = :job_id"
                             ),
                             {"job_id": job_id, "error": str(e)[:1000]},
@@ -1466,7 +1466,7 @@ def compute_aggregate_uk(aggregate_id: str, traceparent: str | None = None) -> N
                     with Session(engine) as session:
                         session.execute(
                             text(
-                                "UPDATE aggregates SET status = 'failed', error_message = :error "
+                                "UPDATE aggregates SET status = 'FAILED', error_message = :error "
                                 "WHERE id = :agg_id"
                             ),
                             {"agg_id": aggregate_id, "error": str(e)[:1000]},
@@ -1647,7 +1647,7 @@ def compute_aggregate_us(aggregate_id: str, traceparent: str | None = None) -> N
                     with Session(engine) as session:
                         session.execute(
                             text(
-                                "UPDATE aggregates SET status = 'failed', error_message = :error "
+                                "UPDATE aggregates SET status = 'FAILED', error_message = :error "
                                 "WHERE id = :agg_id"
                             ),
                             {"agg_id": aggregate_id, "error": str(e)[:1000]},
@@ -1876,7 +1876,7 @@ def compute_change_aggregate_uk(
                     with Session(engine) as session:
                         session.execute(
                             text(
-                                "UPDATE change_aggregates SET status = 'failed', error_message = :error "
+                                "UPDATE change_aggregates SET status = 'FAILED', error_message = :error "
                                 "WHERE id = :agg_id"
                             ),
                             {"agg_id": change_aggregate_id, "error": str(e)[:1000]},
@@ -2105,7 +2105,7 @@ def compute_change_aggregate_us(
                     with Session(engine) as session:
                         session.execute(
                             text(
-                                "UPDATE change_aggregates SET status = 'failed', error_message = :error "
+                                "UPDATE change_aggregates SET status = 'FAILED', error_message = :error "
                                 "WHERE id = :agg_id"
                             ),
                             {"agg_id": change_aggregate_id, "error": str(e)[:1000]},

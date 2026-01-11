@@ -72,7 +72,7 @@ def _trigger_change_aggregate_computation(
 
     traceparent = _get_traceparent()
 
-    if model.name == "uk" or model.name == "policyengine_uk":
+    if "uk" in model.name.lower():
         fn = modal.Function.from_name("policyengine", "compute_change_aggregate_uk")
     else:
         fn = modal.Function.from_name("policyengine", "compute_change_aggregate_us")
