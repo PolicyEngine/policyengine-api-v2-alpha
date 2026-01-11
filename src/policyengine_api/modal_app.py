@@ -15,7 +15,7 @@ Deploy with: modal deploy src/policyengine_api/modal_app.py
 import modal
 
 # Base image with common dependencies using uv for fast installs
-# Cache bust: 2026-01-11-aggregate-workers
+# Cache bust: 2026-01-11-store-outputs-v2
 base_image = (
     modal.Image.debian_slim(python_version="3.13")
     .apt_install("libhdf5-dev")
