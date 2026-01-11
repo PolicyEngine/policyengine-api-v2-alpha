@@ -570,6 +570,46 @@ def simulate_economy_uk(simulation_id: str, traceparent: str | None = None) -> N
                         )
                         pe_sim.ensure()
 
+                    # Save output dataset
+                    with logfire.span("save_output_dataset"):
+                        import tempfile
+                        from supabase import create_client
+
+                        output_filename = f"output_{simulation_id}.h5"
+                        output_path = f"/tmp/{output_filename}"
+
+                        # Set filepath and save
+                        pe_sim.output_dataset.filepath = output_path
+                        pe_sim.output_dataset.save()
+
+                        # Upload to Supabase storage
+                        supabase = create_client(supabase_url, supabase_key)
+                        with open(output_path, "rb") as f:
+                            supabase.storage.from_(storage_bucket).upload(
+                                output_filename,
+                                f,
+                                {
+                                    "content-type": "application/octet-stream",
+                                    "upsert": "true",
+                                },
+                            )
+
+                        # Create output dataset record
+                        output_dataset = Dataset(
+                            name=f"Output: {dataset.name}",
+                            description=f"Output from simulation {simulation_id}",
+                            filepath=output_filename,
+                            year=dataset.year,
+                            is_output_dataset=True,
+                            tax_benefit_model_id=dataset.tax_benefit_model_id,
+                        )
+                        session.add(output_dataset)
+                        session.commit()
+                        session.refresh(output_dataset)
+
+                        # Link to simulation
+                        simulation.output_dataset_id = output_dataset.id
+
                     # Mark as completed
                     simulation.status = SimulationStatus.COMPLETED
                     simulation.completed_at = datetime.now(timezone.utc)
@@ -696,6 +736,45 @@ def simulate_economy_us(simulation_id: str, traceparent: str | None = None) -> N
                             dynamic=dynamic,
                         )
                         pe_sim.ensure()
+
+                    # Save output dataset
+                    with logfire.span("save_output_dataset"):
+                        from supabase import create_client
+
+                        output_filename = f"output_{simulation_id}.h5"
+                        output_path = f"/tmp/{output_filename}"
+
+                        # Set filepath and save
+                        pe_sim.output_dataset.filepath = output_path
+                        pe_sim.output_dataset.save()
+
+                        # Upload to Supabase storage
+                        supabase = create_client(supabase_url, supabase_key)
+                        with open(output_path, "rb") as f:
+                            supabase.storage.from_(storage_bucket).upload(
+                                output_filename,
+                                f,
+                                {
+                                    "content-type": "application/octet-stream",
+                                    "upsert": "true",
+                                },
+                            )
+
+                        # Create output dataset record
+                        output_dataset = Dataset(
+                            name=f"Output: {dataset.name}",
+                            description=f"Output from simulation {simulation_id}",
+                            filepath=output_filename,
+                            year=dataset.year,
+                            is_output_dataset=True,
+                            tax_benefit_model_id=dataset.tax_benefit_model_id,
+                        )
+                        session.add(output_dataset)
+                        session.commit()
+                        session.refresh(output_dataset)
+
+                        # Link to simulation
+                        simulation.output_dataset_id = output_dataset.id
 
                     # Mark as completed
                     simulation.status = SimulationStatus.COMPLETED
@@ -1357,51 +1436,36 @@ def compute_aggregate_uk(aggregate_id: str, traceparent: str | None = None) -> N
                             f"Simulation {aggregate.simulation_id} not found"
                         )
 
-                    # Get dataset
-                    dataset = session.get(Dataset, simulation.dataset_id)
-                    if not dataset:
-                        raise ValueError(f"Dataset {simulation.dataset_id} not found")
+                    # Check if simulation has stored output
+                    if not simulation.output_dataset_id:
+                        raise ValueError(
+                            f"Simulation {aggregate.simulation_id} has no stored output. "
+                            "Re-run the simulation to generate output."
+                        )
 
-                    # Import policyengine
-                    from policyengine.core import Simulation as PESimulation
-                    from policyengine.tax_benefit_models.uk import uk_latest
-                    from policyengine.tax_benefit_models.uk.datasets import (
-                        PolicyEngineUKDataset,
-                    )
+                    output_dataset = session.get(Dataset, simulation.output_dataset_id)
+                    if not output_dataset:
+                        raise ValueError(
+                            f"Output dataset {simulation.output_dataset_id} not found"
+                        )
 
-                    pe_model_version = uk_latest
+                    # Download and load output dataset
+                    import pandas as pd
 
-                    # Get policy and dynamic
-                    policy = _get_pe_policy_uk(
-                        simulation.policy_id, pe_model_version, session
-                    )
-                    dynamic = _get_pe_dynamic_uk(
-                        simulation.dynamic_id, pe_model_version, session
-                    )
-
-                    # Download dataset
-                    with logfire.span("download_dataset", filepath=dataset.filepath):
+                    with logfire.span(
+                        "download_output", filepath=output_dataset.filepath
+                    ):
                         local_path = download_dataset(
-                            dataset.filepath, supabase_url, supabase_key, storage_bucket
+                            output_dataset.filepath,
+                            supabase_url,
+                            supabase_key,
+                            storage_bucket,
                         )
 
-                    with logfire.span("load_dataset"):
-                        pe_dataset = PolicyEngineUKDataset(
-                            name=dataset.name,
-                            description=dataset.description or "",
-                            filepath=local_path,
-                            year=dataset.year,
-                        )
-
-                    # Create and run simulation
-                    with logfire.span("run_simulation"):
-                        pe_sim = PESimulation(
-                            dataset=pe_dataset,
-                            tax_benefit_model_version=pe_model_version,
-                            policy=policy,
-                            dynamic=dynamic,
-                        )
-                        pe_sim.ensure()
+                    with logfire.span("load_output"):
+                        with pd.HDFStore(local_path, mode="r") as store:
+                            entity = aggregate.entity or "person"
+                            entity_df = store[entity]
 
                     # Calculate aggregate
                     with logfire.span(
@@ -1409,21 +1473,18 @@ def compute_aggregate_uk(aggregate_id: str, traceparent: str | None = None) -> N
                         variable=aggregate.variable,
                         aggregate_type=aggregate.aggregate_type,
                     ):
-                        import numpy as np
-
-                        # Get variable values from output dataset
-                        entity = aggregate.entity or "person"
-                        entity_data = getattr(pe_sim.output_dataset.data, entity)
-                        values = np.asarray(entity_data[aggregate.variable])
+                        values = entity_df[aggregate.variable].values
 
                         # Apply filter if configured
                         if aggregate.filter_config:
+                            import numpy as np
+
                             mask = np.ones(len(values), dtype=bool)
                             for (
                                 filter_var,
                                 filter_val,
                             ) in aggregate.filter_config.items():
-                                filter_values = np.asarray(entity_data[filter_var])
+                                filter_values = entity_df[filter_var].values
                                 if isinstance(filter_val, dict):
                                     if "gte" in filter_val:
                                         mask &= filter_values >= filter_val["gte"]
@@ -1437,9 +1498,9 @@ def compute_aggregate_uk(aggregate_id: str, traceparent: str | None = None) -> N
 
                         # Calculate aggregate
                         if aggregate.aggregate_type == AggregateType.SUM:
-                            result = float(np.sum(values))
+                            result = float(values.sum())
                         elif aggregate.aggregate_type == AggregateType.MEAN:
-                            result = float(np.mean(values)) if len(values) > 0 else 0.0
+                            result = float(values.mean()) if len(values) > 0 else 0.0
                         elif aggregate.aggregate_type == AggregateType.COUNT:
                             result = float(len(values))
                         else:
@@ -1537,51 +1598,36 @@ def compute_aggregate_us(aggregate_id: str, traceparent: str | None = None) -> N
                             f"Simulation {aggregate.simulation_id} not found"
                         )
 
-                    # Get dataset
-                    dataset = session.get(Dataset, simulation.dataset_id)
-                    if not dataset:
-                        raise ValueError(f"Dataset {simulation.dataset_id} not found")
+                    # Check if simulation has stored output
+                    if not simulation.output_dataset_id:
+                        raise ValueError(
+                            f"Simulation {aggregate.simulation_id} has no stored output. "
+                            "Re-run the simulation to generate output."
+                        )
 
-                    # Import policyengine
-                    from policyengine.core import Simulation as PESimulation
-                    from policyengine.tax_benefit_models.us import us_latest
-                    from policyengine.tax_benefit_models.us.datasets import (
-                        PolicyEngineUSDataset,
-                    )
+                    output_dataset = session.get(Dataset, simulation.output_dataset_id)
+                    if not output_dataset:
+                        raise ValueError(
+                            f"Output dataset {simulation.output_dataset_id} not found"
+                        )
 
-                    pe_model_version = us_latest
+                    # Download and load output dataset
+                    import pandas as pd
 
-                    # Get policy and dynamic
-                    policy = _get_pe_policy_us(
-                        simulation.policy_id, pe_model_version, session
-                    )
-                    dynamic = _get_pe_dynamic_us(
-                        simulation.dynamic_id, pe_model_version, session
-                    )
-
-                    # Download dataset
-                    with logfire.span("download_dataset", filepath=dataset.filepath):
+                    with logfire.span(
+                        "download_output", filepath=output_dataset.filepath
+                    ):
                         local_path = download_dataset(
-                            dataset.filepath, supabase_url, supabase_key, storage_bucket
+                            output_dataset.filepath,
+                            supabase_url,
+                            supabase_key,
+                            storage_bucket,
                         )
 
-                    with logfire.span("load_dataset"):
-                        pe_dataset = PolicyEngineUSDataset(
-                            name=dataset.name,
-                            description=dataset.description or "",
-                            filepath=local_path,
-                            year=dataset.year,
-                        )
-
-                    # Create and run simulation
-                    with logfire.span("run_simulation"):
-                        pe_sim = PESimulation(
-                            dataset=pe_dataset,
-                            tax_benefit_model_version=pe_model_version,
-                            policy=policy,
-                            dynamic=dynamic,
-                        )
-                        pe_sim.ensure()
+                    with logfire.span("load_output"):
+                        with pd.HDFStore(local_path, mode="r") as store:
+                            entity = aggregate.entity or "person"
+                            entity_df = store[entity]
 
                     # Calculate aggregate
                     with logfire.span(
@@ -1589,21 +1635,18 @@ def compute_aggregate_us(aggregate_id: str, traceparent: str | None = None) -> N
                         variable=aggregate.variable,
                         aggregate_type=aggregate.aggregate_type,
                     ):
-                        import numpy as np
-
-                        # Get variable values from output dataset
-                        entity = aggregate.entity or "person"
-                        entity_data = getattr(pe_sim.output_dataset.data, entity)
-                        values = np.asarray(entity_data[aggregate.variable])
+                        values = entity_df[aggregate.variable].values
 
                         # Apply filter if configured
                         if aggregate.filter_config:
+                            import numpy as np
+
                             mask = np.ones(len(values), dtype=bool)
                             for (
                                 filter_var,
                                 filter_val,
                             ) in aggregate.filter_config.items():
-                                filter_values = np.asarray(entity_data[filter_var])
+                                filter_values = entity_df[filter_var].values
                                 if isinstance(filter_val, dict):
                                     if "gte" in filter_val:
                                         mask &= filter_values >= filter_val["gte"]
@@ -1617,9 +1660,9 @@ def compute_aggregate_us(aggregate_id: str, traceparent: str | None = None) -> N
 
                         # Calculate aggregate
                         if aggregate.aggregate_type == AggregateType.SUM:
-                            result = float(np.sum(values))
+                            result = float(values.sum())
                         elif aggregate.aggregate_type == AggregateType.MEAN:
-                            result = float(np.mean(values)) if len(values) > 0 else 0.0
+                            result = float(values.mean()) if len(values) > 0 else 0.0
                         elif aggregate.aggregate_type == AggregateType.COUNT:
                             result = float(len(values))
                         else:
@@ -1728,66 +1771,50 @@ def compute_change_aggregate_uk(
                     if not baseline_sim or not reform_sim:
                         raise ValueError("Simulations not found")
 
-                    # Get dataset (assuming same dataset for both)
-                    dataset = session.get(Dataset, baseline_sim.dataset_id)
-                    if not dataset:
-                        raise ValueError(f"Dataset {baseline_sim.dataset_id} not found")
-
-                    # Import policyengine
-                    from policyengine.core import Simulation as PESimulation
-                    from policyengine.tax_benefit_models.uk import uk_latest
-                    from policyengine.tax_benefit_models.uk.datasets import (
-                        PolicyEngineUKDataset,
-                    )
-
-                    pe_model_version = uk_latest
-
-                    # Get policies and dynamics
-                    baseline_policy = _get_pe_policy_uk(
-                        baseline_sim.policy_id, pe_model_version, session
-                    )
-                    reform_policy = _get_pe_policy_uk(
-                        reform_sim.policy_id, pe_model_version, session
-                    )
-                    baseline_dynamic = _get_pe_dynamic_uk(
-                        baseline_sim.dynamic_id, pe_model_version, session
-                    )
-                    reform_dynamic = _get_pe_dynamic_uk(
-                        reform_sim.dynamic_id, pe_model_version, session
-                    )
-
-                    # Download dataset
-                    with logfire.span("download_dataset", filepath=dataset.filepath):
-                        local_path = download_dataset(
-                            dataset.filepath, supabase_url, supabase_key, storage_bucket
+                    # Check both simulations have stored outputs
+                    if not baseline_sim.output_dataset_id:
+                        raise ValueError(
+                            f"Baseline simulation {change_agg.baseline_simulation_id} "
+                            "has no stored output."
+                        )
+                    if not reform_sim.output_dataset_id:
+                        raise ValueError(
+                            f"Reform simulation {change_agg.reform_simulation_id} "
+                            "has no stored output."
                         )
 
-                    with logfire.span("load_dataset"):
-                        pe_dataset = PolicyEngineUKDataset(
-                            name=dataset.name,
-                            description=dataset.description or "",
-                            filepath=local_path,
-                            year=dataset.year,
-                        )
+                    baseline_output = session.get(
+                        Dataset, baseline_sim.output_dataset_id
+                    )
+                    reform_output = session.get(Dataset, reform_sim.output_dataset_id)
 
-                    # Create and run simulations
-                    with logfire.span("run_baseline_simulation"):
-                        pe_baseline_sim = PESimulation(
-                            dataset=pe_dataset,
-                            tax_benefit_model_version=pe_model_version,
-                            policy=baseline_policy,
-                            dynamic=baseline_dynamic,
-                        )
-                        pe_baseline_sim.ensure()
+                    if not baseline_output or not reform_output:
+                        raise ValueError("Output datasets not found")
 
-                    with logfire.span("run_reform_simulation"):
-                        pe_reform_sim = PESimulation(
-                            dataset=pe_dataset,
-                            tax_benefit_model_version=pe_model_version,
-                            policy=reform_policy,
-                            dynamic=reform_dynamic,
+                    # Load output datasets
+                    import pandas as pd
+
+                    entity = change_agg.entity or "person"
+
+                    with logfire.span("load_baseline_output"):
+                        baseline_path = download_dataset(
+                            baseline_output.filepath,
+                            supabase_url,
+                            supabase_key,
+                            storage_bucket,
                         )
-                        pe_reform_sim.ensure()
+                        with pd.HDFStore(baseline_path, mode="r") as store:
+                            baseline_df = store[entity]
+
+                    with logfire.span("load_reform_output"):
+                        reform_path = download_dataset(
+                            reform_output.filepath,
+                            supabase_url,
+                            supabase_key,
+                            storage_bucket,
+                        )
+                        with pd.HDFStore(reform_path, mode="r") as store:
+                            reform_df = store[entity]
 
                     # Calculate change aggregate
                     with logfire.span(
@@ -1795,38 +1822,20 @@ def compute_change_aggregate_uk(
                         variable=change_agg.variable,
                         aggregate_type=change_agg.aggregate_type,
                     ):
-                        import numpy as np
-
-                        entity = change_agg.entity or "person"
-
-                        # Get data from output datasets
-                        baseline_entity_data = getattr(
-                            pe_baseline_sim.output_dataset.data, entity
-                        )
-                        reform_entity_data = getattr(
-                            pe_reform_sim.output_dataset.data, entity
-                        )
-
-                        baseline_values = np.asarray(
-                            baseline_entity_data[change_agg.variable]
-                        )
-                        reform_values = np.asarray(
-                            reform_entity_data[change_agg.variable]
-                        )
-
-                        # Calculate change
+                        baseline_values = baseline_df[change_agg.variable].values
+                        reform_values = reform_df[change_agg.variable].values
                         change_values = reform_values - baseline_values
 
                         # Apply filter if configured
                         if change_agg.filter_config:
+                            import numpy as np
+
                             mask = np.ones(len(change_values), dtype=bool)
                             for (
                                 filter_var,
                                 filter_val,
                             ) in change_agg.filter_config.items():
-                                filter_values = np.asarray(
-                                    baseline_entity_data[filter_var]
-                                )
+                                filter_values = baseline_df[filter_var].values
                                 if isinstance(filter_val, dict):
                                     if "gte" in filter_val:
                                         mask &= filter_values >= filter_val["gte"]
@@ -1850,10 +1859,10 @@ def compute_change_aggregate_uk(
 
                         # Calculate aggregate
                         if change_agg.aggregate_type == ChangeAggregateType.SUM:
-                            result = float(np.sum(change_values))
+                            result = float(change_values.sum())
                         elif change_agg.aggregate_type == ChangeAggregateType.MEAN:
                             result = (
-                                float(np.mean(change_values))
+                                float(change_values.mean())
                                 if len(change_values) > 0
                                 else 0.0
                             )
@@ -1965,66 +1974,50 @@ def compute_change_aggregate_us(
                     if not baseline_sim or not reform_sim:
                         raise ValueError("Simulations not found")
 
-                    # Get dataset (assuming same dataset for both)
-                    dataset = session.get(Dataset, baseline_sim.dataset_id)
-                    if not dataset:
-                        raise ValueError(f"Dataset {baseline_sim.dataset_id} not found")
-
-                    # Import policyengine
-                    from policyengine.core import Simulation as PESimulation
-                    from policyengine.tax_benefit_models.us import us_latest
-                    from policyengine.tax_benefit_models.us.datasets import (
-                        PolicyEngineUSDataset,
-                    )
-
-                    pe_model_version = us_latest
-
-                    # Get policies and dynamics
-                    baseline_policy = _get_pe_policy_us(
-                        baseline_sim.policy_id, pe_model_version, session
-                    )
-                    reform_policy = _get_pe_policy_us(
-                        reform_sim.policy_id, pe_model_version, session
-                    )
-                    baseline_dynamic = _get_pe_dynamic_us(
-                        baseline_sim.dynamic_id, pe_model_version, session
-                    )
-                    reform_dynamic = _get_pe_dynamic_us(
-                        reform_sim.dynamic_id, pe_model_version, session
-                    )
-
-                    # Download dataset
-                    with logfire.span("download_dataset", filepath=dataset.filepath):
-                        local_path = download_dataset(
-                            dataset.filepath, supabase_url, supabase_key, storage_bucket
+                    # Check both simulations have stored outputs
+                    if not baseline_sim.output_dataset_id:
+                        raise ValueError(
+                            f"Baseline simulation {change_agg.baseline_simulation_id} "
+                            "has no stored output."
+                        )
+                    if not reform_sim.output_dataset_id:
+                        raise ValueError(
+                            f"Reform simulation {change_agg.reform_simulation_id} "
+                            "has no stored output."
                         )
 
-                    with logfire.span("load_dataset"):
-                        pe_dataset = PolicyEngineUSDataset(
-                            name=dataset.name,
-                            description=dataset.description or "",
-                            filepath=local_path,
-                            year=dataset.year,
-                        )
+                    baseline_output = session.get(
+                        Dataset, baseline_sim.output_dataset_id
+                    )
+                    reform_output = session.get(Dataset, reform_sim.output_dataset_id)
 
-                    # Create and run simulations
-                    with logfire.span("run_baseline_simulation"):
-                        pe_baseline_sim = PESimulation(
-                            dataset=pe_dataset,
-                            tax_benefit_model_version=pe_model_version,
-                            policy=baseline_policy,
-                            dynamic=baseline_dynamic,
-                        )
-                        pe_baseline_sim.ensure()
+                    if not baseline_output or not reform_output:
+                        raise ValueError("Output datasets not found")
 
-                    with logfire.span("run_reform_simulation"):
-                        pe_reform_sim = PESimulation(
-                            dataset=pe_dataset,
-                            tax_benefit_model_version=pe_model_version,
-                            policy=reform_policy,
-                            dynamic=reform_dynamic,
+                    # Load output datasets
+                    import pandas as pd
+
+                    entity = change_agg.entity or "person"
+
+                    with logfire.span("load_baseline_output"):
+                        baseline_path = download_dataset(
+                            baseline_output.filepath,
+                            supabase_url,
+                            supabase_key,
+                            storage_bucket,
                         )
-                        pe_reform_sim.ensure()
+                        with pd.HDFStore(baseline_path, mode="r") as store:
+                            baseline_df = store[entity]
+
+                    with logfire.span("load_reform_output"):
+                        reform_path = download_dataset(
+                            reform_output.filepath,
+                            supabase_url,
+                            supabase_key,
+                            storage_bucket,
+                        )
+                        with pd.HDFStore(reform_path, mode="r") as store:
+                            reform_df = store[entity]
 
                     # Calculate change aggregate
                     with logfire.span(
@@ -2032,38 +2025,22 @@ def compute_change_aggregate_us(
                         variable=change_agg.variable,
                         aggregate_type=change_agg.aggregate_type,
                     ):
-                        import numpy as np
-
-                        entity = change_agg.entity or "person"
-
-                        # Get data from output datasets
-                        baseline_entity_data = getattr(
-                            pe_baseline_sim.output_dataset.data, entity
-                        )
-                        reform_entity_data = getattr(
-                            pe_reform_sim.output_dataset.data, entity
-                        )
-
-                        baseline_values = np.asarray(
-                            baseline_entity_data[change_agg.variable]
-                        )
-                        reform_values = np.asarray(
-                            reform_entity_data[change_agg.variable]
-                        )
+                        baseline_values = baseline_df[change_agg.variable].values
+                        reform_values = reform_df[change_agg.variable].values
 
                         # Calculate change
                         change_values = reform_values - baseline_values
 
                         # Apply filter if configured
                         if change_agg.filter_config:
+                            import numpy as np
+
                             mask = np.ones(len(change_values), dtype=bool)
                             for (
                                 filter_var,
                                 filter_val,
                             ) in change_agg.filter_config.items():
-                                filter_values = np.asarray(
-                                    baseline_entity_data[filter_var]
-                                )
+                                filter_values = baseline_df[filter_var].values
                                 if isinstance(filter_val, dict):
                                     if "gte" in filter_val:
                                         mask &= filter_values >= filter_val["gte"]
@@ -2087,10 +2064,10 @@ def compute_change_aggregate_us(
 
                         # Calculate aggregate
                         if change_agg.aggregate_type == ChangeAggregateType.SUM:
-                            result = float(np.sum(change_values))
+                            result = float(change_values.sum())
                         elif change_agg.aggregate_type == ChangeAggregateType.MEAN:
                             result = (
-                                float(np.mean(change_values))
+                                float(change_values.mean())
                                 if len(change_values) > 0
                                 else 0.0
                             )
