@@ -14,10 +14,9 @@ from sqlmodel import Session, select
 from policyengine_api.models import (
     Parameter,
     ParameterRead,
-    TaxBenefitModel,
-    TaxBenefitModelVersion,
 )
 from policyengine_api.services.database import get_session
+from policyengine_api.services.tax_benefit_models import resolve_model_version_id
 
 router = APIRouter(prefix="/parameters", tags=["parameters"])
 
@@ -28,6 +27,7 @@ def list_parameters(
     limit: int = 100,
     search: str | None = None,
     tax_benefit_model_name: str | None = None,
+    tax_benefit_model_version_id: UUID | None = None,
     session: Session = Depends(get_session),
 ):
     """List available parameters with pagination and search.
@@ -37,19 +37,22 @@ def list_parameters(
 
     Args:
         search: Filter by parameter name, label, or description.
-        tax_benefit_model_name: Filter by country model.
+        tax_benefit_model_name: Filter by country model name.
             Use "policyengine-uk" for UK parameters.
             Use "policyengine-us" for US parameters.
+            When specified without version_id, returns parameters from the latest version.
+        tax_benefit_model_version_id: Filter by specific model version UUID.
+            Takes precedence over tax_benefit_model_name if both are provided.
     """
     query = select(Parameter)
 
-    # Filter by tax benefit model name (country)
-    if tax_benefit_model_name:
-        query = (
-            query.join(TaxBenefitModelVersion)
-            .join(TaxBenefitModel)
-            .where(TaxBenefitModel.name == tax_benefit_model_name)
-        )
+    # Resolve version ID from either explicit ID or model name (defaults to latest)
+    version_id = resolve_model_version_id(
+        tax_benefit_model_name, tax_benefit_model_version_id, session
+    )
+
+    if version_id:
+        query = query.where(Parameter.tax_benefit_model_version_id == version_id)
 
     if search:
         # Case-insensitive search using ILIKE
