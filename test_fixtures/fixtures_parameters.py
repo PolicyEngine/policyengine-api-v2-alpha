@@ -5,9 +5,12 @@ from datetime import datetime, timedelta, timezone
 import pytest
 
 from policyengine_api.models import (
+    Dataset,
     Parameter,
     ParameterValue,
     Policy,
+    Simulation,
+    SimulationStatus,
     TaxBenefitModel,
     TaxBenefitModelVersion,
     Variable,
@@ -198,4 +201,72 @@ def two_model_versions(session):
         "model": model,
         "old_version": old_version,
         "new_version": new_version,
+    }
+
+
+# -----------------------------------------------------------------------------
+# Dataset and Simulation Factory Functions
+# -----------------------------------------------------------------------------
+
+
+def create_dataset(
+    session,
+    model: TaxBenefitModel,
+    name: str = "test-dataset",
+    year: int = 2024,
+) -> Dataset:
+    """Create and persist a Dataset."""
+    dataset = Dataset(
+        name=name,
+        description=f"Test dataset {name}",
+        filepath=f"test/{name}.h5",
+        year=year,
+        tax_benefit_model_id=model.id,
+    )
+    session.add(dataset)
+    session.commit()
+    session.refresh(dataset)
+    return dataset
+
+
+def create_simulation(
+    session,
+    dataset: Dataset,
+    model_version: TaxBenefitModelVersion,
+    status: SimulationStatus = SimulationStatus.COMPLETED,
+) -> Simulation:
+    """Create and persist a Simulation."""
+    simulation = Simulation(
+        dataset_id=dataset.id,
+        tax_benefit_model_version_id=model_version.id,
+        status=status,
+    )
+    session.add(simulation)
+    session.commit()
+    session.refresh(simulation)
+    return simulation
+
+
+@pytest.fixture
+def simulation_fixture(session):
+    """Create a complete simulation setup for testing.
+
+    Returns a dict with:
+        - model: The TaxBenefitModel
+        - version: The TaxBenefitModelVersion
+        - dataset: The Dataset
+        - simulation: The Simulation
+    """
+    model, version = create_model_and_version(
+        session,
+        model_name="policyengine-uk",
+        version_string="1.0.0",
+    )
+    dataset = create_dataset(session, model, name="test-frs-2024")
+    simulation = create_simulation(session, dataset, version)
+    return {
+        "model": model,
+        "version": version,
+        "dataset": dataset,
+        "simulation": simulation,
     }
