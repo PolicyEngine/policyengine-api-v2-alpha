@@ -12,12 +12,11 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel import Session, select
 
 from policyengine_api.models import (
-    TaxBenefitModel,
-    TaxBenefitModelVersion,
     Variable,
     VariableRead,
 )
 from policyengine_api.services.database import get_session
+from policyengine_api.services.tax_benefit_models import resolve_model_version_id
 
 router = APIRouter(prefix="/variables", tags=["variables"])
 
@@ -28,6 +27,7 @@ def list_variables(
     limit: int = 100,
     search: str | None = None,
     tax_benefit_model_name: str | None = None,
+    tax_benefit_model_version_id: UUID | None = None,
     session: Session = Depends(get_session),
 ):
     """List available variables with pagination and search.
@@ -38,19 +38,22 @@ def list_variables(
 
     Args:
         search: Filter by variable name, label, or description.
-        tax_benefit_model_name: Filter by country model.
+        tax_benefit_model_name: Filter by country model name.
             Use "policyengine-uk" for UK variables.
             Use "policyengine-us" for US variables.
+            When specified without version_id, returns variables from the latest version.
+        tax_benefit_model_version_id: Filter by specific model version UUID.
+            Takes precedence over tax_benefit_model_name if both are provided.
     """
     query = select(Variable)
 
-    # Filter by tax benefit model name (country)
-    if tax_benefit_model_name:
-        query = (
-            query.join(TaxBenefitModelVersion)
-            .join(TaxBenefitModel)
-            .where(TaxBenefitModel.name == tax_benefit_model_name)
-        )
+    # Resolve version ID from either explicit ID or model name (defaults to latest)
+    version_id = resolve_model_version_id(
+        tax_benefit_model_name, tax_benefit_model_version_id, session
+    )
+
+    if version_id:
+        query = query.where(Variable.tax_benefit_model_version_id == version_id)
 
     if search:
         # Case-insensitive search using ILIKE

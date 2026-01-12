@@ -35,10 +35,9 @@ from policyengine_api.models import (
     ReportStatus,
     Simulation,
     SimulationStatus,
-    TaxBenefitModel,
-    TaxBenefitModelVersion,
 )
 from policyengine_api.services.database import get_session
+from policyengine_api.services.tax_benefit_models import get_latest_model_version
 
 
 def get_traceparent() -> str | None:
@@ -108,33 +107,6 @@ class EconomicImpactResponse(BaseModel):
     error_message: str | None = None
     decile_impacts: list[DecileImpactRead] | None = None
     program_statistics: list[ProgramStatisticsRead] | None = None
-
-
-def _get_model_version(
-    tax_benefit_model_name: str, session: Session
-) -> TaxBenefitModelVersion:
-    """Get the latest tax benefit model version."""
-    model_name = tax_benefit_model_name.replace("_", "-")
-
-    model = session.exec(
-        select(TaxBenefitModel).where(TaxBenefitModel.name == model_name)
-    ).first()
-    if not model:
-        raise HTTPException(
-            status_code=404, detail=f"Tax benefit model {model_name} not found"
-        )
-
-    version = session.exec(
-        select(TaxBenefitModelVersion)
-        .where(TaxBenefitModelVersion.model_id == model.id)
-        .order_by(TaxBenefitModelVersion.created_at.desc())
-    ).first()
-    if not version:
-        raise HTTPException(
-            status_code=404, detail=f"No version found for model {model_name}"
-        )
-
-    return version
 
 
 def _get_deterministic_simulation_id(
@@ -576,7 +548,7 @@ def economic_impact(
         )
 
     # Get model version
-    model_version = _get_model_version(request.tax_benefit_model_name, session)
+    model_version = get_latest_model_version(request.tax_benefit_model_name, session)
 
     # Get or create simulations
     baseline_sim = _get_or_create_simulation(
