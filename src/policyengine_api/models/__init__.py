@@ -61,6 +61,12 @@ from .user_household_association import (
     UserHouseholdAssociationRead,
     UserHouseholdAssociationUpdate,
 )
+from .user_policy import (
+    UserPolicy,
+    UserPolicyCreate,
+    UserPolicyRead,
+    UserPolicyUpdate,
+)
 from .variable import Variable, VariableCreate, VariableRead
 
 __all__ = [
@@ -136,6 +142,10 @@ __all__ = [
     "UserHouseholdAssociationRead",
     "UserHouseholdAssociationUpdate",
     "UserRead",
+    "UserPolicy",
+    "UserPolicyCreate",
+    "UserPolicyRead",
+    "UserPolicyUpdate",
     "Variable",
     "VariableCreate",
     "VariableRead",
