@@ -94,6 +94,15 @@ def create_aggregate_outputs(
     Computation happens asynchronously on Modal. Poll GET /outputs/aggregates/{id}
     until status="completed" to get results.
     """
+    # Validate all simulations exist first
+    for output in outputs:
+        simulation = session.get(Simulation, output.simulation_id)
+        if not simulation:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Simulation {output.simulation_id} not found",
+            )
+
     db_outputs = []
     for output in outputs:
         db_output = AggregateOutput.model_validate(output)

@@ -95,6 +95,21 @@ def create_change_aggregates(
     Computation happens asynchronously on Modal. Poll GET /outputs/change-aggregates/{id}
     until status="completed" to get results.
     """
+    # Validate all simulations exist first
+    for output in outputs:
+        baseline = session.get(Simulation, output.baseline_simulation_id)
+        if not baseline:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Baseline simulation {output.baseline_simulation_id} not found",
+            )
+        reform = session.get(Simulation, output.reform_simulation_id)
+        if not reform:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Reform simulation {output.reform_simulation_id} not found",
+            )
+
     db_outputs = []
     for output in outputs:
         db_output = ChangeAggregate.model_validate(output)
