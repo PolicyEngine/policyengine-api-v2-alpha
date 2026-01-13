@@ -1,5 +1,6 @@
 """Tests for change aggregate endpoints."""
 
+from unittest.mock import MagicMock, patch
 from uuid import uuid4
 
 import pytest
@@ -12,8 +13,12 @@ def test_list_change_aggregates_empty(client):
     assert isinstance(response.json(), list)
 
 
-def test_create_single_change_aggregate(client, simulation_id):
+@patch("policyengine_api.api.change_aggregates.modal.Function")
+def test_create_single_change_aggregate(mock_modal_fn, client, simulation_id):
     """Create a single change aggregate."""
+    mock_fn = MagicMock()
+    mock_modal_fn.from_name.return_value = mock_fn
+
     response = client.post(
         "/outputs/change-aggregates",
         json=[
@@ -33,8 +38,12 @@ def test_create_single_change_aggregate(client, simulation_id):
     assert data[0]["aggregate_type"] == "sum"
 
 
-def test_create_multiple_change_aggregates(client, simulation_id):
+@patch("policyengine_api.api.change_aggregates.modal.Function")
+def test_create_multiple_change_aggregates(mock_modal_fn, client, simulation_id):
     """Create multiple change aggregates in one request."""
+    mock_fn = MagicMock()
+    mock_modal_fn.from_name.return_value = mock_fn
+
     response = client.post(
         "/outputs/change-aggregates",
         json=[
