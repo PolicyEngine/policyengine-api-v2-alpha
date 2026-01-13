@@ -83,7 +83,7 @@ def _trigger_change_aggregate_computation(
     )
 
 
-@router.post("/", response_model=List[ChangeAggregateRead])
+@router.post("", response_model=List[ChangeAggregateRead])
 def create_change_aggregates(
     outputs: List[ChangeAggregateCreate],
     background_tasks: BackgroundTasks,
@@ -128,7 +128,7 @@ def create_change_aggregates(
     return db_outputs
 
 
-@router.get("/", response_model=List[ChangeAggregateRead])
+@router.get("", response_model=List[ChangeAggregateRead])
 def list_change_aggregates(session: Session = Depends(get_session)):
     """List all change aggregates."""
     outputs = session.exec(select(ChangeAggregate)).all()

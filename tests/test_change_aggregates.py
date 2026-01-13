@@ -12,14 +12,14 @@ def test_list_change_aggregates_empty(client):
     assert isinstance(response.json(), list)
 
 
-def test_create_single_change_aggregate(client):
+def test_create_single_change_aggregate(client, simulation_id):
     """Create a single change aggregate."""
     response = client.post(
         "/outputs/change-aggregates",
         json=[
             {
-                "baseline_simulation_id": str(uuid4()),
-                "reform_simulation_id": str(uuid4()),
+                "baseline_simulation_id": simulation_id,
+                "reform_simulation_id": simulation_id,
                 "variable": "net_income",
                 "aggregate_type": "sum",
             }
@@ -33,22 +33,20 @@ def test_create_single_change_aggregate(client):
     assert data[0]["aggregate_type"] == "sum"
 
 
-def test_create_multiple_change_aggregates(client):
+def test_create_multiple_change_aggregates(client, simulation_id):
     """Create multiple change aggregates in one request."""
-    baseline_id = str(uuid4())
-    reform_id = str(uuid4())
     response = client.post(
         "/outputs/change-aggregates",
         json=[
             {
-                "baseline_simulation_id": baseline_id,
-                "reform_simulation_id": reform_id,
+                "baseline_simulation_id": simulation_id,
+                "reform_simulation_id": simulation_id,
                 "variable": "income_tax",
                 "aggregate_type": "sum",
             },
             {
-                "baseline_simulation_id": baseline_id,
-                "reform_simulation_id": reform_id,
+                "baseline_simulation_id": simulation_id,
+                "reform_simulation_id": simulation_id,
                 "variable": "benefits",
                 "aggregate_type": "mean",
             },
