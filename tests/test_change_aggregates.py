@@ -1,5 +1,6 @@
 """Tests for change aggregate endpoints."""
 
+from unittest.mock import MagicMock, patch
 from uuid import uuid4
 
 import pytest
@@ -12,14 +13,18 @@ def test_list_change_aggregates_empty(client):
     assert isinstance(response.json(), list)
 
 
-def test_create_single_change_aggregate(client):
+@patch("policyengine_api.api.change_aggregates.modal.Function")
+def test_create_single_change_aggregate(mock_modal_fn, client, simulation_id):
     """Create a single change aggregate."""
+    mock_fn = MagicMock()
+    mock_modal_fn.from_name.return_value = mock_fn
+
     response = client.post(
         "/outputs/change-aggregates",
         json=[
             {
-                "baseline_simulation_id": str(uuid4()),
-                "reform_simulation_id": str(uuid4()),
+                "baseline_simulation_id": simulation_id,
+                "reform_simulation_id": simulation_id,
                 "variable": "net_income",
                 "aggregate_type": "sum",
             }
@@ -33,22 +38,24 @@ def test_create_single_change_aggregate(client):
     assert data[0]["aggregate_type"] == "sum"
 
 
-def test_create_multiple_change_aggregates(client):
+@patch("policyengine_api.api.change_aggregates.modal.Function")
+def test_create_multiple_change_aggregates(mock_modal_fn, client, simulation_id):
     """Create multiple change aggregates in one request."""
-    baseline_id = str(uuid4())
-    reform_id = str(uuid4())
+    mock_fn = MagicMock()
+    mock_modal_fn.from_name.return_value = mock_fn
+
     response = client.post(
         "/outputs/change-aggregates",
         json=[
             {
-                "baseline_simulation_id": baseline_id,
-                "reform_simulation_id": reform_id,
+                "baseline_simulation_id": simulation_id,
+                "reform_simulation_id": simulation_id,
                 "variable": "income_tax",
                 "aggregate_type": "sum",
             },
             {
-                "baseline_simulation_id": baseline_id,
-                "reform_simulation_id": reform_id,
+                "baseline_simulation_id": simulation_id,
+                "reform_simulation_id": simulation_id,
                 "variable": "benefits",
                 "aggregate_type": "mean",
             },

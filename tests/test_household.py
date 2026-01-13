@@ -77,10 +77,12 @@ class TestUKHouseholdCalculate:
             json={
                 "tax_benefit_model_name": "policyengine_uk",
                 "people": [{"age": 40, "employment_income": 45000}],
-                "household": {
-                    "region": "LONDON",
-                    "rent": 1500,
-                },
+                "household": [
+                    {
+                        "region": "LONDON",
+                        "rent": 1500,
+                    }
+                ],
                 "year": 2026,
             },
         )
@@ -152,6 +154,114 @@ class TestUSHouseholdCalculate:
         job_data = response.json()
         data = _poll_job(job_data["job_id"])
         assert len(data["result"]["person"]) == 4
+
+
+class TestMultiHousehold:
+    """Tests for multiple household calculations."""
+
+    def test_multiple_uk_households(self):
+        """Test calculation for multiple UK households."""
+        response = client.post(
+            "/household/calculate",
+            json={
+                "tax_benefit_model_name": "policyengine_uk",
+                "people": [
+                    # Person in household 0
+                    {
+                        "person_id": 0,
+                        "person_benunit_id": 0,
+                        "person_household_id": 0,
+                        "age": 30,
+                        "employment_income": 30000,
+                    },
+                    # Person in household 1
+                    {
+                        "person_id": 1,
+                        "person_benunit_id": 1,
+                        "person_household_id": 1,
+                        "age": 45,
+                        "employment_income": 60000,
+                    },
+                ],
+                "benunit": [
+                    {"benunit_id": 0},
+                    {"benunit_id": 1},
+                ],
+                "household": [
+                    {"household_id": 0, "region": "LONDON"},
+                    {"household_id": 1, "region": "NORTH_EAST"},
+                ],
+                "year": 2026,
+            },
+        )
+        assert response.status_code == 200
+        job_data = response.json()
+        data = _poll_job(job_data["job_id"])
+
+        assert len(data["result"]["person"]) == 2
+        assert len(data["result"]["benunit"]) == 2
+        assert len(data["result"]["household"]) == 2
+
+    def test_multiple_us_households(self):
+        """Test calculation for multiple US households."""
+        response = client.post(
+            "/household/calculate",
+            json={
+                "tax_benefit_model_name": "policyengine_us",
+                "people": [
+                    # Person in household 0
+                    {
+                        "person_id": 0,
+                        "person_household_id": 0,
+                        "person_tax_unit_id": 0,
+                        "person_marital_unit_id": 0,
+                        "person_family_id": 0,
+                        "person_spm_unit_id": 0,
+                        "age": 30,
+                        "employment_income": 50000,
+                    },
+                    # Person in household 1
+                    {
+                        "person_id": 1,
+                        "person_household_id": 1,
+                        "person_tax_unit_id": 1,
+                        "person_marital_unit_id": 1,
+                        "person_family_id": 1,
+                        "person_spm_unit_id": 1,
+                        "age": 40,
+                        "employment_income": 80000,
+                    },
+                ],
+                "household": [
+                    {"household_id": 0, "state_fips": 6},  # California
+                    {"household_id": 1, "state_fips": 36},  # New York
+                ],
+                "tax_unit": [
+                    {"tax_unit_id": 0, "state_code": "CA"},
+                    {"tax_unit_id": 1, "state_code": "NY"},
+                ],
+                "marital_unit": [
+                    {"marital_unit_id": 0},
+                    {"marital_unit_id": 1},
+                ],
+                "family": [
+                    {"family_id": 0},
+                    {"family_id": 1},
+                ],
+                "spm_unit": [
+                    {"spm_unit_id": 0},
+                    {"spm_unit_id": 1},
+                ],
+                "year": 2024,
+            },
+        )
+        assert response.status_code == 200
+        job_data = response.json()
+        data = _poll_job(job_data["job_id"])
+
+        assert len(data["result"]["person"]) == 2
+        assert len(data["result"]["household"]) == 2
+        assert len(data["result"]["tax_unit"]) == 2
 
 
 class TestValidation:

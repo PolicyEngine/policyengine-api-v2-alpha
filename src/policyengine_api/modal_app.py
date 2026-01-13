@@ -214,18 +214,24 @@ def download_dataset(
 def simulate_household_uk(
     job_id: str,
     people: list[dict],
-    benunit: dict,
-    household: dict,
+    benunit: list[dict],
+    household: list[dict],
     year: int,
     policy_data: dict | None,
     dynamic_data: dict | None,
     traceparent: str | None = None,
 ) -> None:
-    """Calculate UK household and write result to database."""
+    """Calculate UK household(s) and write result to database.
+
+    Supports multiple households via entity relational dataframes.
+    """
     import json
+    import tempfile
     from datetime import datetime, timezone
+    from pathlib import Path
 
     import logfire
+    import pandas as pd
     from sqlmodel import Session, create_engine
 
     configure_logfire("policyengine-modal-uk", traceparent)
@@ -236,10 +242,82 @@ def simulate_household_uk(
             engine = create_engine(database_url)
 
             try:
+                from policyengine.core import Simulation
+                from microdf import MicroDataFrame
                 from policyengine.tax_benefit_models.uk import uk_latest
-                from policyengine.tax_benefit_models.uk.analysis import (
-                    UKHouseholdInput,
-                    calculate_household_impact,
+                from policyengine.tax_benefit_models.uk.datasets import (
+                    PolicyEngineUKDataset,
+                )
+                from policyengine.tax_benefit_models.uk.datasets import UKYearData
+
+                n_people = len(people)
+                n_benunits = max(1, len(benunit))
+                n_households = max(1, len(household))
+
+                # Build person data with defaults
+                person_data = {
+                    "person_id": list(range(n_people)),
+                    "person_benunit_id": [0] * n_people,
+                    "person_household_id": [0] * n_people,
+                    "person_weight": [1.0] * n_people,
+                }
+                for i, person in enumerate(people):
+                    for key, value in person.items():
+                        if key not in person_data:
+                            person_data[key] = [0.0] * n_people
+                        person_data[key][i] = value
+
+                # Build benunit data
+                benunit_data = {
+                    "benunit_id": list(range(n_benunits)),
+                    "benunit_weight": [1.0] * n_benunits,
+                }
+                for i, bu in enumerate(benunit if benunit else [{}]):
+                    for key, value in bu.items():
+                        if key not in benunit_data:
+                            benunit_data[key] = [0.0] * n_benunits
+                        benunit_data[key][i] = value
+
+                # Build household data
+                household_data = {
+                    "household_id": list(range(n_households)),
+                    "household_weight": [1.0] * n_households,
+                    "region": ["LONDON"] * n_households,
+                    "tenure_type": ["RENT_PRIVATELY"] * n_households,
+                    "council_tax": [0.0] * n_households,
+                    "rent": [0.0] * n_households,
+                }
+                for i, hh in enumerate(household if household else [{}]):
+                    for key, value in hh.items():
+                        if key not in household_data:
+                            household_data[key] = [0.0] * n_households
+                        household_data[key][i] = value
+
+                # Create MicroDataFrames
+                person_df = MicroDataFrame(
+                    pd.DataFrame(person_data), weights="person_weight"
+                )
+                benunit_df = MicroDataFrame(
+                    pd.DataFrame(benunit_data), weights="benunit_weight"
+                )
+                household_df = MicroDataFrame(
+                    pd.DataFrame(household_data), weights="household_weight"
+                )
+
+                # Create temporary dataset
+                tmpdir = tempfile.mkdtemp()
+                filepath = str(Path(tmpdir) / "household_calc.h5")
+
+                dataset = PolicyEngineUKDataset(
+                    name="Household calculation",
+                    description="Household(s) for calculation",
+                    filepath=filepath,
+                    year=year,
+                    data=UKYearData(
+                        person=person_df,
+                        benunit=benunit_df,
+                        household=household_df,
+                    ),
                 )
 
                 # Build policy if provided
@@ -274,15 +352,48 @@ def simulate_household_uk(
                         parameter_values=pe_param_values,
                     )
 
-                pe_input = UKHouseholdInput(
-                    people=people,
-                    benunit=benunit,
-                    household=household,
-                    year=year,
-                )
+                # Run simulation
+                with logfire.span("run_simulation"):
+                    simulation = Simulation(
+                        dataset=dataset,
+                        tax_benefit_model_version=uk_latest,
+                        policy=policy,
+                    )
+                    simulation.run()
 
-                with logfire.span("calculate_household_impact"):
-                    result = calculate_household_impact(pe_input, policy=policy)
+                # Extract outputs
+                output_data = simulation.output_dataset.data
+
+                def safe_convert(value):
+                    try:
+                        return float(value)
+                    except (ValueError, TypeError):
+                        return str(value)
+
+                person_outputs = []
+                for i in range(n_people):
+                    person_dict = {}
+                    for var in uk_latest.entity_variables["person"]:
+                        person_dict[var] = safe_convert(output_data.person[var].iloc[i])
+                    person_outputs.append(person_dict)
+
+                benunit_outputs = []
+                for i in range(len(output_data.benunit)):
+                    benunit_dict = {}
+                    for var in uk_latest.entity_variables["benunit"]:
+                        benunit_dict[var] = safe_convert(
+                            output_data.benunit[var].iloc[i]
+                        )
+                    benunit_outputs.append(benunit_dict)
+
+                household_outputs = []
+                for i in range(len(output_data.household)):
+                    household_dict = {}
+                    for var in uk_latest.entity_variables["household"]:
+                        household_dict[var] = safe_convert(
+                            output_data.household[var].iloc[i]
+                        )
+                    household_outputs.append(household_dict)
 
                 # Write result to database
                 with Session(engine) as session:
@@ -300,9 +411,9 @@ def simulate_household_uk(
                             "job_id": job_id,
                             "result": json.dumps(
                                 {
-                                    "person": result.person,
-                                    "benunit": result.benunit,
-                                    "household": result.household,
+                                    "person": person_outputs,
+                                    "benunit": benunit_outputs,
+                                    "household": household_outputs,
                                 }
                             ),
                             "completed_at": datetime.now(timezone.utc),
@@ -345,21 +456,27 @@ def simulate_household_uk(
 def simulate_household_us(
     job_id: str,
     people: list[dict],
-    marital_unit: dict,
-    family: dict,
-    spm_unit: dict,
-    tax_unit: dict,
-    household: dict,
+    marital_unit: list[dict],
+    family: list[dict],
+    spm_unit: list[dict],
+    tax_unit: list[dict],
+    household: list[dict],
     year: int,
     policy_data: dict | None,
     dynamic_data: dict | None,
     traceparent: str | None = None,
 ) -> None:
-    """Calculate US household and write result to database."""
+    """Calculate US household(s) and write result to database.
+
+    Supports multiple households via entity relational dataframes.
+    """
     import json
+    import tempfile
     from datetime import datetime, timezone
+    from pathlib import Path
 
     import logfire
+    import pandas as pd
     from sqlmodel import Session, create_engine
 
     configure_logfire("policyengine-modal-us", traceparent)
@@ -370,10 +487,129 @@ def simulate_household_us(
             engine = create_engine(database_url)
 
             try:
+                from policyengine.core import Simulation
+                from microdf import MicroDataFrame
                 from policyengine.tax_benefit_models.us import us_latest
-                from policyengine.tax_benefit_models.us.analysis import (
-                    USHouseholdInput,
-                    calculate_household_impact,
+                from policyengine.tax_benefit_models.us.datasets import (
+                    PolicyEngineUSDataset,
+                )
+                from policyengine.tax_benefit_models.us.datasets import USYearData
+
+                n_people = len(people)
+                n_households = max(1, len(household))
+                n_marital_units = max(1, len(marital_unit))
+                n_families = max(1, len(family))
+                n_spm_units = max(1, len(spm_unit))
+                n_tax_units = max(1, len(tax_unit))
+
+                # Build person data with defaults
+                person_data = {
+                    "person_id": list(range(n_people)),
+                    "person_household_id": [0] * n_people,
+                    "person_marital_unit_id": [0] * n_people,
+                    "person_family_id": [0] * n_people,
+                    "person_spm_unit_id": [0] * n_people,
+                    "person_tax_unit_id": [0] * n_people,
+                    "person_weight": [1.0] * n_people,
+                }
+                for i, person in enumerate(people):
+                    for key, value in person.items():
+                        if key not in person_data:
+                            person_data[key] = [0.0] * n_people
+                        person_data[key][i] = value
+
+                # Build household data
+                household_data = {
+                    "household_id": list(range(n_households)),
+                    "household_weight": [1.0] * n_households,
+                }
+                for i, hh in enumerate(household if household else [{}]):
+                    for key, value in hh.items():
+                        if key not in household_data:
+                            household_data[key] = [0.0] * n_households
+                        household_data[key][i] = value
+
+                # Build marital_unit data
+                marital_unit_data = {
+                    "marital_unit_id": list(range(n_marital_units)),
+                    "marital_unit_weight": [1.0] * n_marital_units,
+                }
+                for i, mu in enumerate(marital_unit if marital_unit else [{}]):
+                    for key, value in mu.items():
+                        if key not in marital_unit_data:
+                            marital_unit_data[key] = [0.0] * n_marital_units
+                        marital_unit_data[key][i] = value
+
+                # Build family data
+                family_data = {
+                    "family_id": list(range(n_families)),
+                    "family_weight": [1.0] * n_families,
+                }
+                for i, fam in enumerate(family if family else [{}]):
+                    for key, value in fam.items():
+                        if key not in family_data:
+                            family_data[key] = [0.0] * n_families
+                        family_data[key][i] = value
+
+                # Build spm_unit data
+                spm_unit_data = {
+                    "spm_unit_id": list(range(n_spm_units)),
+                    "spm_unit_weight": [1.0] * n_spm_units,
+                }
+                for i, spm in enumerate(spm_unit if spm_unit else [{}]):
+                    for key, value in spm.items():
+                        if key not in spm_unit_data:
+                            spm_unit_data[key] = [0.0] * n_spm_units
+                        spm_unit_data[key][i] = value
+
+                # Build tax_unit data
+                tax_unit_data = {
+                    "tax_unit_id": list(range(n_tax_units)),
+                    "tax_unit_weight": [1.0] * n_tax_units,
+                }
+                for i, tu in enumerate(tax_unit if tax_unit else [{}]):
+                    for key, value in tu.items():
+                        if key not in tax_unit_data:
+                            tax_unit_data[key] = [0.0] * n_tax_units
+                        tax_unit_data[key][i] = value
+
+                # Create MicroDataFrames
+                person_df = MicroDataFrame(
+                    pd.DataFrame(person_data), weights="person_weight"
+                )
+                household_df = MicroDataFrame(
+                    pd.DataFrame(household_data), weights="household_weight"
+                )
+                marital_unit_df = MicroDataFrame(
+                    pd.DataFrame(marital_unit_data), weights="marital_unit_weight"
+                )
+                family_df = MicroDataFrame(
+                    pd.DataFrame(family_data), weights="family_weight"
+                )
+                spm_unit_df = MicroDataFrame(
+                    pd.DataFrame(spm_unit_data), weights="spm_unit_weight"
+                )
+                tax_unit_df = MicroDataFrame(
+                    pd.DataFrame(tax_unit_data), weights="tax_unit_weight"
+                )
+
+                # Create temporary dataset
+                tmpdir = tempfile.mkdtemp()
+                filepath = str(Path(tmpdir) / "household_calc.h5")
+
+                dataset = PolicyEngineUSDataset(
+                    name="Household calculation",
+                    description="Household(s) for calculation",
+                    filepath=filepath,
+                    year=year,
+                    data=USYearData(
+                        person=person_df,
+                        household=household_df,
+                        marital_unit=marital_unit_df,
+                        family=family_df,
+                        spm_unit=spm_unit_df,
+                        tax_unit=tax_unit_df,
+                    ),
                 )
 
                 # Build policy if provided
@@ -408,18 +644,34 @@ def simulate_household_us(
                         parameter_values=pe_param_values,
                     )
 
-                pe_input = USHouseholdInput(
-                    people=people,
-                    marital_unit=marital_unit,
-                    family=family,
-                    spm_unit=spm_unit,
-                    tax_unit=tax_unit,
-                    household=household,
-                    year=year,
-                )
+                # Run simulation
+                with logfire.span("run_simulation"):
+                    simulation = Simulation(
+                        dataset=dataset,
+                        tax_benefit_model_version=us_latest,
+                        policy=policy,
+                    )
+                    simulation.run()
 
-                with logfire.span("calculate_household_impact"):
-                    result = calculate_household_impact(pe_input, policy=policy)
+                # Extract outputs
+                output_data = simulation.output_dataset.data
+
+                def safe_convert(value):
+                    try:
+                        return float(value)
+                    except (ValueError, TypeError):
+                        return str(value)
+
+                def extract_entity_outputs(
+                    entity_name: str, entity_data, n_rows: int
+                ) -> list[dict]:
+                    outputs = []
+                    for i in range(n_rows):
+                        row_dict = {}
+                        for var in us_latest.entity_variables[entity_name]:
+                            row_dict[var] = safe_convert(entity_data[var].iloc[i])
+                        outputs.append(row_dict)
+                    return outputs
 
                 # Write result to database
                 with Session(engine) as session:
@@ -437,12 +689,34 @@ def simulate_household_us(
                             "job_id": job_id,
                             "result": json.dumps(
                                 {
-                                    "person": result.person,
-                                    "marital_unit": result.marital_unit,
-                                    "family": result.family,
-                                    "spm_unit": result.spm_unit,
-                                    "tax_unit": result.tax_unit,
-                                    "household": result.household,
+                                    "person": extract_entity_outputs(
+                                        "person", output_data.person, n_people
+                                    ),
+                                    "marital_unit": extract_entity_outputs(
+                                        "marital_unit",
+                                        output_data.marital_unit,
+                                        len(output_data.marital_unit),
+                                    ),
+                                    "family": extract_entity_outputs(
+                                        "family",
+                                        output_data.family,
+                                        len(output_data.family),
+                                    ),
+                                    "spm_unit": extract_entity_outputs(
+                                        "spm_unit",
+                                        output_data.spm_unit,
+                                        len(output_data.spm_unit),
+                                    ),
+                                    "tax_unit": extract_entity_outputs(
+                                        "tax_unit",
+                                        output_data.tax_unit,
+                                        len(output_data.tax_unit),
+                                    ),
+                                    "household": extract_entity_outputs(
+                                        "household",
+                                        output_data.household,
+                                        len(output_data.household),
+                                    ),
                                 }
                             ),
                             "completed_at": datetime.now(timezone.utc),
@@ -572,7 +846,6 @@ def simulate_economy_uk(simulation_id: str, traceparent: str | None = None) -> N
 
                     # Save output dataset
                     with logfire.span("save_output_dataset"):
-                        import tempfile
                         from supabase import create_client
 
                         output_filename = f"output_{simulation_id}.h5"

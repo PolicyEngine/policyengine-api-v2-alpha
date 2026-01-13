@@ -55,12 +55,34 @@ class HouseholdCalculateRequest(BaseModel):
     CORRECT: {"employment_income": 70000, "age": 40}
     WRONG: {"employment_income": {"2024": 70000}, "age": {"2024": 40}}
 
-    Example US request:
+    Supports multiple households via entity relational dataframes. Include
+    {entity}_id fields in each entity and person_{entity}_id fields in people
+    to link them together.
+
+    Example US request (single household, simple):
     {
         "tax_benefit_model_name": "policyengine_us",
         "people": [{"employment_income": 70000, "age": 40}],
-        "tax_unit": {"state_code": "CA"},
-        "household": {"state_fips": 6},
+        "tax_unit": [{"state_code": "CA"}],
+        "household": [{"state_fips": 6}],
+        "year": 2024
+    }
+
+    Example US request (multiple households):
+    {
+        "tax_benefit_model_name": "policyengine_us",
+        "people": [
+            {"person_id": 0, "person_household_id": 0, "person_tax_unit_id": 0, "age": 40, "employment_income": 70000},
+            {"person_id": 1, "person_household_id": 1, "person_tax_unit_id": 1, "age": 30, "employment_income": 50000}
+        ],
+        "tax_unit": [
+            {"tax_unit_id": 0, "state_code": "CA"},
+            {"tax_unit_id": 1, "state_code": "NY"}
+        ],
+        "household": [
+            {"household_id": 0, "state_fips": 6},
+            {"household_id": 1, "state_fips": 36}
+        ],
         "year": 2024
     }
 
@@ -68,7 +90,7 @@ class HouseholdCalculateRequest(BaseModel):
     {
         "tax_benefit_model_name": "policyengine_uk",
         "people": [{"employment_income": 50000, "age": 30}],
-        "household": {},
+        "household": [{}],
         "year": 2026
     }
     """
@@ -77,27 +99,31 @@ class HouseholdCalculateRequest(BaseModel):
         description="Which country model to use"
     )
     people: list[dict[str, Any]] = Field(
-        description="List of people with flat variable values (e.g. [{'age': 30, 'employment_income': 50000}]). Do NOT use time-period format."
+        description="List of people with flat variable values. Include person_id and person_{entity}_id fields to link to entities."
     )
-    benunit: dict[str, Any] = Field(
-        default_factory=dict, description="UK benefit unit variables (flat values)"
+    benunit: list[dict[str, Any]] = Field(
+        default_factory=list,
+        description="UK benefit units. Include benunit_id to link with person_benunit_id in people.",
     )
-    marital_unit: dict[str, Any] = Field(
-        default_factory=dict, description="US marital unit variables (flat values)"
+    marital_unit: list[dict[str, Any]] = Field(
+        default_factory=list,
+        description="US marital units. Include marital_unit_id to link with person_marital_unit_id in people.",
     )
-    family: dict[str, Any] = Field(
-        default_factory=dict, description="US family variables (flat values)"
+    family: list[dict[str, Any]] = Field(
+        default_factory=list,
+        description="US families. Include family_id to link with person_family_id in people.",
     )
-    spm_unit: dict[str, Any] = Field(
-        default_factory=dict, description="US SPM unit variables (flat values)"
+    spm_unit: list[dict[str, Any]] = Field(
+        default_factory=list,
+        description="US SPM units. Include spm_unit_id to link with person_spm_unit_id in people.",
     )
-    tax_unit: dict[str, Any] = Field(
-        default_factory=dict,
-        description="US tax unit variables (flat values, e.g. {'state_code': 'CA'})",
+    tax_unit: list[dict[str, Any]] = Field(
+        default_factory=list,
+        description="US tax units. Include tax_unit_id to link with person_tax_unit_id in people.",
     )
-    household: dict[str, Any] = Field(
-        default_factory=dict,
-        description="Household variables (flat values, e.g. {'state_fips': 6} for US)",
+    household: list[dict[str, Any]] = Field(
+        default_factory=list,
+        description="Households. Include household_id to link with person_household_id in people.",
     )
     year: int | None = Field(
         default=None,
@@ -120,7 +146,7 @@ class HouseholdCalculateResponse(BaseModel):
     family: list[dict[str, Any]] | None = None
     spm_unit: list[dict[str, Any]] | None = None
     tax_unit: list[dict[str, Any]] | None = None
-    household: dict[str, Any]
+    household: list[dict[str, Any]]
 
 
 class HouseholdJobResponse(BaseModel):
@@ -143,13 +169,14 @@ class HouseholdImpactRequest(BaseModel):
     """Request body for household impact comparison.
 
     Same format as HouseholdCalculateRequest - use flat values, NOT time-period dictionaries.
+    Supports multiple households via entity relational dataframes.
 
     Example:
     {
         "tax_benefit_model_name": "policyengine_us",
         "people": [{"employment_income": 70000, "age": 40}],
-        "tax_unit": {"state_code": "CA"},
-        "household": {"state_fips": 6},
+        "tax_unit": [{"state_code": "CA"}],
+        "household": [{"state_fips": 6}],
         "year": 2024,
         "policy_id": "uuid-of-reform-policy"
     }
@@ -159,25 +186,31 @@ class HouseholdImpactRequest(BaseModel):
         description="Which country model to use"
     )
     people: list[dict[str, Any]] = Field(
-        description="List of people with flat variable values. Do NOT use time-period format."
+        description="List of people with flat variable values. Include person_id and person_{entity}_id fields to link to entities."
     )
-    benunit: dict[str, Any] = Field(
-        default_factory=dict, description="UK benefit unit variables (flat values)"
+    benunit: list[dict[str, Any]] = Field(
+        default_factory=list,
+        description="UK benefit units. Include benunit_id to link with person_benunit_id in people.",
     )
-    marital_unit: dict[str, Any] = Field(
-        default_factory=dict, description="US marital unit variables (flat values)"
+    marital_unit: list[dict[str, Any]] = Field(
+        default_factory=list,
+        description="US marital units. Include marital_unit_id to link with person_marital_unit_id in people.",
     )
-    family: dict[str, Any] = Field(
-        default_factory=dict, description="US family variables (flat values)"
+    family: list[dict[str, Any]] = Field(
+        default_factory=list,
+        description="US families. Include family_id to link with person_family_id in people.",
     )
-    spm_unit: dict[str, Any] = Field(
-        default_factory=dict, description="US SPM unit variables (flat values)"
+    spm_unit: list[dict[str, Any]] = Field(
+        default_factory=list,
+        description="US SPM units. Include spm_unit_id to link with person_spm_unit_id in people.",
     )
-    tax_unit: dict[str, Any] = Field(
-        default_factory=dict, description="US tax unit variables (flat values)"
+    tax_unit: list[dict[str, Any]] = Field(
+        default_factory=list,
+        description="US tax units. Include tax_unit_id to link with person_tax_unit_id in people.",
     )
-    household: dict[str, Any] = Field(
-        default_factory=dict, description="Household variables (flat values)"
+    household: list[dict[str, Any]] = Field(
+        default_factory=list,
+        description="Households. Include household_id to link with person_household_id in people.",
     )
     year: int | None = Field(
         default=None, description="Simulation year (default: 2024 for US, 2026 for UK)"
@@ -212,70 +245,26 @@ class HouseholdImpactJobStatusResponse(BaseModel):
 def _run_local_household_uk(
     job_id: str,
     people: list[dict],
-    benunit: dict,
-    household: dict,
+    benunit: list[dict],
+    household: list[dict],
     year: int,
     policy_data: dict | None,
     session: Session,
 ) -> None:
-    """Run UK household calculation locally."""
+    """Run UK household calculation locally.
+
+    Supports multiple households via entity relational dataframes.
+    """
     from datetime import datetime, timezone
 
-    from policyengine.tax_benefit_models.uk import uk_latest
-    from policyengine.tax_benefit_models.uk.analysis import (
-        UKHouseholdInput,
-        calculate_household_impact,
-    )
-
     try:
-        # Build policy if provided
-        policy = None
-        if policy_data:
-            from policyengine.core.policy import ParameterValue as PEParameterValue
-            from policyengine.core.policy import Policy as PEPolicy
-
-            pe_param_values = []
-            param_lookup = {p.name: p for p in uk_latest.parameters}
-            for pv in policy_data.get("parameter_values", []):
-                pe_param = param_lookup.get(pv["parameter_name"])
-                if pe_param:
-                    pe_pv = PEParameterValue(
-                        parameter=pe_param,
-                        value=pv["value"],
-                        start_date=datetime.fromisoformat(pv["start_date"])
-                        if pv.get("start_date")
-                        else None,
-                        end_date=datetime.fromisoformat(pv["end_date"])
-                        if pv.get("end_date")
-                        else None,
-                    )
-                    pe_param_values.append(pe_pv)
-            policy = PEPolicy(
-                name=policy_data.get("name", ""),
-                description=policy_data.get("description", ""),
-                parameter_values=pe_param_values,
-            )
-
-        pe_input = UKHouseholdInput(
-            people=people,
-            benunit=benunit,
-            household=household,
-            year=year,
-        )
-
-        result = calculate_household_impact(pe_input, policy=policy)
+        result = _calculate_household_uk(people, benunit, household, year, policy_data)
 
         # Update job with result
         job = session.get(HouseholdJob, job_id)
         if job:
             job.status = HouseholdJobStatus.COMPLETED
-            job.result = _sanitize_for_json(
-                {
-                    "person": result.person,
-                    "benunit": result.benunit,
-                    "household": result.household,
-                }
-            )
+            job.result = _sanitize_for_json(result)
             job.completed_at = datetime.now(timezone.utc)
             session.add(job)
             session.commit()
@@ -292,84 +281,199 @@ def _run_local_household_uk(
             session.add(job)
             session.commit()
         raise
+
+
+def _calculate_household_uk(
+    people: list[dict],
+    benunit: list[dict],
+    household: list[dict],
+    year: int,
+    policy_data: dict | None,
+) -> dict:
+    """Calculate UK household(s) and return result dict.
+
+    Supports multiple households via entity relational dataframes. If entity IDs
+    are not provided, defaults to single household with all people in it.
+    """
+    import tempfile
+    from datetime import datetime
+    from pathlib import Path
+
+    import pandas as pd
+    from policyengine.core import Simulation
+    from microdf import MicroDataFrame
+    from policyengine.tax_benefit_models.uk import uk_latest
+    from policyengine.tax_benefit_models.uk.datasets import PolicyEngineUKDataset
+    from policyengine.tax_benefit_models.uk.datasets import UKYearData
+
+    n_people = len(people)
+    n_benunits = max(1, len(benunit))
+    n_households = max(1, len(household))
+
+    # Build person data with defaults
+    person_data = {
+        "person_id": list(range(n_people)),
+        "person_benunit_id": [0] * n_people,
+        "person_household_id": [0] * n_people,
+        "person_weight": [1.0] * n_people,
+    }
+    # Add user-provided person fields
+    for i, person in enumerate(people):
+        for key, value in person.items():
+            if key not in person_data:
+                person_data[key] = [0.0] * n_people
+            person_data[key][i] = value
+
+    # Build benunit data with defaults
+    benunit_data = {
+        "benunit_id": list(range(n_benunits)),
+        "benunit_weight": [1.0] * n_benunits,
+    }
+    for i, bu in enumerate(benunit if benunit else [{}]):
+        for key, value in bu.items():
+            if key not in benunit_data:
+                benunit_data[key] = [0.0] * n_benunits
+            benunit_data[key][i] = value
+
+    # Build household data with defaults
+    household_data = {
+        "household_id": list(range(n_households)),
+        "household_weight": [1.0] * n_households,
+        "region": ["LONDON"] * n_households,
+        "tenure_type": ["RENT_PRIVATELY"] * n_households,
+        "council_tax": [0.0] * n_households,
+        "rent": [0.0] * n_households,
+    }
+    for i, hh in enumerate(household if household else [{}]):
+        for key, value in hh.items():
+            if key not in household_data:
+                household_data[key] = [0.0] * n_households
+            household_data[key][i] = value
+
+    # Create MicroDataFrames
+    person_df = MicroDataFrame(pd.DataFrame(person_data), weights="person_weight")
+    benunit_df = MicroDataFrame(pd.DataFrame(benunit_data), weights="benunit_weight")
+    household_df = MicroDataFrame(
+        pd.DataFrame(household_data), weights="household_weight"
+    )
+
+    # Create temporary dataset
+    tmpdir = tempfile.mkdtemp()
+    filepath = str(Path(tmpdir) / "household_calc.h5")
+
+    dataset = PolicyEngineUKDataset(
+        name="Household calculation",
+        description="Household(s) for calculation",
+        filepath=filepath,
+        year=year,
+        data=UKYearData(
+            person=person_df,
+            benunit=benunit_df,
+            household=household_df,
+        ),
+    )
+
+    # Build policy if provided
+    policy = None
+    if policy_data:
+        from policyengine.core.policy import ParameterValue as PEParameterValue
+        from policyengine.core.policy import Policy as PEPolicy
+
+        pe_param_values = []
+        param_lookup = {p.name: p for p in uk_latest.parameters}
+        for pv in policy_data.get("parameter_values", []):
+            pe_param = param_lookup.get(pv["parameter_name"])
+            if pe_param:
+                pe_pv = PEParameterValue(
+                    parameter=pe_param,
+                    value=pv["value"],
+                    start_date=datetime.fromisoformat(pv["start_date"])
+                    if pv.get("start_date")
+                    else None,
+                    end_date=datetime.fromisoformat(pv["end_date"])
+                    if pv.get("end_date")
+                    else None,
+                )
+                pe_param_values.append(pe_pv)
+        policy = PEPolicy(
+            name=policy_data.get("name", ""),
+            description=policy_data.get("description", ""),
+            parameter_values=pe_param_values,
+        )
+
+    # Run simulation
+    simulation = Simulation(
+        dataset=dataset,
+        tax_benefit_model_version=uk_latest,
+        policy=policy,
+    )
+    simulation.run()
+
+    # Extract outputs
+    output_data = simulation.output_dataset.data
+
+    def safe_convert(value):
+        try:
+            return float(value)
+        except (ValueError, TypeError):
+            return str(value)
+
+    person_outputs = []
+    for i in range(n_people):
+        person_dict = {}
+        for var in uk_latest.entity_variables["person"]:
+            person_dict[var] = safe_convert(output_data.person[var].iloc[i])
+        person_outputs.append(person_dict)
+
+    benunit_outputs = []
+    for i in range(len(output_data.benunit)):
+        benunit_dict = {}
+        for var in uk_latest.entity_variables["benunit"]:
+            benunit_dict[var] = safe_convert(output_data.benunit[var].iloc[i])
+        benunit_outputs.append(benunit_dict)
+
+    household_outputs = []
+    for i in range(len(output_data.household)):
+        household_dict = {}
+        for var in uk_latest.entity_variables["household"]:
+            household_dict[var] = safe_convert(output_data.household[var].iloc[i])
+        household_outputs.append(household_dict)
+
+    return {
+        "person": person_outputs,
+        "benunit": benunit_outputs,
+        "household": household_outputs,
+    }
 
 
 def _run_local_household_us(
     job_id: str,
     people: list[dict],
-    marital_unit: dict,
-    family: dict,
-    spm_unit: dict,
-    tax_unit: dict,
-    household: dict,
+    marital_unit: list[dict],
+    family: list[dict],
+    spm_unit: list[dict],
+    tax_unit: list[dict],
+    household: list[dict],
     year: int,
     policy_data: dict | None,
     session: Session,
 ) -> None:
-    """Run US household calculation locally."""
+    """Run US household calculation locally.
+
+    Supports multiple households via entity relational dataframes.
+    """
     from datetime import datetime, timezone
 
-    from policyengine.tax_benefit_models.us import us_latest
-    from policyengine.tax_benefit_models.us.analysis import (
-        USHouseholdInput,
-        calculate_household_impact,
-    )
-
     try:
-        # Build policy if provided
-        policy = None
-        if policy_data:
-            from policyengine.core.policy import ParameterValue as PEParameterValue
-            from policyengine.core.policy import Policy as PEPolicy
-
-            pe_param_values = []
-            param_lookup = {p.name: p for p in us_latest.parameters}
-            for pv in policy_data.get("parameter_values", []):
-                pe_param = param_lookup.get(pv["parameter_name"])
-                if pe_param:
-                    pe_pv = PEParameterValue(
-                        parameter=pe_param,
-                        value=pv["value"],
-                        start_date=datetime.fromisoformat(pv["start_date"])
-                        if pv.get("start_date")
-                        else None,
-                        end_date=datetime.fromisoformat(pv["end_date"])
-                        if pv.get("end_date")
-                        else None,
-                    )
-                    pe_param_values.append(pe_pv)
-            policy = PEPolicy(
-                name=policy_data.get("name", ""),
-                description=policy_data.get("description", ""),
-                parameter_values=pe_param_values,
-            )
-
-        pe_input = USHouseholdInput(
-            people=people,
-            marital_unit=marital_unit,
-            family=family,
-            spm_unit=spm_unit,
-            tax_unit=tax_unit,
-            household=household,
-            year=year,
+        result = _calculate_household_us(
+            people, marital_unit, family, spm_unit, tax_unit, household, year, policy_data
         )
-
-        result = calculate_household_impact(pe_input, policy=policy)
 
         # Update job with result
         job = session.get(HouseholdJob, job_id)
         if job:
             job.status = HouseholdJobStatus.COMPLETED
-            job.result = _sanitize_for_json(
-                {
-                    "person": result.person,
-                    "marital_unit": result.marital_unit,
-                    "family": result.family,
-                    "spm_unit": result.spm_unit,
-                    "tax_unit": result.tax_unit,
-                    "household": result.household,
-                }
-            )
+            job.result = _sanitize_for_json(result)
             job.completed_at = datetime.now(timezone.utc)
             session.add(job)
             session.commit()
@@ -386,6 +490,215 @@ def _run_local_household_us(
             session.add(job)
             session.commit()
         raise
+
+
+def _calculate_household_us(
+    people: list[dict],
+    marital_unit: list[dict],
+    family: list[dict],
+    spm_unit: list[dict],
+    tax_unit: list[dict],
+    household: list[dict],
+    year: int,
+    policy_data: dict | None,
+) -> dict:
+    """Calculate US household(s) and return result dict.
+
+    Supports multiple households via entity relational dataframes. If entity IDs
+    are not provided, defaults to single household with all people in it.
+    """
+    import tempfile
+    from datetime import datetime
+    from pathlib import Path
+
+    import pandas as pd
+    from policyengine.core import Simulation
+    from microdf import MicroDataFrame
+    from policyengine.tax_benefit_models.us import us_latest
+    from policyengine.tax_benefit_models.us.datasets import PolicyEngineUSDataset
+    from policyengine.tax_benefit_models.us.datasets import USYearData
+
+    n_people = len(people)
+    n_households = max(1, len(household))
+    n_marital_units = max(1, len(marital_unit))
+    n_families = max(1, len(family))
+    n_spm_units = max(1, len(spm_unit))
+    n_tax_units = max(1, len(tax_unit))
+
+    # Build person data with defaults
+    person_data = {
+        "person_id": list(range(n_people)),
+        "person_household_id": [0] * n_people,
+        "person_marital_unit_id": [0] * n_people,
+        "person_family_id": [0] * n_people,
+        "person_spm_unit_id": [0] * n_people,
+        "person_tax_unit_id": [0] * n_people,
+        "person_weight": [1.0] * n_people,
+    }
+    for i, person in enumerate(people):
+        for key, value in person.items():
+            if key not in person_data:
+                person_data[key] = [0.0] * n_people
+            person_data[key][i] = value
+
+    # Build household data
+    household_data = {
+        "household_id": list(range(n_households)),
+        "household_weight": [1.0] * n_households,
+    }
+    for i, hh in enumerate(household if household else [{}]):
+        for key, value in hh.items():
+            if key not in household_data:
+                household_data[key] = [0.0] * n_households
+            household_data[key][i] = value
+
+    # Build marital_unit data
+    marital_unit_data = {
+        "marital_unit_id": list(range(n_marital_units)),
+        "marital_unit_weight": [1.0] * n_marital_units,
+    }
+    for i, mu in enumerate(marital_unit if marital_unit else [{}]):
+        for key, value in mu.items():
+            if key not in marital_unit_data:
+                marital_unit_data[key] = [0.0] * n_marital_units
+            marital_unit_data[key][i] = value
+
+    # Build family data
+    family_data = {
+        "family_id": list(range(n_families)),
+        "family_weight": [1.0] * n_families,
+    }
+    for i, fam in enumerate(family if family else [{}]):
+        for key, value in fam.items():
+            if key not in family_data:
+                family_data[key] = [0.0] * n_families
+            family_data[key][i] = value
+
+    # Build spm_unit data
+    spm_unit_data = {
+        "spm_unit_id": list(range(n_spm_units)),
+        "spm_unit_weight": [1.0] * n_spm_units,
+    }
+    for i, spm in enumerate(spm_unit if spm_unit else [{}]):
+        for key, value in spm.items():
+            if key not in spm_unit_data:
+                spm_unit_data[key] = [0.0] * n_spm_units
+            spm_unit_data[key][i] = value
+
+    # Build tax_unit data
+    tax_unit_data = {
+        "tax_unit_id": list(range(n_tax_units)),
+        "tax_unit_weight": [1.0] * n_tax_units,
+    }
+    for i, tu in enumerate(tax_unit if tax_unit else [{}]):
+        for key, value in tu.items():
+            if key not in tax_unit_data:
+                tax_unit_data[key] = [0.0] * n_tax_units
+            tax_unit_data[key][i] = value
+
+    # Create MicroDataFrames
+    person_df = MicroDataFrame(pd.DataFrame(person_data), weights="person_weight")
+    household_df = MicroDataFrame(
+        pd.DataFrame(household_data), weights="household_weight"
+    )
+    marital_unit_df = MicroDataFrame(
+        pd.DataFrame(marital_unit_data), weights="marital_unit_weight"
+    )
+    family_df = MicroDataFrame(pd.DataFrame(family_data), weights="family_weight")
+    spm_unit_df = MicroDataFrame(pd.DataFrame(spm_unit_data), weights="spm_unit_weight")
+    tax_unit_df = MicroDataFrame(pd.DataFrame(tax_unit_data), weights="tax_unit_weight")
+
+    # Create temporary dataset
+    tmpdir = tempfile.mkdtemp()
+    filepath = str(Path(tmpdir) / "household_calc.h5")
+
+    dataset = PolicyEngineUSDataset(
+        name="Household calculation",
+        description="Household(s) for calculation",
+        filepath=filepath,
+        year=year,
+        data=USYearData(
+            person=person_df,
+            household=household_df,
+            marital_unit=marital_unit_df,
+            family=family_df,
+            spm_unit=spm_unit_df,
+            tax_unit=tax_unit_df,
+        ),
+    )
+
+    # Build policy if provided
+    policy = None
+    if policy_data:
+        from policyengine.core.policy import ParameterValue as PEParameterValue
+        from policyengine.core.policy import Policy as PEPolicy
+
+        pe_param_values = []
+        param_lookup = {p.name: p for p in us_latest.parameters}
+        for pv in policy_data.get("parameter_values", []):
+            pe_param = param_lookup.get(pv["parameter_name"])
+            if pe_param:
+                pe_pv = PEParameterValue(
+                    parameter=pe_param,
+                    value=pv["value"],
+                    start_date=datetime.fromisoformat(pv["start_date"])
+                    if pv.get("start_date")
+                    else None,
+                    end_date=datetime.fromisoformat(pv["end_date"])
+                    if pv.get("end_date")
+                    else None,
+                )
+                pe_param_values.append(pe_pv)
+        policy = PEPolicy(
+            name=policy_data.get("name", ""),
+            description=policy_data.get("description", ""),
+            parameter_values=pe_param_values,
+        )
+
+    # Run simulation
+    simulation = Simulation(
+        dataset=dataset,
+        tax_benefit_model_version=us_latest,
+        policy=policy,
+    )
+    simulation.run()
+
+    # Extract outputs
+    output_data = simulation.output_dataset.data
+
+    def safe_convert(value):
+        try:
+            return float(value)
+        except (ValueError, TypeError):
+            return str(value)
+
+    def extract_entity_outputs(entity_name: str, entity_data, n_rows: int) -> list[dict]:
+        outputs = []
+        for i in range(n_rows):
+            row_dict = {}
+            for var in us_latest.entity_variables[entity_name]:
+                row_dict[var] = safe_convert(entity_data[var].iloc[i])
+            outputs.append(row_dict)
+        return outputs
+
+    return {
+        "person": extract_entity_outputs("person", output_data.person, n_people),
+        "marital_unit": extract_entity_outputs(
+            "marital_unit", output_data.marital_unit, len(output_data.marital_unit)
+        ),
+        "family": extract_entity_outputs(
+            "family", output_data.family, len(output_data.family)
+        ),
+        "spm_unit": extract_entity_outputs(
+            "spm_unit", output_data.spm_unit, len(output_data.spm_unit)
+        ),
+        "tax_unit": extract_entity_outputs(
+            "tax_unit", output_data.tax_unit, len(output_data.tax_unit)
+        ),
+        "household": extract_entity_outputs(
+            "household", output_data.household, len(output_data.household)
+        ),
+    }
 
 
 def _trigger_modal_household(
@@ -596,7 +909,7 @@ def get_household_job_status(
             family=job.result.get("family"),
             spm_unit=job.result.get("spm_unit"),
             tax_unit=job.result.get("tax_unit"),
-            household=job.result.get("household", {}),
+            household=job.result.get("household", []),
         )
 
     return HouseholdJobStatusResponse(
@@ -613,40 +926,33 @@ def _compute_impact(
     """Compute difference between baseline and reform."""
     impact = {}
 
+    def compute_entity_diff(
+        baseline_list: list[dict], reform_list: list[dict]
+    ) -> list[dict]:
+        """Compute differences for a list of entity dicts."""
+        entity_impact = []
+        for b_entity, r_entity in zip(baseline_list, reform_list):
+            entity_diff = {}
+            for key in b_entity:
+                if key in r_entity:
+                    baseline_val = b_entity[key]
+                    reform_val = r_entity[key]
+                    if isinstance(baseline_val, (int, float)) and isinstance(
+                        reform_val, (int, float)
+                    ):
+                        entity_diff[key] = {
+                            "baseline": baseline_val,
+                            "reform": reform_val,
+                            "change": reform_val - baseline_val,
+                        }
+            entity_impact.append(entity_diff)
+        return entity_impact
+
     # Compute household-level differences
-    hh_impact = {}
-    for key in baseline.household:
-        if key in reform.household:
-            baseline_val = baseline.household[key]
-            reform_val = reform.household[key]
-            if isinstance(baseline_val, (int, float)) and isinstance(
-                reform_val, (int, float)
-            ):
-                hh_impact[key] = {
-                    "baseline": baseline_val,
-                    "reform": reform_val,
-                    "change": reform_val - baseline_val,
-                }
-    impact["household"] = hh_impact
+    impact["household"] = compute_entity_diff(baseline.household, reform.household)
 
     # Compute person-level differences
-    person_impact = []
-    for i, (bp, rp) in enumerate(zip(baseline.person, reform.person)):
-        person_diff = {}
-        for key in bp:
-            if key in rp:
-                baseline_val = bp[key]
-                reform_val = rp[key]
-                if isinstance(baseline_val, (int, float)) and isinstance(
-                    reform_val, (int, float)
-                ):
-                    person_diff[key] = {
-                        "baseline": baseline_val,
-                        "reform": reform_val,
-                        "change": reform_val - baseline_val,
-                    }
-        person_impact.append(person_diff)
-    impact["person"] = person_impact
+    impact["person"] = compute_entity_diff(baseline.person, reform.person)
 
     return impact
 
@@ -837,7 +1143,7 @@ def get_household_impact_job_status(
             family=baseline_job.result.get("family"),
             spm_unit=baseline_job.result.get("spm_unit"),
             tax_unit=baseline_job.result.get("tax_unit"),
-            household=baseline_job.result.get("household", {}),
+            household=baseline_job.result.get("household", []),
         )
         reform_result = HouseholdCalculateResponse(
             person=reform_job.result.get("person", []),
@@ -846,7 +1152,7 @@ def get_household_impact_job_status(
             family=reform_job.result.get("family"),
             spm_unit=reform_job.result.get("spm_unit"),
             tax_unit=reform_job.result.get("tax_unit"),
-            household=reform_job.result.get("household", {}),
+            household=reform_job.result.get("household", []),
         )
         impact = _compute_impact(baseline_result, reform_result)
 

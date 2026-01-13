@@ -1,5 +1,6 @@
 """Tests for aggregate outputs endpoints."""
 
+from unittest.mock import MagicMock, patch
 from uuid import uuid4
 
 import pytest
@@ -12,13 +13,17 @@ def test_list_aggregates_empty(client):
     assert isinstance(response.json(), list)
 
 
-def test_create_single_aggregate(client):
+@patch("policyengine_api.api.outputs.modal.Function")
+def test_create_single_aggregate(mock_modal_fn, client, simulation_id):
     """Create a single aggregate output."""
+    mock_fn = MagicMock()
+    mock_modal_fn.from_name.return_value = mock_fn
+
     response = client.post(
         "/outputs/aggregates",
         json=[
             {
-                "simulation_id": str(uuid4()),
+                "simulation_id": simulation_id,
                 "variable": "net_income",
                 "aggregate_type": "sum",
             }
@@ -32,24 +37,27 @@ def test_create_single_aggregate(client):
     assert data[0]["aggregate_type"] == "sum"
 
 
-def test_create_multiple_aggregates(client):
+@patch("policyengine_api.api.outputs.modal.Function")
+def test_create_multiple_aggregates(mock_modal_fn, client, simulation_id):
     """Create multiple aggregate outputs in one request."""
-    sim_id = str(uuid4())
+    mock_fn = MagicMock()
+    mock_modal_fn.from_name.return_value = mock_fn
+
     response = client.post(
         "/outputs/aggregates",
         json=[
             {
-                "simulation_id": sim_id,
+                "simulation_id": simulation_id,
                 "variable": "income_tax",
                 "aggregate_type": "sum",
             },
             {
-                "simulation_id": sim_id,
+                "simulation_id": simulation_id,
                 "variable": "household_count",
                 "aggregate_type": "count",
             },
             {
-                "simulation_id": sim_id,
+                "simulation_id": simulation_id,
                 "variable": "mean_income",
                 "aggregate_type": "mean",
             },

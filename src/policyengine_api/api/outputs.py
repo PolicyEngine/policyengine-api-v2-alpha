@@ -82,7 +82,7 @@ def _trigger_aggregate_computation(
     )
 
 
-@router.post("/", response_model=List[AggregateOutputRead])
+@router.post("", response_model=List[AggregateOutputRead])
 def create_aggregate_outputs(
     outputs: List[AggregateOutputCreate],
     background_tasks: BackgroundTasks,
@@ -121,7 +121,7 @@ def create_aggregate_outputs(
     return db_outputs
 
 
-@router.get("/", response_model=List[AggregateOutputRead])
+@router.get("", response_model=List[AggregateOutputRead])
 def list_aggregate_outputs(session: Session = Depends(get_session)):
     """List all aggregates."""
     outputs = session.exec(select(AggregateOutput)).all()
