@@ -68,17 +68,21 @@ def create_user_policy(
 @router.get("/", response_model=list[UserPolicyRead])
 def list_user_policies(
     user_id: UUID = Query(..., description="User ID to filter by"),
-    country_id: str | None = Query(None, description="Country filter (us/uk)"),
+    tax_benefit_model_id: UUID | None = Query(None, description="Filter by tax benefit model"),
     session: Session = Depends(get_session),
 ):
     """List all policy associations for a user.
 
-    Returns all policies saved by the specified user. Optionally filter by country.
+    Returns all policies saved by the specified user. Optionally filter by tax benefit model.
     """
     query = select(UserPolicy).where(UserPolicy.user_id == user_id)
 
-    if country_id:
-        query = query.where(UserPolicy.country_id == country_id)
+    if tax_benefit_model_id:
+        query = (
+            query
+            .join(Policy, UserPolicy.policy_id == Policy.id)
+            .where(Policy.tax_benefit_model_id == tax_benefit_model_id)
+        )
 
     user_policies = session.exec(query).all()
     return user_policies

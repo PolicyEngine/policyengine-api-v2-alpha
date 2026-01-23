@@ -16,10 +16,14 @@ def test_list_user_policies_empty(client, session):
     assert response.json() == []
 
 
-def test_create_user_policy(client, session):
+def test_create_user_policy(client, session, tax_benefit_model):
     """Create a new user-policy association."""
     user = User(first_name="Test", last_name="User", email="test@example.com")
-    policy = Policy(name="Test policy", description="A test policy")
+    policy = Policy(
+        name="Test policy",
+        description="A test policy",
+        tax_benefit_model_id=tax_benefit_model.id,
+    )
     session.add(user)
     session.add(policy)
     session.commit()
@@ -31,7 +35,6 @@ def test_create_user_policy(client, session):
         json={
             "user_id": str(user.id),
             "policy_id": str(policy.id),
-            "country_id": "us",
             "label": "My test policy",
         },
     )
@@ -39,17 +42,20 @@ def test_create_user_policy(client, session):
     data = response.json()
     assert data["user_id"] == str(user.id)
     assert data["policy_id"] == str(policy.id)
-    assert data["country_id"] == "us"
     assert data["label"] == "My test policy"
     assert "id" in data
     assert "created_at" in data
     assert "updated_at" in data
 
 
-def test_create_user_policy_without_label(client, session):
+def test_create_user_policy_without_label(client, session, tax_benefit_model):
     """Create a user-policy association without a label."""
     user = User(first_name="Test", last_name="User", email="test@example.com")
-    policy = Policy(name="Test policy", description="A test policy")
+    policy = Policy(
+        name="Test policy",
+        description="A test policy",
+        tax_benefit_model_id=tax_benefit_model.id,
+    )
     session.add(user)
     session.add(policy)
     session.commit()
@@ -61,7 +67,6 @@ def test_create_user_policy_without_label(client, session):
         json={
             "user_id": str(user.id),
             "policy_id": str(policy.id),
-            "country_id": "uk",
         },
     )
     assert response.status_code == 200
@@ -79,7 +84,6 @@ def test_create_user_policy_user_not_found(client):
         json={
             "user_id": str(fake_user_id),
             "policy_id": str(fake_policy_id),
-            "country_id": "us",
         },
     )
     assert response.status_code == 404
@@ -99,17 +103,20 @@ def test_create_user_policy_policy_not_found(client, session):
         json={
             "user_id": str(user.id),
             "policy_id": str(fake_policy_id),
-            "country_id": "us",
         },
     )
     assert response.status_code == 404
     assert response.json()["detail"] == "Policy not found"
 
 
-def test_create_user_policy_duplicate(client, session):
+def test_create_user_policy_duplicate(client, session, tax_benefit_model):
     """Creating duplicate user-policy association returns 409."""
     user = User(first_name="Test", last_name="User", email="test@example.com")
-    policy = Policy(name="Test policy", description="A test policy")
+    policy = Policy(
+        name="Test policy",
+        description="A test policy",
+        tax_benefit_model_id=tax_benefit_model.id,
+    )
     session.add(user)
     session.add(policy)
     session.commit()
@@ -120,7 +127,6 @@ def test_create_user_policy_duplicate(client, session):
     user_policy = UserPolicy(
         user_id=user.id,
         policy_id=policy.id,
-        country_id="us",
     )
     session.add(user_policy)
     session.commit()
@@ -131,18 +137,25 @@ def test_create_user_policy_duplicate(client, session):
         json={
             "user_id": str(user.id),
             "policy_id": str(policy.id),
-            "country_id": "us",
         },
     )
     assert response.status_code == 409
     assert "already has an association" in response.json()["detail"]
 
 
-def test_list_user_policies_with_data(client, session):
+def test_list_user_policies_with_data(client, session, tax_benefit_model, uk_tax_benefit_model):
     """List user policies returns all associations for a user."""
     user = User(first_name="Test", last_name="User", email="test@example.com")
-    policy1 = Policy(name="Policy 1", description="First policy")
-    policy2 = Policy(name="Policy 2", description="Second policy")
+    policy1 = Policy(
+        name="Policy 1",
+        description="First policy",
+        tax_benefit_model_id=tax_benefit_model.id,
+    )
+    policy2 = Policy(
+        name="Policy 2",
+        description="Second policy",
+        tax_benefit_model_id=uk_tax_benefit_model.id,
+    )
     session.add(user)
     session.add(policy1)
     session.add(policy2)
@@ -154,13 +167,11 @@ def test_list_user_policies_with_data(client, session):
     user_policy1 = UserPolicy(
         user_id=user.id,
         policy_id=policy1.id,
-        country_id="us",
         label="US policy",
     )
     user_policy2 = UserPolicy(
         user_id=user.id,
         policy_id=policy2.id,
-        country_id="uk",
         label="UK policy",
     )
     session.add(user_policy1)
@@ -173,11 +184,21 @@ def test_list_user_policies_with_data(client, session):
     assert len(data) == 2
 
 
-def test_list_user_policies_filter_by_country(client, session):
-    """List user policies with country filter."""
+def test_list_user_policies_filter_by_tax_benefit_model(
+    client, session, tax_benefit_model, uk_tax_benefit_model
+):
+    """List user policies filtered by tax_benefit_model_id via Policy join."""
     user = User(first_name="Test", last_name="User", email="test@example.com")
-    policy1 = Policy(name="Policy 1", description="First policy")
-    policy2 = Policy(name="Policy 2", description="Second policy")
+    policy1 = Policy(
+        name="Policy 1",
+        description="First policy",
+        tax_benefit_model_id=tax_benefit_model.id,
+    )
+    policy2 = Policy(
+        name="Policy 2",
+        description="Second policy",
+        tax_benefit_model_id=uk_tax_benefit_model.id,
+    )
     session.add(user)
     session.add(policy1)
     session.add(policy2)
@@ -189,28 +210,32 @@ def test_list_user_policies_filter_by_country(client, session):
     user_policy1 = UserPolicy(
         user_id=user.id,
         policy_id=policy1.id,
-        country_id="us",
     )
     user_policy2 = UserPolicy(
         user_id=user.id,
         policy_id=policy2.id,
-        country_id="uk",
     )
     session.add(user_policy1)
     session.add(user_policy2)
     session.commit()
 
-    response = client.get(f"/user-policies?user_id={user.id}&country_id=us")
+    response = client.get(
+        f"/user-policies?user_id={user.id}&tax_benefit_model_id={tax_benefit_model.id}"
+    )
     assert response.status_code == 200
     data = response.json()
     assert len(data) == 1
-    assert data[0]["country_id"] == "us"
+    assert data[0]["policy_id"] == str(policy1.id)
 
 
-def test_get_user_policy(client, session):
+def test_get_user_policy(client, session, tax_benefit_model):
     """Get a specific user-policy association by ID."""
     user = User(first_name="Test", last_name="User", email="test@example.com")
-    policy = Policy(name="Test policy", description="A test policy")
+    policy = Policy(
+        name="Test policy",
+        description="A test policy",
+        tax_benefit_model_id=tax_benefit_model.id,
+    )
     session.add(user)
     session.add(policy)
     session.commit()
@@ -220,7 +245,6 @@ def test_get_user_policy(client, session):
     user_policy = UserPolicy(
         user_id=user.id,
         policy_id=policy.id,
-        country_id="us",
         label="My policy",
     )
     session.add(user_policy)
@@ -242,10 +266,14 @@ def test_get_user_policy_not_found(client):
     assert response.json()["detail"] == "User-policy association not found"
 
 
-def test_update_user_policy(client, session):
+def test_update_user_policy(client, session, tax_benefit_model):
     """Update a user-policy association label."""
     user = User(first_name="Test", last_name="User", email="test@example.com")
-    policy = Policy(name="Test policy", description="A test policy")
+    policy = Policy(
+        name="Test policy",
+        description="A test policy",
+        tax_benefit_model_id=tax_benefit_model.id,
+    )
     session.add(user)
     session.add(policy)
     session.commit()
@@ -255,7 +283,6 @@ def test_update_user_policy(client, session):
     user_policy = UserPolicy(
         user_id=user.id,
         policy_id=policy.id,
-        country_id="us",
         label="Old label",
     )
     session.add(user_policy)
@@ -282,10 +309,14 @@ def test_update_user_policy_not_found(client):
     assert response.json()["detail"] == "User-policy association not found"
 
 
-def test_delete_user_policy(client, session):
+def test_delete_user_policy(client, session, tax_benefit_model):
     """Delete a user-policy association."""
     user = User(first_name="Test", last_name="User", email="test@example.com")
-    policy = Policy(name="Test policy", description="A test policy")
+    policy = Policy(
+        name="Test policy",
+        description="A test policy",
+        tax_benefit_model_id=tax_benefit_model.id,
+    )
     session.add(user)
     session.add(policy)
     session.commit()
@@ -295,7 +326,6 @@ def test_delete_user_policy(client, session):
     user_policy = UserPolicy(
         user_id=user.id,
         policy_id=policy.id,
-        country_id="us",
     )
     session.add(user_policy)
     session.commit()
