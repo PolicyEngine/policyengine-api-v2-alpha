@@ -6,6 +6,7 @@ from sqlmodel import Field, Relationship, SQLModel
 
 if TYPE_CHECKING:
     from .parameter_value import ParameterValue
+    from .tax_benefit_model import TaxBenefitModel
 
 
 class PolicyBase(SQLModel):
@@ -13,6 +14,7 @@ class PolicyBase(SQLModel):
 
     name: str
     description: str | None = None
+    tax_benefit_model_id: UUID = Field(foreign_key="tax_benefit_models.id", index=True)
 
 
 class Policy(PolicyBase, table=True):
@@ -26,6 +28,7 @@ class Policy(PolicyBase, table=True):
 
     # Relationships
     parameter_values: list["ParameterValue"] = Relationship(back_populates="policy")
+    tax_benefit_model: "TaxBenefitModel" = Relationship()
 
 
 class PolicyCreate(PolicyBase):

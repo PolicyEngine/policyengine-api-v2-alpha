@@ -14,7 +14,6 @@ class UserPolicyBase(SQLModel):
 
     user_id: UUID = Field(foreign_key="users.id", index=True)
     policy_id: UUID = Field(foreign_key="policies.id", index=True)
-    country_id: str  # "us" or "uk"
     label: str | None = None
 
 
