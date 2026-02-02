@@ -48,6 +48,12 @@ from .tax_benefit_model_version import (
     TaxBenefitModelVersionRead,
 )
 from .user import User, UserCreate, UserRead
+from .user_household_association import (
+    UserHouseholdAssociation,
+    UserHouseholdAssociationCreate,
+    UserHouseholdAssociationRead,
+    UserHouseholdAssociationUpdate,
+)
 from .variable import Variable, VariableCreate, VariableRead
 
 __all__ = [
@@ -114,6 +120,10 @@ __all__ = [
     "TaxBenefitModelVersionRead",
     "User",
     "UserCreate",
+    "UserHouseholdAssociation",
+    "UserHouseholdAssociationCreate",
+    "UserHouseholdAssociationRead",
+    "UserHouseholdAssociationUpdate",
     "UserRead",
     "Variable",
     "VariableCreate",
