@@ -9,6 +9,7 @@ from . import (
     datasets,
     dynamics,
     household,
+    households,
     outputs,
     parameter_values,
     parameters,
@@ -33,6 +34,7 @@ api_router.include_router(tax_benefit_models.router)
 api_router.include_router(tax_benefit_model_versions.router)
 api_router.include_router(change_aggregates.router)
 api_router.include_router(household.router)
+api_router.include_router(households.router)
 api_router.include_router(analysis.router)
 api_router.include_router(agent.router)
 

@@ -11,6 +11,7 @@ from .dataset import Dataset, DatasetCreate, DatasetRead
 from .dataset_version import DatasetVersion, DatasetVersionCreate, DatasetVersionRead
 from .decile_impact import DecileImpact, DecileImpactCreate, DecileImpactRead
 from .dynamic import Dynamic, DynamicCreate, DynamicRead
+from .household import Household, HouseholdCreate, HouseholdRead
 from .household_job import (
     HouseholdJob,
     HouseholdJobCreate,
@@ -72,6 +73,9 @@ __all__ = [
     "Dynamic",
     "DynamicCreate",
     "DynamicRead",
+    "Household",
+    "HouseholdCreate",
+    "HouseholdRead",
     "HouseholdJob",
     "HouseholdJobCreate",
     "HouseholdJobRead",
