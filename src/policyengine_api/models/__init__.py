@@ -36,7 +36,13 @@ from .program_statistics import (
     ProgramStatisticsRead,
 )
 from .report import Report, ReportCreate, ReportRead, ReportStatus
-from .simulation import Simulation, SimulationCreate, SimulationRead, SimulationStatus
+from .simulation import (
+    Simulation,
+    SimulationCreate,
+    SimulationRead,
+    SimulationStatus,
+    SimulationType,
+)
 from .tax_benefit_model import (
     TaxBenefitModel,
     TaxBenefitModelCreate,
@@ -112,6 +118,7 @@ __all__ = [
     "SimulationCreate",
     "SimulationRead",
     "SimulationStatus",
+    "SimulationType",
     "TaxBenefitModel",
     "TaxBenefitModelCreate",
     "TaxBenefitModelRead",
