@@ -1,7 +1,5 @@
 """Pytest fixtures for tests."""
 
-from uuid import uuid4
-
 import pytest
 from fastapi.testclient import TestClient
 from fastapi_cache import FastAPICache
