@@ -109,8 +109,8 @@ def test_create_user_policy_policy_not_found(client, session):
     assert response.json()["detail"] == "Policy not found"
 
 
-def test_create_user_policy_duplicate(client, session, tax_benefit_model):
-    """Creating duplicate user-policy association returns 409."""
+def test_create_user_policy_duplicate_allowed(client, session, tax_benefit_model):
+    """Creating duplicate user-policy association is allowed (matches FE localStorage behavior)."""
     user = User(first_name="Test", last_name="User", email="test@example.com")
     policy = Policy(
         name="Test policy",
@@ -131,7 +131,7 @@ def test_create_user_policy_duplicate(client, session, tax_benefit_model):
     session.add(user_policy)
     session.commit()
 
-    # Try to create duplicate
+    # Create duplicate - should succeed with a new ID
     response = client.post(
         "/user-policies",
         json={
@@ -139,11 +139,16 @@ def test_create_user_policy_duplicate(client, session, tax_benefit_model):
             "policy_id": str(policy.id),
         },
     )
-    assert response.status_code == 409
-    assert "already has an association" in response.json()["detail"]
+    assert response.status_code == 200
+    data = response.json()
+    assert data["id"] != str(user_policy.id)  # New association created
+    assert data["user_id"] == str(user.id)
+    assert data["policy_id"] == str(policy.id)
 
 
-def test_list_user_policies_with_data(client, session, tax_benefit_model, uk_tax_benefit_model):
+def test_list_user_policies_with_data(
+    client, session, tax_benefit_model, uk_tax_benefit_model
+):
     """List user policies returns all associations for a user."""
     user = User(first_name="Test", last_name="User", email="test@example.com")
     policy1 = Policy(

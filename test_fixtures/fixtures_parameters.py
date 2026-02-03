@@ -54,9 +54,15 @@ def create_parameter(session, model_version, name: str, label: str) -> Parameter
     return param
 
 
-def create_policy(session, name: str, description: str = "A test policy") -> Policy:
+def create_policy(
+    session, name: str, model_version, description: str = "A test policy"
+) -> Policy:
     """Create and persist a Policy."""
-    policy = Policy(name=name, description=description)
+    policy = Policy(
+        name=name,
+        description=description,
+        tax_benefit_model_id=model_version.model_id,
+    )
     session.add(policy)
     session.commit()
     session.refresh(policy)

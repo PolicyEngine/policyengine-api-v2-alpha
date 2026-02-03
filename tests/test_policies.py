@@ -2,7 +2,7 @@
 
 from uuid import uuid4
 
-from policyengine_api.models import Policy, TaxBenefitModel
+from policyengine_api.models import Policy
 
 
 def test_list_policies_empty(client):
