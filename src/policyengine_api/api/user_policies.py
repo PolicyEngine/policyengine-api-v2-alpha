@@ -32,7 +32,8 @@ def create_user_policy(
     """Create a new user-policy association.
 
     Associates a user with a policy, allowing them to save it to their list.
-    A user can only have one association per policy (duplicates are rejected).
+    Duplicates are allowed - users can save the same policy multiple times
+    with different labels (matching FE localStorage behavior).
     """
     # Validate user exists
     user = session.get(User, user_policy.user_id)
@@ -44,20 +45,7 @@ def create_user_policy(
     if not policy:
         raise HTTPException(status_code=404, detail="Policy not found")
 
-    # Check for duplicate (same user_id + policy_id)
-    existing = session.exec(
-        select(UserPolicy).where(
-            UserPolicy.user_id == user_policy.user_id,
-            UserPolicy.policy_id == user_policy.policy_id,
-        )
-    ).first()
-    if existing:
-        raise HTTPException(
-            status_code=409,
-            detail="User already has an association with this policy",
-        )
-
-    # Create the association
+    # Create the association (duplicates allowed)
     db_user_policy = UserPolicy.model_validate(user_policy)
     session.add(db_user_policy)
     session.commit()
