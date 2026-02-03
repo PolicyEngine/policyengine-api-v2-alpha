@@ -19,6 +19,7 @@ class ReportBase(SQLModel):
 
     label: str
     description: str | None = None
+    report_type: str | None = None
     user_id: UUID | None = Field(default=None, foreign_key="users.id")
     markdown: str | None = Field(default=None, sa_column=Column(Text))
     parent_report_id: UUID | None = Field(default=None, foreign_key="reports.id")
