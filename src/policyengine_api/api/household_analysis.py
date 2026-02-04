@@ -6,11 +6,11 @@ Supports single runs (current law) and comparisons (baseline vs reform).
 WORKFLOW:
 1. Create a stored household: POST /households
 2. Optionally create a reform policy: POST /policies
-3. Run analysis: POST /analysis/household-impact
-4. Results are synchronous - the response includes computed values
+3. Run analysis: POST /analysis/household-impact (returns report_id)
+4. Poll GET /analysis/household-impact/{report_id} until status="completed"
+5. Results include baseline_result, reform_result (if comparison), and impact diff
 """
 
-from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Protocol
@@ -18,6 +18,7 @@ from uuid import UUID
 
 import logfire
 from fastapi import APIRouter, Depends, HTTPException
+from opentelemetry.trace.propagation.tracecontext import TraceContextTextMapPropagator
 from pydantic import BaseModel, Field
 from sqlmodel import Session
 
@@ -37,6 +38,14 @@ from .analysis import (
     _get_or_create_report,
     _get_or_create_simulation,
 )
+
+
+def get_traceparent() -> str | None:
+    """Get the current W3C traceparent header for distributed tracing."""
+    carrier: dict[str, str] = {}
+    TraceContextTextMapPropagator().inject(carrier)
+    return carrier.get("traceparent")
+
 
 router = APIRouter(prefix="/analysis", tags=["analysis"])
 
@@ -61,7 +70,14 @@ UK_CONFIG = CountryConfig(
 
 US_CONFIG = CountryConfig(
     name="us",
-    entity_types=("person", "tax_unit", "spm_unit", "family", "marital_unit", "household"),
+    entity_types=(
+        "person",
+        "tax_unit",
+        "spm_unit",
+        "family",
+        "marital_unit",
+        "household",
+    ),
 )
 
 
@@ -326,68 +342,109 @@ def _load_policy_data(policy_id: UUID | None, session: Session) -> dict | None:
 
 
 # =============================================================================
-# Report Orchestration
+# Report Orchestration (Async)
 # =============================================================================
 
 
-def trigger_household_report(report_id: UUID, session: Session) -> None:
-    """Trigger household simulation(s) for a report."""
-    report = _load_report(report_id, session)
-    _mark_report_running(report, session)
+def _run_local_household_impact(report_id: str, session: Session) -> None:
+    """Run household impact analysis locally.
+
+    NOTE: This runs synchronously and blocks the HTTP request when running
+    locally (agent_use_modal=False). This mirrors the economic impact behavior.
+    True async execution requires Modal.
+    """
+    report = session.get(Report, report_id)
+    if not report:
+        return
+
+    report.status = ReportStatus.RUNNING
+    session.add(report)
+    session.commit()
 
     try:
-        _run_report_simulations(report, session)
-        _mark_report_completed(report, session)
+        # Run baseline simulation
+        if report.baseline_simulation_id:
+            _run_simulation_in_session(report.baseline_simulation_id, session)
+
+        # Run reform simulation if present
+        if report.reform_simulation_id:
+            _run_simulation_in_session(report.reform_simulation_id, session)
+
+        report.status = ReportStatus.COMPLETED
+        session.add(report)
+        session.commit()
     except Exception as e:
-        _mark_report_failed(report, e, session)
+        report.status = ReportStatus.FAILED
+        report.error_message = str(e)
+        session.add(report)
+        session.commit()
 
 
+def _run_simulation_in_session(simulation_id: UUID, session: Session) -> None:
+    """Run a single household simulation within an existing session."""
+    simulation = session.get(Simulation, simulation_id)
+    if not simulation or simulation.status != SimulationStatus.PENDING:
+        return
+
+    household = session.get(Household, simulation.household_id)
+    if not household:
+        raise ValueError(f"Household {simulation.household_id} not found")
+
+    policy_data = _load_policy_data(simulation.policy_id, session)
+
+    simulation.status = SimulationStatus.RUNNING
+    simulation.started_at = datetime.now(timezone.utc)
+    session.add(simulation)
+    session.commit()
+
+    try:
+        calculator = get_calculator(household.tax_benefit_model_name)
+        result = calculator(household.household_data, household.year, policy_data)
+
+        simulation.household_result = result
+        simulation.status = SimulationStatus.COMPLETED
+        simulation.completed_at = datetime.now(timezone.utc)
+        session.add(simulation)
+        session.commit()
+    except Exception as e:
+        simulation.status = SimulationStatus.FAILED
+        simulation.error_message = str(e)
+        simulation.completed_at = datetime.now(timezone.utc)
+        session.add(simulation)
+        session.commit()
+        raise
+
+
+def _trigger_household_impact(
+    report_id: str, tax_benefit_model_name: str, session: Session | None = None
+) -> None:
+    """Trigger household impact calculation (local or Modal based on settings)."""
+    from policyengine_api.config import settings
+
+    traceparent = get_traceparent()
+
+    if not settings.agent_use_modal and session is not None:
+        # Run locally (blocking - see _run_local_household_impact docstring)
+        _run_local_household_impact(report_id, session)
+    else:
+        # Use Modal
+        import modal
+
+        if tax_benefit_model_name == "policyengine_uk":
+            fn = modal.Function.from_name("policyengine", "household_impact_uk")
+        else:
+            fn = modal.Function.from_name("policyengine", "household_impact_us")
+
+        fn.spawn(report_id=report_id, traceparent=traceparent)
+
+
+# Legacy functions kept for compatibility
 def _load_report(report_id: UUID, session: Session) -> Report:
     """Load report or raise error."""
     report = session.get(Report, report_id)
     if not report:
         raise ValueError(f"Report {report_id} not found")
     return report
-
-
-def _mark_report_running(report: Report, session: Session) -> None:
-    """Mark report as running."""
-    report.status = ReportStatus.RUNNING
-    session.add(report)
-    session.commit()
-
-
-def _mark_report_completed(report: Report, session: Session) -> None:
-    """Mark report as completed."""
-    report.status = ReportStatus.COMPLETED
-    session.add(report)
-    session.commit()
-
-
-def _mark_report_failed(report: Report, error: Exception, session: Session) -> None:
-    """Mark report as failed."""
-    report.status = ReportStatus.FAILED
-    report.error_message = str(error)
-    session.add(report)
-    session.commit()
-
-
-def _run_report_simulations(report: Report, session: Session) -> None:
-    """Run all pending simulations for a report."""
-    _run_simulation_if_pending(report.baseline_simulation_id, session)
-
-    if report.reform_simulation_id:
-        _run_simulation_if_pending(report.reform_simulation_id, session)
-
-
-def _run_simulation_if_pending(simulation_id: UUID | None, session: Session) -> None:
-    """Run simulation if it exists and is pending."""
-    if not simulation_id:
-        return
-
-    simulation = session.get(Simulation, simulation_id)
-    if simulation and simulation.status == SimulationStatus.PENDING:
-        run_household_simulation(simulation.id, session)
 
 
 # =============================================================================
@@ -436,7 +493,9 @@ class HouseholdImpactResponse(BaseModel):
 # =============================================================================
 
 
-def build_simulation_info(simulation: Simulation | None) -> HouseholdSimulationInfo | None:
+def build_simulation_info(
+    simulation: Simulation | None,
+) -> HouseholdSimulationInfo | None:
     """Build simulation info from a simulation."""
     if not simulation:
         return None
@@ -540,7 +599,9 @@ def household_impact(
     If policy_id is None: single run under current law.
     If policy_id is set: comparison (baseline vs reform).
 
-    This is a synchronous operation for household calculations.
+    This is an async operation. The endpoint returns immediately with a report_id
+    and status="pending". Poll GET /analysis/household-impact/{report_id} until
+    status="completed" to get results.
     """
     household = validate_household_exists(request.household_id, session)
     validate_policy_exists(request.policy_id, session)
@@ -564,8 +625,10 @@ def household_impact(
     )
 
     if report.status == ReportStatus.PENDING:
-        with logfire.span("trigger_household_report", job_id=str(report.id)):
-            trigger_household_report(report.id, session)
+        with logfire.span("trigger_household_impact", job_id=str(report.id)):
+            _trigger_household_impact(
+                str(report.id), household.tax_benefit_model_name, session
+            )
 
     return build_household_response(report, baseline_sim, reform_sim, session)
 
