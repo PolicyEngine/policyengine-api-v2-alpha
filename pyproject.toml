@@ -24,6 +24,7 @@ dependencies = [
     "fastapi-mcp>=0.4.0",
     "modal>=0.68.0",
     "anthropic>=0.40.0",
+    "alembic>=1.13.0",
 ]
 
 [project.optional-dependencies]

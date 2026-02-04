@@ -75,7 +75,21 @@ Use `gh` CLI for GitHub operations to ensure Actions run correctly.
 
 ## Database
 
-`make init` resets tables and storage. `make seed` populates UK/US models with variables, parameters, and datasets.
+This project uses **Alembic** for database migrations. See `.claude/skills/database-migrations.md` for detailed guidelines.
+
+**Key rules:**
+- All schema changes go through Alembic migrations (never use `SQLModel.metadata.create_all()`)
+- After modifying a model: `uv run alembic revision --autogenerate -m "Description"`
+- Apply migrations: `uv run alembic upgrade head`
+
+**Local development:**
+```bash
+supabase start                    # Start local Supabase
+uv run python scripts/init.py     # Run migrations + apply RLS policies
+uv run python scripts/seed.py     # Seed data
+```
+
+`scripts/init.py --reset` drops and recreates everything (destructive).
 
 ## Modal sandbox + Claude Code CLI gotchas
 
