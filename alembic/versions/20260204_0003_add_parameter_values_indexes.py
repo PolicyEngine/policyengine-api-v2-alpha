@@ -1,7 +1,7 @@
 """Add parameter_values indexes
 
-Revision ID: a17ac554f4aa
-Revises: d6e30d3b834d
+Revision ID: 0003_param_idx
+Revises: 0002_household
 Create Date: 2026-02-04 02:20:00.000000
 
 This migration adds performance indexes to the parameter_values table
@@ -13,8 +13,8 @@ from typing import Sequence, Union
 from alembic import op
 
 # revision identifiers, used by Alembic.
-revision: str = "a17ac554f4aa"
-down_revision: Union[str, Sequence[str], None] = "d6e30d3b834d"
+revision: str = "0003_param_idx"
+down_revision: Union[str, Sequence[str], None] = "0002_household"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

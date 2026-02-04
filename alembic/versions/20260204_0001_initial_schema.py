@@ -1,11 +1,11 @@
-"""Initial schema
+"""Initial schema (main branch state)
 
-Revision ID: d6e30d3b834d
+Revision ID: 0001_initial
 Revises:
-Create Date: 2026-02-04 02:15:03.471607
+Create Date: 2026-02-04
 
-This migration creates all base tables for the PolicyEngine API.
-Tables are organized by dependency tier to ensure proper creation order.
+This migration creates all base tables for the PolicyEngine API as they
+exist on the main branch, BEFORE the household CRUD changes.
 """
 
 from typing import Sequence, Union
@@ -14,14 +14,14 @@ import sqlalchemy as sa
 from alembic import op
 
 # revision identifiers, used by Alembic.
-revision: str = "d6e30d3b834d"
+revision: str = "0001_initial"
 down_revision: Union[str, Sequence[str], None] = None
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    """Create all tables."""
+    """Create all tables as they exist on main branch."""
     # ========================================================================
     # TIER 1: Tables with no foreign key dependencies
     # ========================================================================
@@ -215,33 +215,6 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(["tax_benefit_model_id"], ["tax_benefit_models.id"]),
     )
 
-    # Households (stored household definitions)
-    op.create_table(
-        "households",
-        sa.Column("id", sa.Uuid(), nullable=False),
-        sa.Column("tax_benefit_model_name", sa.String(), nullable=False),
-        sa.Column("year", sa.Integer(), nullable=False),
-        sa.Column("label", sa.String(), nullable=True),
-        sa.Column("household_data", sa.JSON(), nullable=False),
-        sa.Column(
-            "created_at",
-            sa.DateTime(timezone=True),
-            server_default=sa.func.now(),
-            nullable=False,
-        ),
-        sa.Column(
-            "updated_at",
-            sa.DateTime(timezone=True),
-            server_default=sa.func.now(),
-            nullable=False,
-        ),
-        sa.PrimaryKeyConstraint("id"),
-    )
-    op.create_index(
-        "idx_households_model_name", "households", ["tax_benefit_model_name"]
-    )
-    op.create_index("idx_households_year", "households", ["year"])
-
     # ========================================================================
     # TIER 4: Tables depending on tier 3
     # ========================================================================
@@ -268,13 +241,11 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(["dynamic_id"], ["dynamics.id"]),
     )
 
-    # Simulations (economy or household calculations)
+    # Simulations (economy calculations) - NOTE: No household support yet
     op.create_table(
         "simulations",
         sa.Column("id", sa.Uuid(), nullable=False),
-        sa.Column("simulation_type", sa.String(), nullable=False, default="economy"),
-        sa.Column("dataset_id", sa.Uuid(), nullable=True),
-        sa.Column("household_id", sa.Uuid(), nullable=True),
+        sa.Column("dataset_id", sa.Uuid(), nullable=False),  # Required in main
         sa.Column("policy_id", sa.Uuid(), nullable=True),
         sa.Column("dynamic_id", sa.Uuid(), nullable=True),
         sa.Column("tax_benefit_model_version_id", sa.Uuid(), nullable=False),
@@ -295,10 +266,8 @@ def upgrade() -> None:
         ),
         sa.Column("started_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("completed_at", sa.DateTime(timezone=True), nullable=True),
-        sa.Column("household_result", sa.JSON(), nullable=True),
         sa.PrimaryKeyConstraint("id"),
         sa.ForeignKeyConstraint(["dataset_id"], ["datasets.id"]),
-        sa.ForeignKeyConstraint(["household_id"], ["households.id"]),
         sa.ForeignKeyConstraint(["policy_id"], ["policies.id"]),
         sa.ForeignKeyConstraint(["dynamic_id"], ["dynamics.id"]),
         sa.ForeignKeyConstraint(
@@ -307,31 +276,7 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(["output_dataset_id"], ["datasets.id"]),
     )
 
-    # User-household associations
-    op.create_table(
-        "user_household_associations",
-        sa.Column("id", sa.Uuid(), nullable=False),
-        sa.Column("user_id", sa.Uuid(), nullable=False),
-        sa.Column("household_id", sa.Uuid(), nullable=False),
-        sa.Column(
-            "created_at",
-            sa.DateTime(timezone=True),
-            server_default=sa.func.now(),
-            nullable=False,
-        ),
-        sa.PrimaryKeyConstraint("id"),
-        sa.ForeignKeyConstraint(["user_id"], ["users.id"], ondelete="CASCADE"),
-        sa.ForeignKeyConstraint(["household_id"], ["households.id"], ondelete="CASCADE"),
-        sa.UniqueConstraint("user_id", "household_id"),
-    )
-    op.create_index(
-        "idx_user_household_user", "user_household_associations", ["user_id"]
-    )
-    op.create_index(
-        "idx_user_household_household", "user_household_associations", ["household_id"]
-    )
-
-    # Household jobs (async household calculations)
+    # Household jobs (async household calculations) - legacy approach
     op.create_table(
         "household_jobs",
         sa.Column("id", sa.Uuid(), nullable=False),
@@ -359,13 +304,12 @@ def upgrade() -> None:
     # TIER 5: Tables depending on simulations
     # ========================================================================
 
-    # Reports (analysis reports)
+    # Reports (analysis reports) - NOTE: No report_type yet
     op.create_table(
         "reports",
         sa.Column("id", sa.Uuid(), nullable=False),
         sa.Column("label", sa.String(), nullable=False),
         sa.Column("description", sa.String(), nullable=True),
-        sa.Column("report_type", sa.String(), nullable=True),
         sa.Column("user_id", sa.Uuid(), nullable=True),
         sa.Column("markdown", sa.Text(), nullable=True),
         sa.Column("parent_report_id", sa.Uuid(), nullable=True),
@@ -573,16 +517,10 @@ def downgrade() -> None:
 
     # Tier 4
     op.drop_table("household_jobs")
-    op.drop_index("idx_user_household_household", "user_household_associations")
-    op.drop_index("idx_user_household_user", "user_household_associations")
-    op.drop_table("user_household_associations")
     op.drop_table("simulations")
     op.drop_table("parameter_values")
 
     # Tier 3
-    op.drop_index("idx_households_year", "households")
-    op.drop_index("idx_households_model_name", "households")
-    op.drop_table("households")
     op.drop_table("dataset_versions")
     op.drop_table("variables")
     op.drop_table("parameters")
