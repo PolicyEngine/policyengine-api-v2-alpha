@@ -7,7 +7,8 @@ imports happen at image build time, not runtime.
 Function naming follows the API hierarchy:
 - simulate_household_*: Single household calculation (/simulate/household)
 - simulate_economy_*: Single economy simulation (/simulate/economy)
-- economy_comparison_*: Full economy comparison analysis (/analysis/compare/economy)
+- economy_comparison_*: Full economy comparison analysis (/analysis/economic-impact)
+- household_impact_*: Household impact analysis (/analysis/household-impact)
 
 Deploy with: modal deploy src/policyengine_api/modal_app.py
 """
@@ -2516,3 +2517,689 @@ def compute_change_aggregate_us(
                 raise
     finally:
         logfire.force_flush()
+
+
+# =============================================================================
+# Household Impact Functions
+# =============================================================================
+
+
+@app.function(
+    image=uk_image,
+    secrets=[db_secrets, logfire_secrets],
+    memory=2048,
+    cpu=2,
+    timeout=300,
+)
+def household_impact_uk(report_id: str, traceparent: str | None = None) -> None:
+    """Run UK household impact analysis and write results to database."""
+    import logfire
+
+    configure_logfire("policyengine-modal-uk", traceparent)
+
+    try:
+        with logfire.span("household_impact_uk", report_id=report_id):
+            from datetime import datetime, timezone
+            from uuid import UUID
+
+            from sqlmodel import Session, create_engine
+
+            database_url = get_database_url()
+            engine = create_engine(database_url)
+
+            try:
+                from policyengine_api.models import (
+                    Household,
+                    Report,
+                    ReportStatus,
+                    Simulation,
+                    SimulationStatus,
+                )
+
+                with Session(engine) as session:
+                    # Load report
+                    report = session.get(Report, UUID(report_id))
+                    if not report:
+                        raise ValueError(f"Report {report_id} not found")
+
+                    # Mark as running
+                    report.status = ReportStatus.RUNNING
+                    session.add(report)
+                    session.commit()
+
+                    # Run baseline simulation
+                    if report.baseline_simulation_id:
+                        _run_household_simulation_uk(
+                            report.baseline_simulation_id, session
+                        )
+
+                    # Run reform simulation if present
+                    if report.reform_simulation_id:
+                        _run_household_simulation_uk(
+                            report.reform_simulation_id, session
+                        )
+
+                    # Mark report as completed
+                    report.status = ReportStatus.COMPLETED
+                    session.add(report)
+                    session.commit()
+
+            except Exception as e:
+                logfire.error(
+                    "UK household impact failed", report_id=report_id, error=str(e)
+                )
+                try:
+                    from sqlmodel import text
+
+                    with Session(engine) as session:
+                        session.execute(
+                            text(
+                                "UPDATE reports SET status = 'FAILED', error_message = :error "
+                                "WHERE id = :report_id"
+                            ),
+                            {"report_id": report_id, "error": str(e)[:1000]},
+                        )
+                        session.commit()
+                except Exception as db_error:
+                    logfire.error("Failed to update DB", error=str(db_error))
+                raise
+    finally:
+        logfire.force_flush()
+
+
+def _run_household_simulation_uk(simulation_id, session) -> None:
+    """Run a single UK household simulation."""
+    from datetime import datetime, timezone
+
+    from policyengine_api.models import (
+        Household,
+        Simulation,
+        SimulationStatus,
+    )
+
+    simulation = session.get(Simulation, simulation_id)
+    if not simulation or simulation.status != SimulationStatus.PENDING:
+        return
+
+    household = session.get(Household, simulation.household_id)
+    if not household:
+        raise ValueError(f"Household {simulation.household_id} not found")
+
+    # Mark as running
+    simulation.status = SimulationStatus.RUNNING
+    simulation.started_at = datetime.now(timezone.utc)
+    session.add(simulation)
+    session.commit()
+
+    try:
+        # Get policy data if present
+        policy_data = _get_household_policy_data(simulation.policy_id, session)
+
+        # Run calculation
+        result = _calculate_uk_household(
+            household.household_data,
+            household.year,
+            policy_data,
+        )
+
+        # Store result
+        simulation.household_result = result
+        simulation.status = SimulationStatus.COMPLETED
+        simulation.completed_at = datetime.now(timezone.utc)
+        session.add(simulation)
+        session.commit()
+    except Exception as e:
+        simulation.status = SimulationStatus.FAILED
+        simulation.error_message = str(e)
+        simulation.completed_at = datetime.now(timezone.utc)
+        session.add(simulation)
+        session.commit()
+        raise
+
+
+def _calculate_uk_household(
+    household_data: dict, year: int, policy_data: dict | None
+) -> dict:
+    """Calculate UK household and return result dict."""
+    import tempfile
+    from pathlib import Path
+
+    import pandas as pd
+    from microdf import MicroDataFrame
+    from policyengine.core import Simulation
+    from policyengine.tax_benefit_models.uk import uk_latest
+    from policyengine.tax_benefit_models.uk.datasets import (
+        PolicyEngineUKDataset,
+        UKYearData,
+    )
+
+    people = household_data.get("people", [])
+    benunit = household_data.get("benunit", [])
+    hh = household_data.get("household", [])
+
+    # Ensure lists
+    if isinstance(benunit, dict):
+        benunit = [benunit]
+    if isinstance(hh, dict):
+        hh = [hh]
+
+    n_people = len(people)
+    n_benunits = max(1, len(benunit) if benunit else 1)
+    n_households = max(1, len(hh) if hh else 1)
+
+    # Build person data
+    person_data = {
+        "person_id": list(range(n_people)),
+        "person_benunit_id": [0] * n_people,
+        "person_household_id": [0] * n_people,
+        "person_weight": [1.0] * n_people,
+    }
+    for i, person in enumerate(people):
+        for key, value in person.items():
+            if key not in person_data:
+                person_data[key] = [0.0] * n_people
+            person_data[key][i] = value
+
+    # Build benunit data
+    benunit_data = {
+        "benunit_id": list(range(n_benunits)),
+        "benunit_weight": [1.0] * n_benunits,
+    }
+    for i, bu in enumerate(benunit if benunit else [{}]):
+        for key, value in bu.items():
+            if key not in benunit_data:
+                benunit_data[key] = [0.0] * n_benunits
+            benunit_data[key][i] = value
+
+    # Build household data
+    household_df_data = {
+        "household_id": list(range(n_households)),
+        "household_weight": [1.0] * n_households,
+        "region": ["LONDON"] * n_households,
+        "tenure_type": ["RENT_PRIVATELY"] * n_households,
+        "council_tax": [0.0] * n_households,
+        "rent": [0.0] * n_households,
+    }
+    for i, h in enumerate(hh if hh else [{}]):
+        for key, value in h.items():
+            if key not in household_df_data:
+                household_df_data[key] = [0.0] * n_households
+            household_df_data[key][i] = value
+
+    # Create MicroDataFrames
+    person_df = MicroDataFrame(pd.DataFrame(person_data), weights="person_weight")
+    benunit_df = MicroDataFrame(pd.DataFrame(benunit_data), weights="benunit_weight")
+    household_df = MicroDataFrame(
+        pd.DataFrame(household_df_data), weights="household_weight"
+    )
+
+    # Create temporary dataset
+    tmpdir = tempfile.mkdtemp()
+    filepath = str(Path(tmpdir) / "household_calc.h5")
+
+    dataset = PolicyEngineUKDataset(
+        name="Household calculation",
+        description="Household(s) for calculation",
+        person=person_df,
+        benunit=benunit_df,
+        household=household_df,
+        filepath=filepath,
+        year_data_class=UKYearData,
+    )
+    dataset.save()
+
+    # Build policy if provided
+    policy = None
+    if policy_data:
+        from policyengine.core.policy import ParameterValue, Policy
+
+        pe_param_values = []
+        param_lookup = {p.name: p for p in uk_latest.parameters}
+        for pv in policy_data.get("parameter_values", []):
+            param_name = pv.get("parameter_name")
+            if param_name and param_name in param_lookup:
+                pe_pv = ParameterValue(
+                    parameter=param_lookup[param_name],
+                    value=pv.get("value"),
+                    start_date=pv.get("start_date"),
+                    end_date=pv.get("end_date"),
+                )
+                pe_param_values.append(pe_pv)
+
+        if pe_param_values:
+            policy = Policy(
+                name=policy_data.get("name", "Reform"),
+                description=policy_data.get("description", ""),
+                parameter_values=pe_param_values,
+            )
+
+    # Run simulation
+    sim = Simulation(
+        dataset=dataset,
+        tax_benefit_model_version=uk_latest,
+        policy=policy,
+    )
+    sim.ensure()
+
+    # Extract results
+    result = {"person": [], "benunit": [], "household": []}
+
+    for i in range(n_people):
+        person_result = {}
+        for var in sim.output_dataset.person.columns:
+            val = sim.output_dataset.person[var].iloc[i]
+            person_result[var] = float(val) if hasattr(val, "item") else val
+        result["person"].append(person_result)
+
+    for i in range(n_benunits):
+        benunit_result = {}
+        for var in sim.output_dataset.benunit.columns:
+            val = sim.output_dataset.benunit[var].iloc[i]
+            benunit_result[var] = float(val) if hasattr(val, "item") else val
+        result["benunit"].append(benunit_result)
+
+    for i in range(n_households):
+        household_result = {}
+        for var in sim.output_dataset.household.columns:
+            val = sim.output_dataset.household[var].iloc[i]
+            household_result[var] = float(val) if hasattr(val, "item") else val
+        result["household"].append(household_result)
+
+    return result
+
+
+@app.function(
+    image=us_image,
+    secrets=[db_secrets, logfire_secrets],
+    memory=2048,
+    cpu=2,
+    timeout=300,
+)
+def household_impact_us(report_id: str, traceparent: str | None = None) -> None:
+    """Run US household impact analysis and write results to database."""
+    import logfire
+
+    configure_logfire("policyengine-modal-us", traceparent)
+
+    try:
+        with logfire.span("household_impact_us", report_id=report_id):
+            from datetime import datetime, timezone
+            from uuid import UUID
+
+            from sqlmodel import Session, create_engine
+
+            database_url = get_database_url()
+            engine = create_engine(database_url)
+
+            try:
+                from policyengine_api.models import (
+                    Household,
+                    Report,
+                    ReportStatus,
+                    Simulation,
+                    SimulationStatus,
+                )
+
+                with Session(engine) as session:
+                    # Load report
+                    report = session.get(Report, UUID(report_id))
+                    if not report:
+                        raise ValueError(f"Report {report_id} not found")
+
+                    # Mark as running
+                    report.status = ReportStatus.RUNNING
+                    session.add(report)
+                    session.commit()
+
+                    # Run baseline simulation
+                    if report.baseline_simulation_id:
+                        _run_household_simulation_us(
+                            report.baseline_simulation_id, session
+                        )
+
+                    # Run reform simulation if present
+                    if report.reform_simulation_id:
+                        _run_household_simulation_us(
+                            report.reform_simulation_id, session
+                        )
+
+                    # Mark report as completed
+                    report.status = ReportStatus.COMPLETED
+                    session.add(report)
+                    session.commit()
+
+            except Exception as e:
+                logfire.error(
+                    "US household impact failed", report_id=report_id, error=str(e)
+                )
+                try:
+                    from sqlmodel import text
+
+                    with Session(engine) as session:
+                        session.execute(
+                            text(
+                                "UPDATE reports SET status = 'FAILED', error_message = :error "
+                                "WHERE id = :report_id"
+                            ),
+                            {"report_id": report_id, "error": str(e)[:1000]},
+                        )
+                        session.commit()
+                except Exception as db_error:
+                    logfire.error("Failed to update DB", error=str(db_error))
+                raise
+    finally:
+        logfire.force_flush()
+
+
+def _run_household_simulation_us(simulation_id, session) -> None:
+    """Run a single US household simulation."""
+    from datetime import datetime, timezone
+
+    from policyengine_api.models import (
+        Household,
+        Simulation,
+        SimulationStatus,
+    )
+
+    simulation = session.get(Simulation, simulation_id)
+    if not simulation or simulation.status != SimulationStatus.PENDING:
+        return
+
+    household = session.get(Household, simulation.household_id)
+    if not household:
+        raise ValueError(f"Household {simulation.household_id} not found")
+
+    # Mark as running
+    simulation.status = SimulationStatus.RUNNING
+    simulation.started_at = datetime.now(timezone.utc)
+    session.add(simulation)
+    session.commit()
+
+    try:
+        # Get policy data if present
+        policy_data = _get_household_policy_data(simulation.policy_id, session)
+
+        # Run calculation
+        result = _calculate_us_household(
+            household.household_data,
+            household.year,
+            policy_data,
+        )
+
+        # Store result
+        simulation.household_result = result
+        simulation.status = SimulationStatus.COMPLETED
+        simulation.completed_at = datetime.now(timezone.utc)
+        session.add(simulation)
+        session.commit()
+    except Exception as e:
+        simulation.status = SimulationStatus.FAILED
+        simulation.error_message = str(e)
+        simulation.completed_at = datetime.now(timezone.utc)
+        session.add(simulation)
+        session.commit()
+        raise
+
+
+def _calculate_us_household(
+    household_data: dict, year: int, policy_data: dict | None
+) -> dict:
+    """Calculate US household and return result dict."""
+    import tempfile
+    from pathlib import Path
+
+    import pandas as pd
+    from microdf import MicroDataFrame
+    from policyengine.core import Simulation
+    from policyengine.tax_benefit_models.us import us_latest
+    from policyengine.tax_benefit_models.us.datasets import (
+        PolicyEngineUSDataset,
+        USYearData,
+    )
+
+    people = household_data.get("people", [])
+    tax_unit = household_data.get("tax_unit", [])
+    family = household_data.get("family", [])
+    spm_unit = household_data.get("spm_unit", [])
+    marital_unit = household_data.get("marital_unit", [])
+    hh = household_data.get("household", [])
+
+    # Ensure lists
+    if isinstance(tax_unit, dict):
+        tax_unit = [tax_unit]
+    if isinstance(family, dict):
+        family = [family]
+    if isinstance(spm_unit, dict):
+        spm_unit = [spm_unit]
+    if isinstance(marital_unit, dict):
+        marital_unit = [marital_unit]
+    if isinstance(hh, dict):
+        hh = [hh]
+
+    n_people = len(people)
+    n_tax_units = max(1, len(tax_unit) if tax_unit else 1)
+    n_families = max(1, len(family) if family else 1)
+    n_spm_units = max(1, len(spm_unit) if spm_unit else 1)
+    n_marital_units = max(1, len(marital_unit) if marital_unit else 1)
+    n_households = max(1, len(hh) if hh else 1)
+
+    # Build person data
+    person_data = {
+        "person_id": list(range(n_people)),
+        "person_tax_unit_id": [0] * n_people,
+        "person_family_id": [0] * n_people,
+        "person_spm_unit_id": [0] * n_people,
+        "person_marital_unit_id": [0] * n_people,
+        "person_household_id": [0] * n_people,
+        "person_weight": [1.0] * n_people,
+    }
+    for i, person in enumerate(people):
+        for key, value in person.items():
+            if key not in person_data:
+                person_data[key] = [0.0] * n_people
+            person_data[key][i] = value
+
+    # Build tax_unit data
+    tax_unit_data = {
+        "tax_unit_id": list(range(n_tax_units)),
+        "tax_unit_weight": [1.0] * n_tax_units,
+    }
+    for i, tu in enumerate(tax_unit if tax_unit else [{}]):
+        for key, value in tu.items():
+            if key not in tax_unit_data:
+                tax_unit_data[key] = [0.0] * n_tax_units
+            tax_unit_data[key][i] = value
+
+    # Build family data
+    family_data = {
+        "family_id": list(range(n_families)),
+        "family_weight": [1.0] * n_families,
+    }
+    for i, fam in enumerate(family if family else [{}]):
+        for key, value in fam.items():
+            if key not in family_data:
+                family_data[key] = [0.0] * n_families
+            family_data[key][i] = value
+
+    # Build spm_unit data
+    spm_unit_data = {
+        "spm_unit_id": list(range(n_spm_units)),
+        "spm_unit_weight": [1.0] * n_spm_units,
+    }
+    for i, spm in enumerate(spm_unit if spm_unit else [{}]):
+        for key, value in spm.items():
+            if key not in spm_unit_data:
+                spm_unit_data[key] = [0.0] * n_spm_units
+            spm_unit_data[key][i] = value
+
+    # Build marital_unit data
+    marital_unit_data = {
+        "marital_unit_id": list(range(n_marital_units)),
+        "marital_unit_weight": [1.0] * n_marital_units,
+    }
+    for i, mu in enumerate(marital_unit if marital_unit else [{}]):
+        for key, value in mu.items():
+            if key not in marital_unit_data:
+                marital_unit_data[key] = [0.0] * n_marital_units
+            marital_unit_data[key][i] = value
+
+    # Build household data
+    household_df_data = {
+        "household_id": list(range(n_households)),
+        "household_weight": [1.0] * n_households,
+    }
+    for i, h in enumerate(hh if hh else [{}]):
+        for key, value in h.items():
+            if key not in household_df_data:
+                household_df_data[key] = [0.0] * n_households
+            household_df_data[key][i] = value
+
+    # Create MicroDataFrames
+    person_df = MicroDataFrame(pd.DataFrame(person_data), weights="person_weight")
+    tax_unit_df = MicroDataFrame(
+        pd.DataFrame(tax_unit_data), weights="tax_unit_weight"
+    )
+    family_df = MicroDataFrame(pd.DataFrame(family_data), weights="family_weight")
+    spm_unit_df = MicroDataFrame(
+        pd.DataFrame(spm_unit_data), weights="spm_unit_weight"
+    )
+    marital_unit_df = MicroDataFrame(
+        pd.DataFrame(marital_unit_data), weights="marital_unit_weight"
+    )
+    household_df = MicroDataFrame(
+        pd.DataFrame(household_df_data), weights="household_weight"
+    )
+
+    # Create temporary dataset
+    tmpdir = tempfile.mkdtemp()
+    filepath = str(Path(tmpdir) / "household_calc.h5")
+
+    dataset = PolicyEngineUSDataset(
+        name="Household calculation",
+        description="Household(s) for calculation",
+        person=person_df,
+        tax_unit=tax_unit_df,
+        family=family_df,
+        spm_unit=spm_unit_df,
+        marital_unit=marital_unit_df,
+        household=household_df,
+        filepath=filepath,
+        year_data_class=USYearData,
+    )
+    dataset.save()
+
+    # Build policy if provided
+    policy = None
+    if policy_data:
+        from policyengine.core.policy import ParameterValue, Policy
+
+        pe_param_values = []
+        param_lookup = {p.name: p for p in us_latest.parameters}
+        for pv in policy_data.get("parameter_values", []):
+            param_name = pv.get("parameter_name")
+            if param_name and param_name in param_lookup:
+                pe_pv = ParameterValue(
+                    parameter=param_lookup[param_name],
+                    value=pv.get("value"),
+                    start_date=pv.get("start_date"),
+                    end_date=pv.get("end_date"),
+                )
+                pe_param_values.append(pe_pv)
+
+        if pe_param_values:
+            policy = Policy(
+                name=policy_data.get("name", "Reform"),
+                description=policy_data.get("description", ""),
+                parameter_values=pe_param_values,
+            )
+
+    # Run simulation
+    sim = Simulation(
+        dataset=dataset,
+        tax_benefit_model_version=us_latest,
+        policy=policy,
+    )
+    sim.ensure()
+
+    # Extract results
+    result = {
+        "person": [],
+        "tax_unit": [],
+        "family": [],
+        "spm_unit": [],
+        "marital_unit": [],
+        "household": [],
+    }
+
+    for i in range(n_people):
+        person_result = {}
+        for var in sim.output_dataset.person.columns:
+            val = sim.output_dataset.person[var].iloc[i]
+            person_result[var] = float(val) if hasattr(val, "item") else val
+        result["person"].append(person_result)
+
+    for i in range(n_tax_units):
+        tu_result = {}
+        for var in sim.output_dataset.tax_unit.columns:
+            val = sim.output_dataset.tax_unit[var].iloc[i]
+            tu_result[var] = float(val) if hasattr(val, "item") else val
+        result["tax_unit"].append(tu_result)
+
+    for i in range(n_families):
+        fam_result = {}
+        for var in sim.output_dataset.family.columns:
+            val = sim.output_dataset.family[var].iloc[i]
+            fam_result[var] = float(val) if hasattr(val, "item") else val
+        result["family"].append(fam_result)
+
+    for i in range(n_spm_units):
+        spm_result = {}
+        for var in sim.output_dataset.spm_unit.columns:
+            val = sim.output_dataset.spm_unit[var].iloc[i]
+            spm_result[var] = float(val) if hasattr(val, "item") else val
+        result["spm_unit"].append(spm_result)
+
+    for i in range(n_marital_units):
+        mu_result = {}
+        for var in sim.output_dataset.marital_unit.columns:
+            val = sim.output_dataset.marital_unit[var].iloc[i]
+            mu_result[var] = float(val) if hasattr(val, "item") else val
+        result["marital_unit"].append(mu_result)
+
+    for i in range(n_households):
+        hh_result = {}
+        for var in sim.output_dataset.household.columns:
+            val = sim.output_dataset.household[var].iloc[i]
+            hh_result[var] = float(val) if hasattr(val, "item") else val
+        result["household"].append(hh_result)
+
+    return result
+
+
+def _get_household_policy_data(policy_id, session) -> dict | None:
+    """Get policy data for household calculation."""
+    if policy_id is None:
+        return None
+
+    from policyengine_api.models import Policy
+
+    db_policy = session.get(Policy, policy_id)
+    if not db_policy:
+        return None
+
+    return {
+        "name": db_policy.name,
+        "description": db_policy.description,
+        "parameter_values": [
+            {
+                "parameter_name": pv.parameter.name if pv.parameter else None,
+                "value": pv.value_json.get("value")
+                if isinstance(pv.value_json, dict)
+                else pv.value_json,
+                "start_date": pv.start_date.isoformat() if pv.start_date else None,
+                "end_date": pv.end_date.isoformat() if pv.end_date else None,
+            }
+            for pv in db_policy.parameter_values
+            if pv.parameter
+        ],
+    }

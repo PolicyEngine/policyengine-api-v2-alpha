@@ -363,7 +363,7 @@ def seed_model(model_version, session, lite: bool = False) -> TaxBenefitModelVer
         return db_version
 
 
-def seed_datasets(session, lite: bool = False):
+def seed_datasets(session, lite: bool = False, skip_uk_datasets: bool = False):
     """Seed datasets and upload to S3."""
     with logfire.span("seed_datasets"):
         mode_str = " (lite mode - 2026 only)" if lite else ""
@@ -383,60 +383,64 @@ def seed_datasets(session, lite: bool = False):
             )
             return
 
-        # UK datasets
-        console.print("  Creating UK datasets...")
         data_folder = str(Path(__file__).parent.parent / "data")
-        uk_datasets = ensure_uk_datasets(data_folder=data_folder)
 
-        # In lite mode, only upload FRS 2026
-        if lite:
-            uk_datasets = {
-                k: v for k, v in uk_datasets.items() if v.year == 2026 and "frs" in k
-            }
-            console.print(f"    Lite mode: filtered to {len(uk_datasets)} dataset(s)")
-
+        # UK datasets
         uk_created = 0
         uk_skipped = 0
 
-        with logfire.span("seed_uk_datasets", count=len(uk_datasets)):
-            with Progress(
-                SpinnerColumn(),
-                TextColumn("[progress.description]{task.description}"),
-                console=console,
-            ) as progress:
-                task = progress.add_task("UK datasets", total=len(uk_datasets))
-                for _, pe_dataset in uk_datasets.items():
-                    progress.update(task, description=f"UK: {pe_dataset.name}")
+        if skip_uk_datasets:
+            console.print("  [yellow]Skipping UK datasets (--skip-uk-datasets)[/yellow]")
+        else:
+            console.print("  Creating UK datasets...")
+            uk_datasets = ensure_uk_datasets(data_folder=data_folder)
 
-                    # Check if dataset already exists
-                    existing = session.exec(
-                        select(Dataset).where(Dataset.name == pe_dataset.name)
-                    ).first()
+            # In lite mode, only upload FRS 2026
+            if lite:
+                uk_datasets = {
+                    k: v for k, v in uk_datasets.items() if v.year == 2026 and "frs" in k
+                }
+                console.print(f"    Lite mode: filtered to {len(uk_datasets)} dataset(s)")
 
-                    if existing:
-                        uk_skipped += 1
+            with logfire.span("seed_uk_datasets", count=len(uk_datasets)):
+                with Progress(
+                    SpinnerColumn(),
+                    TextColumn("[progress.description]{task.description}"),
+                    console=console,
+                ) as progress:
+                    task = progress.add_task("UK datasets", total=len(uk_datasets))
+                    for _, pe_dataset in uk_datasets.items():
+                        progress.update(task, description=f"UK: {pe_dataset.name}")
+
+                        # Check if dataset already exists
+                        existing = session.exec(
+                            select(Dataset).where(Dataset.name == pe_dataset.name)
+                        ).first()
+
+                        if existing:
+                            uk_skipped += 1
+                            progress.advance(task)
+                            continue
+
+                        # Upload to S3
+                        object_name = upload_dataset_for_seeding(pe_dataset.filepath)
+
+                        # Create database record
+                        db_dataset = Dataset(
+                            name=pe_dataset.name,
+                            description=pe_dataset.description,
+                            filepath=object_name,
+                            year=pe_dataset.year,
+                            tax_benefit_model_id=uk_model.id,
+                        )
+                        session.add(db_dataset)
+                        session.commit()
+                        uk_created += 1
                         progress.advance(task)
-                        continue
 
-                    # Upload to S3
-                    object_name = upload_dataset_for_seeding(pe_dataset.filepath)
-
-                    # Create database record
-                    db_dataset = Dataset(
-                        name=pe_dataset.name,
-                        description=pe_dataset.description,
-                        filepath=object_name,
-                        year=pe_dataset.year,
-                        tax_benefit_model_id=uk_model.id,
-                    )
-                    session.add(db_dataset)
-                    session.commit()
-                    uk_created += 1
-                    progress.advance(task)
-
-        console.print(
-            f"  [green]✓[/green] UK: {uk_created} created, {uk_skipped} skipped"
-        )
+            console.print(
+                f"  [green]✓[/green] UK: {uk_created} created, {uk_skipped} skipped"
+            )
 
         # US datasets
         console.print("  Creating US datasets...")
@@ -622,6 +626,11 @@ def main():
         action="store_true",
         help="Lite mode: skip US state parameters, only seed FRS 2026 and CPS 2026 datasets",
     )
+    parser.add_argument(
+        "--skip-uk-datasets",
+        action="store_true",
+        help="Skip UK datasets (useful when HuggingFace token is not available)",
+    )
     args = parser.parse_args()
 
     with logfire.span("database_seeding"):
@@ -638,7 +647,7 @@ def main():
             console.print(f"[green]✓[/green] US model seeded: {us_version.id}\n")
 
             # Seed datasets
-            seed_datasets(session, lite=args.lite)
+            seed_datasets(session, lite=args.lite, skip_uk_datasets=args.skip_uk_datasets)
 
             # Seed example policies
             seed_example_policies(session)
