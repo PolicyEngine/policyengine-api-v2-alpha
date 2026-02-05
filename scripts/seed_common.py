@@ -189,8 +189,7 @@ def seed_model(model_version, session, lite: bool = False):
                 f"  [green]✓[/green] Added {len(model_version.variables)} variables"
             )
 
-        # Add parameters (only user-facing ones: those with labels)
-        # Deduplicate by name - keep first occurrence
+        # Add parameters - deduplicate by name (keep first occurrence)
         #
         # WHY DEDUPLICATION IS NEEDED:
         # The policyengine package can provide multiple parameter entries with the same
@@ -198,17 +197,16 @@ def seed_model(model_version, session, lite: bool = False):
         # state-specific variants that share the same base name. We keep only the first
         # occurrence to avoid database unique constraint violations and reduce redundancy.
         #
+        # NOTE: We do NOT filter by label. Parameters without labels (bracket params,
+        # breakdown params) are still valid and needed for policy analysis.
+        #
         # In lite mode, exclude US state parameters (gov.states.*)
         seen_names = set()
         parameters_to_add = []
         skipped_state_params = 0
-        skipped_no_label = 0
         skipped_duplicate = 0
 
         for p in model_version.parameters:
-            if p.label is None:
-                skipped_no_label += 1
-                continue
             if p.name in seen_names:
                 skipped_duplicate += 1
                 continue
@@ -221,7 +219,6 @@ def seed_model(model_version, session, lite: bool = False):
 
         console.print(f"  Parameter filtering:")
         console.print(f"    - Total from source: {len(model_version.parameters)}")
-        console.print(f"    - Skipped (no label): {skipped_no_label}")
         console.print(f"    - Skipped (duplicate name): {skipped_duplicate}")
         if lite and skipped_state_params > 0:
             console.print(f"    - Skipped (state params, lite mode): {skipped_state_params}")
