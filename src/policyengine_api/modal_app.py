@@ -807,7 +807,6 @@ def simulate_economy_uk(simulation_id: str, traceparent: str | None = None) -> N
                         raise ValueError(f"Dataset {simulation.dataset_id} not found")
 
                     # Import policyengine
-                    from policyengine.core import Simulation as PESimulation
                     from policyengine.tax_benefit_models.uk import uk_latest
                     from policyengine.tax_benefit_models.uk.datasets import (
                         PolicyEngineUKDataset,
@@ -815,13 +814,20 @@ def simulate_economy_uk(simulation_id: str, traceparent: str | None = None) -> N
 
                     pe_model_version = uk_latest
 
-                    # Get policy and dynamic
+                    # Get policy and dynamic as PEPolicy/PEDynamic objects
                     policy = _get_pe_policy_uk(
                         simulation.policy_id, pe_model_version, session
                     )
                     dynamic = _get_pe_dynamic_uk(
                         simulation.dynamic_id, pe_model_version, session
                     )
+
+                    # Convert to reform dict format for Microsimulation
+                    # This is necessary because policyengine.core.Simulation applies
+                    # reforms AFTER creating Microsimulation, which doesn't work
+                    policy_reform = _pe_policy_to_reform_dict(policy)
+                    dynamic_reform = _pe_policy_to_reform_dict(dynamic)
+                    reform = _merge_reform_dicts(policy_reform, dynamic_reform)
 
                     # Download dataset
                     local_path = download_dataset(
@@ -835,15 +841,12 @@ def simulate_economy_uk(simulation_id: str, traceparent: str | None = None) -> N
                         year=dataset.year,
                     )
 
-                    # Create and run simulation
+                    # Run simulation using Microsimulation directly with reform
+                    # This ensures reforms are applied at construction time
                     with logfire.span("run_simulation"):
-                        pe_sim = PESimulation(
-                            dataset=pe_dataset,
-                            tax_benefit_model_version=pe_model_version,
-                            policy=policy,
-                            dynamic=dynamic,
+                        pe_output_dataset = _run_uk_economy_simulation(
+                            pe_dataset, reform, pe_model_version, simulation_id
                         )
-                        pe_sim.ensure()
 
                     # Save output dataset
                     with logfire.span("save_output_dataset"):
@@ -853,8 +856,8 @@ def simulate_economy_uk(simulation_id: str, traceparent: str | None = None) -> N
                         output_path = f"/tmp/{output_filename}"
 
                         # Set filepath and save
-                        pe_sim.output_dataset.filepath = output_path
-                        pe_sim.output_dataset.save()
+                        pe_output_dataset.filepath = output_path
+                        pe_output_dataset.save()
 
                         # Upload to Supabase storage
                         supabase = create_client(supabase_url, supabase_key)
@@ -869,7 +872,7 @@ def simulate_economy_uk(simulation_id: str, traceparent: str | None = None) -> N
                             )
 
                         # Create output dataset record
-                        output_dataset = Dataset(
+                        output_dataset_record = Dataset(
                             name=f"Output: {dataset.name}",
                             description=f"Output from simulation {simulation_id}",
                             filepath=output_filename,
@@ -877,12 +880,12 @@ def simulate_economy_uk(simulation_id: str, traceparent: str | None = None) -> N
                             is_output_dataset=True,
                             tax_benefit_model_id=dataset.tax_benefit_model_id,
                         )
-                        session.add(output_dataset)
+                        session.add(output_dataset_record)
                         session.commit()
-                        session.refresh(output_dataset)
+                        session.refresh(output_dataset_record)
 
                         # Link to simulation
-                        simulation.output_dataset_id = output_dataset.id
+                        simulation.output_dataset_id = output_dataset_record.id
 
                     # Mark as completed
                     simulation.status = SimulationStatus.COMPLETED
@@ -973,21 +976,28 @@ def simulate_economy_us(simulation_id: str, traceparent: str | None = None) -> N
                         raise ValueError(f"Dataset {simulation.dataset_id} not found")
 
                     # Import policyengine
-                    from policyengine.core import Simulation as PESimulation
                     from policyengine.tax_benefit_models.us import us_latest
                     from policyengine.tax_benefit_models.us.datasets import (
                         PolicyEngineUSDataset,
+                        USYearData,
                     )
 
                     pe_model_version = us_latest
 
-                    # Get policy and dynamic
+                    # Get policy and dynamic as PEPolicy/PEDynamic objects
                     policy = _get_pe_policy_us(
                         simulation.policy_id, pe_model_version, session
                     )
                     dynamic = _get_pe_dynamic_us(
                         simulation.dynamic_id, pe_model_version, session
                     )
+
+                    # Convert to reform dict format for Microsimulation
+                    # This is necessary because policyengine.core.Simulation applies
+                    # reforms AFTER creating Microsimulation, which doesn't work
+                    policy_reform = _pe_policy_to_reform_dict(policy)
+                    dynamic_reform = _pe_policy_to_reform_dict(dynamic)
+                    reform = _merge_reform_dicts(policy_reform, dynamic_reform)
 
                     # Download dataset
                     local_path = download_dataset(
@@ -1001,15 +1011,12 @@ def simulate_economy_us(simulation_id: str, traceparent: str | None = None) -> N
                         year=dataset.year,
                     )
 
-                    # Create and run simulation
+                    # Run simulation using Microsimulation directly with reform
+                    # This ensures reforms are applied at construction time
                     with logfire.span("run_simulation"):
-                        pe_sim = PESimulation(
-                            dataset=pe_dataset,
-                            tax_benefit_model_version=pe_model_version,
-                            policy=policy,
-                            dynamic=dynamic,
+                        pe_output_dataset = _run_us_economy_simulation(
+                            pe_dataset, reform, pe_model_version, simulation_id
                         )
-                        pe_sim.ensure()
 
                     # Save output dataset
                     with logfire.span("save_output_dataset"):
@@ -1019,8 +1026,8 @@ def simulate_economy_us(simulation_id: str, traceparent: str | None = None) -> N
                         output_path = f"/tmp/{output_filename}"
 
                         # Set filepath and save
-                        pe_sim.output_dataset.filepath = output_path
-                        pe_sim.output_dataset.save()
+                        pe_output_dataset.filepath = output_path
+                        pe_output_dataset.save()
 
                         # Upload to Supabase storage
                         supabase = create_client(supabase_url, supabase_key)
@@ -1035,7 +1042,7 @@ def simulate_economy_us(simulation_id: str, traceparent: str | None = None) -> N
                             )
 
                         # Create output dataset record
-                        output_dataset = Dataset(
+                        output_dataset_record = Dataset(
                             name=f"Output: {dataset.name}",
                             description=f"Output from simulation {simulation_id}",
                             filepath=output_filename,
@@ -1043,12 +1050,12 @@ def simulate_economy_us(simulation_id: str, traceparent: str | None = None) -> N
                             is_output_dataset=True,
                             tax_benefit_model_id=dataset.tax_benefit_model_id,
                         )
-                        session.add(output_dataset)
+                        session.add(output_dataset_record)
                         session.commit()
-                        session.refresh(output_dataset)
+                        session.refresh(output_dataset_record)
 
                         # Link to simulation
-                        simulation.output_dataset_id = output_dataset.id
+                        simulation.output_dataset_id = output_dataset_record.id
 
                     # Mark as completed
                     simulation.status = SimulationStatus.COMPLETED
@@ -1814,6 +1821,403 @@ def _get_pe_dynamic_us(dynamic_id, model_version, session):
     """Convert database Dynamic to policyengine Dynamic for US."""
     # Same implementation as UK
     return _get_pe_dynamic_uk(dynamic_id, model_version, session)
+
+
+def _pe_policy_to_reform_dict(policy) -> dict | None:
+    """Convert a policyengine.core.policy.Policy to reform dict format.
+
+    The policyengine-us/uk Microsimulation expects reforms in the format:
+        {"parameter.name": {"YYYY-MM-DD": value}}
+
+    This is necessary because the policyengine.core.Simulation applies reforms
+    AFTER creating the Microsimulation, which doesn't work due to caching.
+    We need to pass the reform at Microsimulation construction time.
+    """
+    if policy is None:
+        return None
+
+    if not policy.parameter_values:
+        return None
+
+    reform = {}
+    for pv in policy.parameter_values:
+        if not pv.parameter:
+            continue
+        param_name = pv.parameter.name
+        value = pv.value
+        start_date = pv.start_date
+
+        if param_name and start_date:
+            # Format date as YYYY-MM-DD string
+            if hasattr(start_date, "strftime"):
+                date_str = start_date.strftime("%Y-%m-%d")
+            else:
+                date_str = str(start_date).split("T")[0]
+
+            if param_name not in reform:
+                reform[param_name] = {}
+            reform[param_name][date_str] = value
+
+    return reform if reform else None
+
+
+def _merge_reform_dicts(reform1: dict | None, reform2: dict | None) -> dict | None:
+    """Merge two reform dicts, with reform2 taking precedence."""
+    if reform1 is None and reform2 is None:
+        return None
+    if reform1 is None:
+        return reform2
+    if reform2 is None:
+        return reform1
+
+    merged = dict(reform1)
+    for param_name, dates in reform2.items():
+        if param_name not in merged:
+            merged[param_name] = {}
+        merged[param_name].update(dates)
+    return merged
+
+
+def _run_us_economy_simulation(pe_dataset, reform, pe_model_version, simulation_id):
+    """Run US economy simulation using Microsimulation directly.
+
+    This bypasses policyengine.core.Simulation which has a bug where reforms
+    are applied AFTER creating Microsimulation (when it's too late).
+    Instead, we pass the reform dict at Microsimulation construction time.
+    """
+    from pathlib import Path
+
+    import numpy as np
+    import pandas as pd
+    from microdf import MicroDataFrame
+    from policyengine.tax_benefit_models.us.datasets import (
+        PolicyEngineUSDataset,
+        USYearData,
+    )
+    from policyengine_core.simulations.simulation_builder import SimulationBuilder
+    from policyengine_us import Microsimulation
+    from policyengine_us.system import system
+
+    # Load dataset
+    pe_dataset.load()
+    year = pe_dataset.year
+
+    # Create Microsimulation with reform applied at construction time
+    microsim = Microsimulation(reform=reform)
+
+    # Build simulation from dataset using SimulationBuilder
+    person_df = pd.DataFrame(pe_dataset.data.person)
+
+    # Determine column naming convention
+    household_id_col = (
+        "person_household_id"
+        if "person_household_id" in person_df.columns
+        else "household_id"
+    )
+    marital_unit_id_col = (
+        "person_marital_unit_id"
+        if "person_marital_unit_id" in person_df.columns
+        else "marital_unit_id"
+    )
+    family_id_col = (
+        "person_family_id" if "person_family_id" in person_df.columns else "family_id"
+    )
+    spm_unit_id_col = (
+        "person_spm_unit_id"
+        if "person_spm_unit_id" in person_df.columns
+        else "spm_unit_id"
+    )
+    tax_unit_id_col = (
+        "person_tax_unit_id"
+        if "person_tax_unit_id" in person_df.columns
+        else "tax_unit_id"
+    )
+
+    # Declare entities
+    builder = SimulationBuilder()
+    builder.populations = system.instantiate_entities()
+
+    builder.declare_person_entity("person", person_df["person_id"].values)
+    builder.declare_entity("household", np.unique(person_df[household_id_col].values))
+    builder.declare_entity("spm_unit", np.unique(person_df[spm_unit_id_col].values))
+    builder.declare_entity("family", np.unique(person_df[family_id_col].values))
+    builder.declare_entity("tax_unit", np.unique(person_df[tax_unit_id_col].values))
+    builder.declare_entity(
+        "marital_unit", np.unique(person_df[marital_unit_id_col].values)
+    )
+
+    # Join persons to entities
+    builder.join_with_persons(
+        builder.populations["household"],
+        person_df[household_id_col].values,
+        np.array(["member"] * len(person_df)),
+    )
+    builder.join_with_persons(
+        builder.populations["spm_unit"],
+        person_df[spm_unit_id_col].values,
+        np.array(["member"] * len(person_df)),
+    )
+    builder.join_with_persons(
+        builder.populations["family"],
+        person_df[family_id_col].values,
+        np.array(["member"] * len(person_df)),
+    )
+    builder.join_with_persons(
+        builder.populations["tax_unit"],
+        person_df[tax_unit_id_col].values,
+        np.array(["member"] * len(person_df)),
+    )
+    builder.join_with_persons(
+        builder.populations["marital_unit"],
+        person_df[marital_unit_id_col].values,
+        np.array(["member"] * len(person_df)),
+    )
+
+    microsim.build_from_populations(builder.populations)
+
+    # Set input variables
+    id_columns = {
+        "person_id",
+        "household_id",
+        "person_household_id",
+        "spm_unit_id",
+        "person_spm_unit_id",
+        "family_id",
+        "person_family_id",
+        "tax_unit_id",
+        "person_tax_unit_id",
+        "marital_unit_id",
+        "person_marital_unit_id",
+    }
+
+    for entity_name, entity_data in [
+        ("person", pe_dataset.data.person),
+        ("household", pe_dataset.data.household),
+        ("spm_unit", pe_dataset.data.spm_unit),
+        ("family", pe_dataset.data.family),
+        ("tax_unit", pe_dataset.data.tax_unit),
+        ("marital_unit", pe_dataset.data.marital_unit),
+    ]:
+        df = pd.DataFrame(entity_data)
+        for column in df.columns:
+            if column not in id_columns and column in system.variables:
+                microsim.set_input(column, year, df[column].values)
+
+    # Calculate output variables and build output dataset
+    data = {
+        "person": pd.DataFrame(),
+        "marital_unit": pd.DataFrame(),
+        "family": pd.DataFrame(),
+        "spm_unit": pd.DataFrame(),
+        "tax_unit": pd.DataFrame(),
+        "household": pd.DataFrame(),
+    }
+
+    weight_columns = {
+        "person_weight",
+        "household_weight",
+        "marital_unit_weight",
+        "family_weight",
+        "spm_unit_weight",
+        "tax_unit_weight",
+    }
+
+    # Copy ID and weight columns from input dataset
+    for entity in data.keys():
+        input_df = pd.DataFrame(getattr(pe_dataset.data, entity))
+        entity_id_col = f"{entity}_id"
+        entity_weight_col = f"{entity}_weight"
+
+        if entity_id_col in input_df.columns:
+            data[entity][entity_id_col] = input_df[entity_id_col].values
+        if entity_weight_col in input_df.columns:
+            data[entity][entity_weight_col] = input_df[entity_weight_col].values
+
+    # Copy person-level group ID columns
+    for col in person_df.columns:
+        if col.startswith("person_") and col.endswith("_id"):
+            target_col = col.replace("person_", "")
+            if target_col in id_columns:
+                data["person"][target_col] = person_df[col].values
+
+    # Calculate non-ID, non-weight variables
+    for entity, variables in pe_model_version.entity_variables.items():
+        for var in variables:
+            if var not in id_columns and var not in weight_columns:
+                data[entity][var] = microsim.calculate(
+                    var, period=year, map_to=entity
+                ).values
+
+    # Convert to MicroDataFrames
+    data["person"] = MicroDataFrame(data["person"], weights="person_weight")
+    data["marital_unit"] = MicroDataFrame(
+        data["marital_unit"], weights="marital_unit_weight"
+    )
+    data["family"] = MicroDataFrame(data["family"], weights="family_weight")
+    data["spm_unit"] = MicroDataFrame(data["spm_unit"], weights="spm_unit_weight")
+    data["tax_unit"] = MicroDataFrame(data["tax_unit"], weights="tax_unit_weight")
+    data["household"] = MicroDataFrame(data["household"], weights="household_weight")
+
+    # Create output dataset
+    return PolicyEngineUSDataset(
+        id=simulation_id,
+        name=pe_dataset.name,
+        description=pe_dataset.description,
+        filepath=str(Path(pe_dataset.filepath).parent / (simulation_id + ".h5")),
+        year=year,
+        is_output_dataset=True,
+        data=USYearData(
+            person=data["person"],
+            marital_unit=data["marital_unit"],
+            family=data["family"],
+            spm_unit=data["spm_unit"],
+            tax_unit=data["tax_unit"],
+            household=data["household"],
+        ),
+    )
+
+
+def _run_uk_economy_simulation(pe_dataset, reform, pe_model_version, simulation_id):
+    """Run UK economy simulation using Microsimulation directly.
+
+    This bypasses policyengine.core.Simulation which has a bug where reforms
+    are applied AFTER creating Microsimulation (when it's too late).
+    Instead, we pass the reform dict at Microsimulation construction time.
+    """
+    from pathlib import Path
+
+    import numpy as np
+    import pandas as pd
+    from microdf import MicroDataFrame
+    from policyengine.tax_benefit_models.uk.datasets import (
+        PolicyEngineUKDataset,
+        UKYearData,
+    )
+    from policyengine_core.simulations.simulation_builder import SimulationBuilder
+    from policyengine_uk import Microsimulation
+    from policyengine_uk.system import system
+
+    # Load dataset
+    pe_dataset.load()
+    year = pe_dataset.year
+
+    # Create Microsimulation with reform applied at construction time
+    microsim = Microsimulation(reform=reform)
+
+    # Build simulation from dataset using SimulationBuilder
+    person_df = pd.DataFrame(pe_dataset.data.person)
+
+    # Determine column naming convention
+    benunit_id_col = (
+        "person_benunit_id"
+        if "person_benunit_id" in person_df.columns
+        else "benunit_id"
+    )
+    household_id_col = (
+        "person_household_id"
+        if "person_household_id" in person_df.columns
+        else "household_id"
+    )
+
+    # Declare entities
+    builder = SimulationBuilder()
+    builder.populations = system.instantiate_entities()
+
+    builder.declare_person_entity("person", person_df["person_id"].values)
+    builder.declare_entity("benunit", np.unique(person_df[benunit_id_col].values))
+    builder.declare_entity("household", np.unique(person_df[household_id_col].values))
+
+    # Join persons to entities
+    builder.join_with_persons(
+        builder.populations["benunit"],
+        person_df[benunit_id_col].values,
+        np.array(["member"] * len(person_df)),
+    )
+    builder.join_with_persons(
+        builder.populations["household"],
+        person_df[household_id_col].values,
+        np.array(["member"] * len(person_df)),
+    )
+
+    microsim.build_from_populations(builder.populations)
+
+    # Set input variables
+    id_columns = {
+        "person_id",
+        "benunit_id",
+        "person_benunit_id",
+        "household_id",
+        "person_household_id",
+    }
+
+    for entity_name, entity_data in [
+        ("person", pe_dataset.data.person),
+        ("benunit", pe_dataset.data.benunit),
+        ("household", pe_dataset.data.household),
+    ]:
+        df = pd.DataFrame(entity_data)
+        for column in df.columns:
+            if column not in id_columns and column in system.variables:
+                microsim.set_input(column, year, df[column].values)
+
+    # Calculate output variables and build output dataset
+    data = {
+        "person": pd.DataFrame(),
+        "benunit": pd.DataFrame(),
+        "household": pd.DataFrame(),
+    }
+
+    weight_columns = {
+        "person_weight",
+        "benunit_weight",
+        "household_weight",
+    }
+
+    # Copy ID and weight columns from input dataset
+    for entity in data.keys():
+        input_df = pd.DataFrame(getattr(pe_dataset.data, entity))
+        entity_id_col = f"{entity}_id"
+        entity_weight_col = f"{entity}_weight"
+
+        if entity_id_col in input_df.columns:
+            data[entity][entity_id_col] = input_df[entity_id_col].values
+        if entity_weight_col in input_df.columns:
+            data[entity][entity_weight_col] = input_df[entity_weight_col].values
+
+    # Copy person-level group ID columns
+    for col in person_df.columns:
+        if col.startswith("person_") and col.endswith("_id"):
+            target_col = col.replace("person_", "")
+            if target_col in id_columns:
+                data["person"][target_col] = person_df[col].values
+
+    # Calculate non-ID, non-weight variables
+    for entity, variables in pe_model_version.entity_variables.items():
+        for var in variables:
+            if var not in id_columns and var not in weight_columns:
+                data[entity][var] = microsim.calculate(
+                    var, period=year, map_to=entity
+                ).values
+
+    # Convert to MicroDataFrames
+    data["person"] = MicroDataFrame(data["person"], weights="person_weight")
+    data["benunit"] = MicroDataFrame(data["benunit"], weights="benunit_weight")
+    data["household"] = MicroDataFrame(data["household"], weights="household_weight")
+
+    # Create output dataset
+    return PolicyEngineUKDataset(
+        id=simulation_id,
+        name=pe_dataset.name,
+        description=pe_dataset.description,
+        filepath=str(Path(pe_dataset.filepath).parent / (simulation_id + ".h5")),
+        year=year,
+        is_output_dataset=True,
+        data=UKYearData(
+            person=data["person"],
+            benunit=data["benunit"],
+            household=data["household"],
+        ),
+    )
 
 
 @app.function(

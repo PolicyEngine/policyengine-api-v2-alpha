@@ -158,22 +158,45 @@ def _ensure_list(value: Any) -> list:
 
 
 def _extract_policy_data(policy: Policy | None) -> dict | None:
-    """Extract policy data from a Policy model into calculation format."""
+    """Extract policy data from a Policy model into calculation format.
+
+    Returns format expected by _calculate_household_us/_calculate_household_uk:
+    {
+        "name": "policy name",
+        "description": "policy description",
+        "parameter_values": [
+            {
+                "parameter_name": "gov.irs.credits.ctc...",
+                "value": 0.16,
+                "start_date": "2024-01-01T00:00:00+00:00",
+                "end_date": null
+            }
+        ]
+    }
+    """
     if not policy or not policy.parameter_values:
         return None
 
-    policy_data = {}
+    parameter_values = []
     for pv in policy.parameter_values:
         if not pv.parameter:
             continue
 
-        policy_data[pv.parameter.name] = {
+        parameter_values.append({
+            "parameter_name": pv.parameter.name,
             "value": _extract_value(pv.value_json),
             "start_date": _format_date(pv.start_date),
             "end_date": _format_date(pv.end_date),
-        }
+        })
 
-    return policy_data if policy_data else None
+    if not parameter_values:
+        return None
+
+    return {
+        "name": policy.name,
+        "description": policy.description or "",
+        "parameter_values": parameter_values,
+    }
 
 
 def _extract_value(value_json: Any) -> Any:

@@ -294,17 +294,16 @@ def _calculate_household_uk(
 
     Supports multiple households via entity relational dataframes. If entity IDs
     are not provided, defaults to single household with all people in it.
-    """
-    import tempfile
-    from datetime import datetime
-    from pathlib import Path
 
+    Uses policyengine-uk Microsimulation directly with reform dict to ensure
+    policy changes are applied correctly.
+    """
+    import numpy as np
     import pandas as pd
-    from policyengine.core import Simulation
-    from microdf import MicroDataFrame
     from policyengine.tax_benefit_models.uk import uk_latest
-    from policyengine.tax_benefit_models.uk.datasets import PolicyEngineUKDataset
-    from policyengine.tax_benefit_models.uk.datasets import UKYearData
+    from policyengine_core.simulations.simulation_builder import SimulationBuilder
+    from policyengine_uk import Microsimulation
+    from policyengine_uk.system import system
 
     n_people = len(people)
     n_benunits = max(1, len(benunit))
@@ -350,68 +349,88 @@ def _calculate_household_uk(
                 household_data[key] = [0.0] * n_households
             household_data[key][i] = value
 
-    # Create MicroDataFrames
-    person_df = MicroDataFrame(pd.DataFrame(person_data), weights="person_weight")
-    benunit_df = MicroDataFrame(pd.DataFrame(benunit_data), weights="benunit_weight")
-    household_df = MicroDataFrame(
-        pd.DataFrame(household_data), weights="household_weight"
+    # Convert policy_data to policyengine-uk reform dict format
+    # Format: {"param.name": {"YYYY-MM-DD": value}}
+    reform = None
+    if policy_data and policy_data.get("parameter_values"):
+        reform = {}
+        for pv in policy_data["parameter_values"]:
+            param_name = pv.get("parameter_name")
+            value = pv.get("value")
+            start_date = pv.get("start_date")
+
+            if param_name and start_date:
+                # Parse ISO date string to get just the date part
+                if "T" in start_date:
+                    date_str = start_date.split("T")[0]
+                else:
+                    date_str = start_date
+
+                if param_name not in reform:
+                    reform[param_name] = {}
+                reform[param_name][date_str] = value
+
+    # Create Microsimulation with reform applied at construction time
+    microsim = Microsimulation(reform=reform)
+
+    # Build simulation from entity data using SimulationBuilder
+    person_df = pd.DataFrame(person_data)
+
+    # Determine column naming convention
+    benunit_id_col = (
+        "person_benunit_id"
+        if "person_benunit_id" in person_df.columns
+        else "benunit_id"
+    )
+    household_id_col = (
+        "person_household_id"
+        if "person_household_id" in person_df.columns
+        else "household_id"
     )
 
-    # Create temporary dataset
-    tmpdir = tempfile.mkdtemp()
-    filepath = str(Path(tmpdir) / "household_calc.h5")
+    # Declare entities using SimulationBuilder
+    builder = SimulationBuilder()
+    builder.populations = system.instantiate_entities()
 
-    dataset = PolicyEngineUKDataset(
-        name="Household calculation",
-        description="Household(s) for calculation",
-        filepath=filepath,
-        year=year,
-        data=UKYearData(
-            person=person_df,
-            benunit=benunit_df,
-            household=household_df,
-        ),
+    builder.declare_person_entity("person", person_df["person_id"].values)
+    builder.declare_entity("benunit", np.unique(person_df[benunit_id_col].values))
+    builder.declare_entity("household", np.unique(person_df[household_id_col].values))
+
+    # Join persons to group entities
+    builder.join_with_persons(
+        builder.populations["benunit"],
+        person_df[benunit_id_col].values,
+        np.array(["member"] * len(person_df)),
+    )
+    builder.join_with_persons(
+        builder.populations["household"],
+        person_df[household_id_col].values,
+        np.array(["member"] * len(person_df)),
     )
 
-    # Build policy if provided
-    policy = None
-    if policy_data:
-        from policyengine.core.policy import ParameterValue as PEParameterValue
-        from policyengine.core.policy import Policy as PEPolicy
+    # Build simulation from populations
+    microsim.build_from_populations(builder.populations)
 
-        pe_param_values = []
-        param_lookup = {p.name: p for p in uk_latest.parameters}
-        for pv in policy_data.get("parameter_values", []):
-            pe_param = param_lookup.get(pv["parameter_name"])
-            if pe_param:
-                pe_pv = PEParameterValue(
-                    parameter=pe_param,
-                    value=pv["value"],
-                    start_date=datetime.fromisoformat(pv["start_date"])
-                    if pv.get("start_date")
-                    else None,
-                    end_date=datetime.fromisoformat(pv["end_date"])
-                    if pv.get("end_date")
-                    else None,
-                )
-                pe_param_values.append(pe_pv)
-        policy = PEPolicy(
-            name=policy_data.get("name", ""),
-            description=policy_data.get("description", ""),
-            parameter_values=pe_param_values,
-        )
+    # Set input variables for each entity
+    id_columns = {
+        "person_id",
+        "benunit_id",
+        "person_benunit_id",
+        "household_id",
+        "person_household_id",
+    }
 
-    # Run simulation
-    simulation = Simulation(
-        dataset=dataset,
-        tax_benefit_model_version=uk_latest,
-        policy=policy,
-    )
-    simulation.run()
+    for entity_name, entity_df in [
+        ("person", person_data),
+        ("benunit", benunit_data),
+        ("household", household_data),
+    ]:
+        df = pd.DataFrame(entity_df)
+        for column in df.columns:
+            if column not in id_columns and column in system.variables:
+                microsim.set_input(column, year, df[column].values)
 
-    # Extract outputs
-    output_data = simulation.output_dataset.data
-
+    # Calculate output variables
     def safe_convert(value):
         try:
             return float(value)
@@ -422,21 +441,24 @@ def _calculate_household_uk(
     for i in range(n_people):
         person_dict = {}
         for var in uk_latest.entity_variables["person"]:
-            person_dict[var] = safe_convert(output_data.person[var].iloc[i])
+            val = microsim.calculate(var, period=year, map_to="person")
+            person_dict[var] = safe_convert(val.values[i])
         person_outputs.append(person_dict)
 
     benunit_outputs = []
-    for i in range(len(output_data.benunit)):
+    for i in range(n_benunits):
         benunit_dict = {}
         for var in uk_latest.entity_variables["benunit"]:
-            benunit_dict[var] = safe_convert(output_data.benunit[var].iloc[i])
+            val = microsim.calculate(var, period=year, map_to="benunit")
+            benunit_dict[var] = safe_convert(val.values[i])
         benunit_outputs.append(benunit_dict)
 
     household_outputs = []
-    for i in range(len(output_data.household)):
+    for i in range(n_households):
         household_dict = {}
         for var in uk_latest.entity_variables["household"]:
-            household_dict[var] = safe_convert(output_data.household[var].iloc[i])
+            val = microsim.calculate(var, period=year, map_to="household")
+            household_dict[var] = safe_convert(val.values[i])
         household_outputs.append(household_dict)
 
     return {
@@ -466,7 +488,14 @@ def _run_local_household_us(
 
     try:
         result = _calculate_household_us(
-            people, marital_unit, family, spm_unit, tax_unit, household, year, policy_data
+            people,
+            marital_unit,
+            family,
+            spm_unit,
+            tax_unit,
+            household,
+            year,
+            policy_data,
         )
 
         # Update job with result
@@ -506,17 +535,16 @@ def _calculate_household_us(
 
     Supports multiple households via entity relational dataframes. If entity IDs
     are not provided, defaults to single household with all people in it.
-    """
-    import tempfile
-    from datetime import datetime
-    from pathlib import Path
 
+    Uses policyengine-us Microsimulation directly with reform dict to ensure
+    policy changes are applied correctly.
+    """
+    import numpy as np
     import pandas as pd
-    from policyengine.core import Simulation
-    from microdf import MicroDataFrame
     from policyengine.tax_benefit_models.us import us_latest
-    from policyengine.tax_benefit_models.us.datasets import PolicyEngineUSDataset
-    from policyengine.tax_benefit_models.us.datasets import USYearData
+    from policyengine_core.simulations.simulation_builder import SimulationBuilder
+    from policyengine_us import Microsimulation
+    from policyengine_us.system import system
 
     n_people = len(people)
     n_households = max(1, len(household))
@@ -596,108 +624,158 @@ def _calculate_household_us(
                 tax_unit_data[key] = [0.0] * n_tax_units
             tax_unit_data[key][i] = value
 
-    # Create MicroDataFrames
-    person_df = MicroDataFrame(pd.DataFrame(person_data), weights="person_weight")
-    household_df = MicroDataFrame(
-        pd.DataFrame(household_data), weights="household_weight"
+    # Convert policy_data to policyengine-us reform dict format
+    # Format: {"param.name": {"YYYY-MM-DD": value}}
+    reform = None
+    if policy_data and policy_data.get("parameter_values"):
+        reform = {}
+        for pv in policy_data["parameter_values"]:
+            param_name = pv.get("parameter_name")
+            value = pv.get("value")
+            start_date = pv.get("start_date")
+
+            if param_name and start_date:
+                # Parse ISO date string to get just the date part
+                if "T" in start_date:
+                    date_str = start_date.split("T")[0]
+                else:
+                    date_str = start_date
+
+                if param_name not in reform:
+                    reform[param_name] = {}
+                reform[param_name][date_str] = value
+
+    # Create Microsimulation with reform applied at construction time
+    # This ensures the reform is properly integrated into the tax benefit system
+    microsim = Microsimulation(reform=reform)
+
+    # Build simulation from entity data using SimulationBuilder
+    person_df = pd.DataFrame(person_data)
+
+    # Determine column naming convention
+    household_id_col = (
+        "person_household_id"
+        if "person_household_id" in person_df.columns
+        else "household_id"
     )
-    marital_unit_df = MicroDataFrame(
-        pd.DataFrame(marital_unit_data), weights="marital_unit_weight"
+    marital_unit_id_col = (
+        "person_marital_unit_id"
+        if "person_marital_unit_id" in person_df.columns
+        else "marital_unit_id"
     )
-    family_df = MicroDataFrame(pd.DataFrame(family_data), weights="family_weight")
-    spm_unit_df = MicroDataFrame(pd.DataFrame(spm_unit_data), weights="spm_unit_weight")
-    tax_unit_df = MicroDataFrame(pd.DataFrame(tax_unit_data), weights="tax_unit_weight")
-
-    # Create temporary dataset
-    tmpdir = tempfile.mkdtemp()
-    filepath = str(Path(tmpdir) / "household_calc.h5")
-
-    dataset = PolicyEngineUSDataset(
-        name="Household calculation",
-        description="Household(s) for calculation",
-        filepath=filepath,
-        year=year,
-        data=USYearData(
-            person=person_df,
-            household=household_df,
-            marital_unit=marital_unit_df,
-            family=family_df,
-            spm_unit=spm_unit_df,
-            tax_unit=tax_unit_df,
-        ),
+    family_id_col = (
+        "person_family_id" if "person_family_id" in person_df.columns else "family_id"
+    )
+    spm_unit_id_col = (
+        "person_spm_unit_id"
+        if "person_spm_unit_id" in person_df.columns
+        else "spm_unit_id"
+    )
+    tax_unit_id_col = (
+        "person_tax_unit_id"
+        if "person_tax_unit_id" in person_df.columns
+        else "tax_unit_id"
     )
 
-    # Build policy if provided
-    policy = None
-    if policy_data:
-        from policyengine.core.policy import ParameterValue as PEParameterValue
-        from policyengine.core.policy import Policy as PEPolicy
+    # Declare entities using SimulationBuilder
+    builder = SimulationBuilder()
+    builder.populations = system.instantiate_entities()
 
-        pe_param_values = []
-        param_lookup = {p.name: p for p in us_latest.parameters}
-        for pv in policy_data.get("parameter_values", []):
-            pe_param = param_lookup.get(pv["parameter_name"])
-            if pe_param:
-                pe_pv = PEParameterValue(
-                    parameter=pe_param,
-                    value=pv["value"],
-                    start_date=datetime.fromisoformat(pv["start_date"])
-                    if pv.get("start_date")
-                    else None,
-                    end_date=datetime.fromisoformat(pv["end_date"])
-                    if pv.get("end_date")
-                    else None,
-                )
-                pe_param_values.append(pe_pv)
-        policy = PEPolicy(
-            name=policy_data.get("name", ""),
-            description=policy_data.get("description", ""),
-            parameter_values=pe_param_values,
-        )
-
-    # Run simulation
-    simulation = Simulation(
-        dataset=dataset,
-        tax_benefit_model_version=us_latest,
-        policy=policy,
+    builder.declare_person_entity("person", person_df["person_id"].values)
+    builder.declare_entity("household", np.unique(person_df[household_id_col].values))
+    builder.declare_entity("spm_unit", np.unique(person_df[spm_unit_id_col].values))
+    builder.declare_entity("family", np.unique(person_df[family_id_col].values))
+    builder.declare_entity("tax_unit", np.unique(person_df[tax_unit_id_col].values))
+    builder.declare_entity(
+        "marital_unit", np.unique(person_df[marital_unit_id_col].values)
     )
-    simulation.run()
 
-    # Extract outputs
-    output_data = simulation.output_dataset.data
+    # Join persons to group entities
+    builder.join_with_persons(
+        builder.populations["household"],
+        person_df[household_id_col].values,
+        np.array(["member"] * len(person_df)),
+    )
+    builder.join_with_persons(
+        builder.populations["spm_unit"],
+        person_df[spm_unit_id_col].values,
+        np.array(["member"] * len(person_df)),
+    )
+    builder.join_with_persons(
+        builder.populations["family"],
+        person_df[family_id_col].values,
+        np.array(["member"] * len(person_df)),
+    )
+    builder.join_with_persons(
+        builder.populations["tax_unit"],
+        person_df[tax_unit_id_col].values,
+        np.array(["member"] * len(person_df)),
+    )
+    builder.join_with_persons(
+        builder.populations["marital_unit"],
+        person_df[marital_unit_id_col].values,
+        np.array(["member"] * len(person_df)),
+    )
 
+    # Build simulation from populations
+    microsim.build_from_populations(builder.populations)
+
+    # Set input variables for each entity
+    id_columns = {
+        "person_id",
+        "household_id",
+        "person_household_id",
+        "spm_unit_id",
+        "person_spm_unit_id",
+        "family_id",
+        "person_family_id",
+        "tax_unit_id",
+        "person_tax_unit_id",
+        "marital_unit_id",
+        "person_marital_unit_id",
+    }
+
+    for entity_name, entity_df in [
+        ("person", person_data),
+        ("household", household_data),
+        ("spm_unit", spm_unit_data),
+        ("family", family_data),
+        ("tax_unit", tax_unit_data),
+        ("marital_unit", marital_unit_data),
+    ]:
+        df = pd.DataFrame(entity_df)
+        for column in df.columns:
+            if column not in id_columns and column in system.variables:
+                microsim.set_input(column, year, df[column].values)
+
+    # Calculate output variables
     def safe_convert(value):
         try:
             return float(value)
         except (ValueError, TypeError):
             return str(value)
 
-    def extract_entity_outputs(entity_name: str, entity_data, n_rows: int) -> list[dict]:
+    def extract_entity_outputs(
+        entity_name: str, n_rows: int, map_to: str
+    ) -> list[dict]:
         outputs = []
         for i in range(n_rows):
             row_dict = {}
             for var in us_latest.entity_variables[entity_name]:
-                row_dict[var] = safe_convert(entity_data[var].iloc[i])
+                val = microsim.calculate(var, period=year, map_to=map_to)
+                row_dict[var] = safe_convert(val.values[i])
             outputs.append(row_dict)
         return outputs
 
     return {
-        "person": extract_entity_outputs("person", output_data.person, n_people),
+        "person": extract_entity_outputs("person", n_people, "person"),
         "marital_unit": extract_entity_outputs(
-            "marital_unit", output_data.marital_unit, len(output_data.marital_unit)
+            "marital_unit", n_marital_units, "marital_unit"
         ),
-        "family": extract_entity_outputs(
-            "family", output_data.family, len(output_data.family)
-        ),
-        "spm_unit": extract_entity_outputs(
-            "spm_unit", output_data.spm_unit, len(output_data.spm_unit)
-        ),
-        "tax_unit": extract_entity_outputs(
-            "tax_unit", output_data.tax_unit, len(output_data.tax_unit)
-        ),
-        "household": extract_entity_outputs(
-            "household", output_data.household, len(output_data.household)
-        ),
+        "family": extract_entity_outputs("family", n_families, "family"),
+        "spm_unit": extract_entity_outputs("spm_unit", n_spm_units, "spm_unit"),
+        "tax_unit": extract_entity_outputs("tax_unit", n_tax_units, "tax_unit"),
+        "household": extract_entity_outputs("household", n_households, "household"),
     }
 
 
