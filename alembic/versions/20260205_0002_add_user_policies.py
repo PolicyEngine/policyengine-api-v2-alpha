@@ -1,8 +1,8 @@
 """add_user_policies
 
-Revision ID: c7254ea1c129
+Revision ID: 0002_user_policies
 Revises: 0001_initial
-Create Date: 2026-02-05 23:28:58.822168
+Create Date: 2026-02-05
 
 This migration adds:
 1. tax_benefit_model_id foreign key to policies table
@@ -17,7 +17,7 @@ import sqlmodel.sql.sqltypes
 from alembic import op
 
 # revision identifiers, used by Alembic.
-revision: str = "c7254ea1c129"
+revision: str = "0002_user_policies"
 down_revision: Union[str, Sequence[str], None] = "0001_initial"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
