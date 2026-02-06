@@ -123,7 +123,9 @@ def create_policy(policy: PolicyCreate, session: Session = Depends(get_session))
 
 @router.get("/", response_model=List[PolicyRead])
 def list_policies(
-    tax_benefit_model_id: UUID | None = Query(None, description="Filter by tax benefit model"),
+    tax_benefit_model_id: UUID | None = Query(
+        None, description="Filter by tax benefit model"
+    ),
     session: Session = Depends(get_session),
 ):
     """List all policies, optionally filtered by tax benefit model."""

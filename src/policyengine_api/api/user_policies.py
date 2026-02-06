@@ -56,7 +56,9 @@ def create_user_policy(
 @router.get("/", response_model=list[UserPolicyRead])
 def list_user_policies(
     user_id: UUID = Query(..., description="User ID to filter by"),
-    tax_benefit_model_id: UUID | None = Query(None, description="Filter by tax benefit model"),
+    tax_benefit_model_id: UUID | None = Query(
+        None, description="Filter by tax benefit model"
+    ),
     session: Session = Depends(get_session),
 ):
     """List all policy associations for a user.
@@ -66,10 +68,8 @@ def list_user_policies(
     query = select(UserPolicy).where(UserPolicy.user_id == user_id)
 
     if tax_benefit_model_id:
-        query = (
-            query
-            .join(Policy, UserPolicy.policy_id == Policy.id)
-            .where(Policy.tax_benefit_model_id == tax_benefit_model_id)
+        query = query.join(Policy, UserPolicy.policy_id == Policy.id).where(
+            Policy.tax_benefit_model_id == tax_benefit_model_id
         )
 
     user_policies = session.exec(query).all()
