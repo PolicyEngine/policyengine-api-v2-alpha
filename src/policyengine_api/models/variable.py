@@ -1,5 +1,5 @@
 from datetime import datetime, timezone
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 from uuid import UUID, uuid4
 
 from sqlmodel import JSON, Column, Field, Relationship, SQLModel
@@ -18,7 +18,7 @@ class VariableBase(SQLModel):
     possible_values: str | None = Field(
         default=None, sa_column=Column(JSON)
     )  # Store as JSON list
-    default_value: str | None = Field(
+    default_value: Any = Field(
         default=None, sa_column=Column(JSON)
     )  # Store as JSON (handles int, float, bool, str, etc.)
     tax_benefit_model_version_id: UUID = Field(
