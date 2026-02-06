@@ -57,19 +57,27 @@ def upgrade() -> None:
     op.create_index("idx_households_year", "households", ["year"])
 
     # User-household associations (many-to-many for saved households)
+    # Note: user_id is a client-generated UUID stored in localStorage, not a foreign key
     op.create_table(
         "user_household_associations",
         sa.Column("id", sa.Uuid(), nullable=False),
         sa.Column("user_id", sa.Uuid(), nullable=False),
         sa.Column("household_id", sa.Uuid(), nullable=False),
+        sa.Column("country_id", sa.String(), nullable=False),
+        sa.Column("label", sa.String(), nullable=True),
         sa.Column(
             "created_at",
             sa.DateTime(timezone=True),
             server_default=sa.func.now(),
             nullable=False,
         ),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.func.now(),
+            nullable=False,
+        ),
         sa.PrimaryKeyConstraint("id"),
-        sa.ForeignKeyConstraint(["user_id"], ["users.id"], ondelete="CASCADE"),
         sa.ForeignKeyConstraint(["household_id"], ["households.id"], ondelete="CASCADE"),
         sa.UniqueConstraint("user_id", "household_id"),
     )

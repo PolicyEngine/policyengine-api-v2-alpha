@@ -7,6 +7,7 @@ import math
 import sys
 import warnings
 from datetime import datetime, timezone
+from enum import Enum
 from pathlib import Path
 from uuid import uuid4
 
@@ -152,6 +153,16 @@ def seed_model(model_version, session, lite: bool = False):
                     total=len(model_version.variables),
                 )
                 for var in model_version.variables:
+                    # Serialize default_value for JSON storage
+                    default_val = var.default_value
+                    if var.value_type is Enum:
+                        # Enum variables: extract the member name (e.g., "SINGLE")
+                        # NOTE: This may need to change when we determine how to properly
+                        # add possible_values (the list of enum members) into the database.
+                        default_val = default_val.name
+                    elif hasattr(default_val, "isoformat"):  # datetime.date
+                        default_val = default_val.isoformat()
+
                     var_rows.append(
                         {
                             "id": uuid4(),
@@ -162,6 +173,7 @@ def seed_model(model_version, session, lite: bool = False):
                             if hasattr(var.data_type, "__name__")
                             else str(var.data_type),
                             "possible_values": None,
+                            "default_value": json.dumps(default_val),
                             "tax_benefit_model_version_id": db_version.id,
                             "created_at": datetime.now(timezone.utc),
                         }
@@ -179,6 +191,7 @@ def seed_model(model_version, session, lite: bool = False):
                     "description",
                     "data_type",
                     "possible_values",
+                    "default_value",
                     "tax_benefit_model_version_id",
                     "created_at",
                 ],
