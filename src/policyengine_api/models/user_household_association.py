@@ -9,7 +9,8 @@ from sqlmodel import Field, SQLModel
 class UserHouseholdAssociationBase(SQLModel):
     """Base association fields."""
 
-    user_id: UUID = Field(foreign_key="users.id", index=True)
+    # user_id is a client-generated UUID stored in localStorage, not a foreign key
+    user_id: UUID = Field(index=True)
     household_id: UUID = Field(foreign_key="households.id", index=True)
     country_id: str
     label: str | None = None
