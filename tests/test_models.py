@@ -6,9 +6,11 @@ from policyengine_api.models import (
     AggregateOutput,
     AggregateType,
     Dataset,
+    Household,
     Policy,
     Simulation,
     SimulationStatus,
+    Variable,
 )
 
 
@@ -66,3 +68,90 @@ def test_aggregate_output_creation():
     assert output.simulation_id == simulation_id
     assert output.aggregate_type == AggregateType.SUM
     assert output.result is None
+
+
+def test_variable_creation_with_default_value():
+    """Test variable model creation with default_value field."""
+    model_version_id = uuid4()
+    variable = Variable(
+        name="age",
+        entity="person",
+        description="Age of the person",
+        data_type="int",
+        default_value=40,
+        tax_benefit_model_version_id=model_version_id,
+    )
+    assert variable.name == "age"
+    assert variable.entity == "person"
+    assert variable.data_type == "int"
+    assert variable.default_value == 40
+    assert variable.id is not None
+
+
+def test_variable_with_float_default_value():
+    """Test variable model with float default value."""
+    model_version_id = uuid4()
+    variable = Variable(
+        name="employment_income",
+        entity="person",
+        data_type="float",
+        default_value=0.0,
+        tax_benefit_model_version_id=model_version_id,
+    )
+    assert variable.default_value == 0.0
+
+
+def test_variable_with_bool_default_value():
+    """Test variable model with boolean default value."""
+    model_version_id = uuid4()
+    variable = Variable(
+        name="is_disabled",
+        entity="person",
+        data_type="bool",
+        default_value=False,
+        tax_benefit_model_version_id=model_version_id,
+    )
+    assert variable.default_value is False
+
+
+def test_variable_with_string_default_value():
+    """Test variable model with string default value (enum)."""
+    model_version_id = uuid4()
+    variable = Variable(
+        name="state_name",
+        entity="household",
+        data_type="Enum",
+        default_value="CA",
+        possible_values=["CA", "NY", "TX"],
+        tax_benefit_model_version_id=model_version_id,
+    )
+    assert variable.default_value == "CA"
+    assert variable.possible_values == ["CA", "NY", "TX"]
+
+
+def test_variable_with_null_default_value():
+    """Test variable model with null default value."""
+    model_version_id = uuid4()
+    variable = Variable(
+        name="optional_field",
+        entity="person",
+        data_type="str",
+        default_value=None,
+        tax_benefit_model_version_id=model_version_id,
+    )
+    assert variable.default_value is None
+
+
+def test_household_creation():
+    """Test household model creation."""
+    household = Household(
+        tax_benefit_model_name="policyengine_us",
+        year=2024,
+        label="Test household",
+        household_data={"people": [{"age": 30}], "household": {}},
+    )
+    assert household.household_data == {"people": [{"age": 30}], "household": {}}
+    assert household.label == "Test household"
+    assert household.tax_benefit_model_name == "policyengine_us"
+    assert household.year == 2024
+    assert household.id is not None
