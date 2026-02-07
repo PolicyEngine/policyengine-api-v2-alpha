@@ -376,7 +376,7 @@ def _run_local_household_impact(report_id: str, session: Session) -> None:
     locally (agent_use_modal=False). This mirrors the economic impact behavior.
     True async execution requires Modal.
     """
-    report = session.get(Report, report_id)
+    report = session.get(Report, UUID(report_id))
     if not report:
         return
 
