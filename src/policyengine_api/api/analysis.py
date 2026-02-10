@@ -31,6 +31,7 @@ from policyengine_api.models import (
     DecileImpactRead,
     ProgramStatistics,
     ProgramStatisticsRead,
+    Region,
     Report,
     ReportStatus,
     Simulation,
@@ -68,10 +69,17 @@ router = APIRouter(prefix="/analysis", tags=["analysis"])
 class EconomicImpactRequest(BaseModel):
     """Request body for economic impact analysis.
 
-    Example:
+    Example with dataset_id:
     {
         "tax_benefit_model_name": "policyengine_uk",
         "dataset_id": "uuid-from-datasets-endpoint",
+        "policy_id": "uuid-of-reform-policy"
+    }
+
+    Example with region:
+    {
+        "tax_benefit_model_name": "policyengine_us",
+        "region": "state/ca",
         "policy_id": "uuid-of-reform-policy"
     }
     """
@@ -79,8 +87,13 @@ class EconomicImpactRequest(BaseModel):
     tax_benefit_model_name: Literal["policyengine_uk", "policyengine_us"] = Field(
         description="Which country model to use"
     )
-    dataset_id: UUID = Field(
-        description="Dataset ID from /datasets endpoint containing population microdata"
+    dataset_id: UUID | None = Field(
+        default=None,
+        description="Dataset ID from /datasets endpoint. Either dataset_id or region must be provided.",
+    )
+    region: str | None = Field(
+        default=None,
+        description="Region code (e.g., 'state/ca', 'us'). Either dataset_id or region must be provided.",
     )
     policy_id: UUID | None = Field(
         default=None,
@@ -99,6 +112,17 @@ class SimulationInfo(BaseModel):
     error_message: str | None = None
 
 
+class RegionInfo(BaseModel):
+    """Region information used in analysis."""
+
+    code: str
+    label: str
+    region_type: str
+    requires_filter: bool
+    filter_field: str | None = None
+    filter_value: str | None = None
+
+
 class EconomicImpactResponse(BaseModel):
     """Response from economic impact analysis."""
 
@@ -106,6 +130,7 @@ class EconomicImpactResponse(BaseModel):
     status: ReportStatus
     baseline_simulation: SimulationInfo
     reform_simulation: SimulationInfo
+    region: RegionInfo | None = None
     error_message: str | None = None
     decile_impacts: list[DecileImpactRead] | None = None
     program_statistics: list[ProgramStatisticsRead] | None = None
@@ -235,6 +260,7 @@ def _build_response(
     baseline_sim: Simulation,
     reform_sim: Simulation,
     session: Session,
+    region: Region | None = None,
 ) -> EconomicImpactResponse:
     """Build response from report and simulations."""
     decile_impacts = None
@@ -292,6 +318,17 @@ def _build_response(
             for s in stats
         ]
 
+    region_info = None
+    if region:
+        region_info = RegionInfo(
+            code=region.code,
+            label=region.label,
+            region_type=region.region_type,
+            requires_filter=region.requires_filter,
+            filter_field=region.filter_field,
+            filter_value=region.filter_value,
+        )
+
     return EconomicImpactResponse(
         report_id=report.id,
         status=report.status,
@@ -305,6 +342,7 @@ def _build_response(
             status=reform_sim.status,
             error_message=reform_sim.error_message,
         ),
+        region=region_info,
         error_message=report.error_message,
         decile_impacts=decile_impacts,
         program_statistics=program_statistics,
@@ -571,6 +609,54 @@ def _trigger_economy_comparison(
         fn.spawn(job_id=job_id, traceparent=traceparent)
 
 
+def _resolve_dataset_and_region(
+    request: EconomicImpactRequest,
+    session: Session,
+) -> tuple[Dataset, Region | None]:
+    """Resolve dataset from request, optionally via region lookup.
+
+    Returns:
+        Tuple of (dataset, region) where region is None if dataset_id was provided directly.
+    """
+    if request.region:
+        # Look up region by code
+        model_name = request.tax_benefit_model_name.replace("_", "-")
+        region = session.exec(
+            select(Region)
+            .join(TaxBenefitModel)
+            .where(Region.code == request.region)
+            .where(TaxBenefitModel.name == model_name)
+        ).first()
+
+        if not region:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Region '{request.region}' not found for model {model_name}",
+            )
+
+        dataset = session.get(Dataset, region.dataset_id)
+        if not dataset:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Dataset for region '{request.region}' not found",
+            )
+        return dataset, region
+
+    elif request.dataset_id:
+        dataset = session.get(Dataset, request.dataset_id)
+        if not dataset:
+            raise HTTPException(
+                status_code=404, detail=f"Dataset {request.dataset_id} not found"
+            )
+        return dataset, None
+
+    else:
+        raise HTTPException(
+            status_code=400,
+            detail="Either dataset_id or region must be provided",
+        )
+
+
 @router.post("/economic-impact", response_model=EconomicImpactResponse)
 def economic_impact(
     request: EconomicImpactRequest,
@@ -584,25 +670,25 @@ def economic_impact(
 
     Results include decile impacts (income changes by income group) and
     program statistics (budgetary effects of tax/benefit programs).
+
+    You can specify the geographic scope either by:
+    - dataset_id: Direct dataset reference
+    - region: Region code (e.g., "state/ca", "us") which resolves to a dataset
     """
-    # Validate dataset exists
-    dataset = session.get(Dataset, request.dataset_id)
-    if not dataset:
-        raise HTTPException(
-            status_code=404, detail=f"Dataset {request.dataset_id} not found"
-        )
+    # Resolve dataset (and optionally region)
+    dataset, region = _resolve_dataset_and_region(request, session)
 
     # Get model version
     model_version = _get_model_version(request.tax_benefit_model_name, session)
 
-    # Get or create simulations
+    # Get or create simulations using the resolved dataset
     baseline_sim = _get_or_create_simulation(
         simulation_type=SimulationType.ECONOMY,
         model_version_id=model_version.id,
         policy_id=None,
         dynamic_id=request.dynamic_id,
         session=session,
-        dataset_id=request.dataset_id,
+        dataset_id=dataset.id,
     )
 
     reform_sim = _get_or_create_simulation(
@@ -611,7 +697,7 @@ def economic_impact(
         policy_id=request.policy_id,
         dynamic_id=request.dynamic_id,
         session=session,
-        dataset_id=request.dataset_id,
+        dataset_id=dataset.id,
     )
 
     # Get or create report
@@ -630,7 +716,7 @@ def economic_impact(
                 str(report.id), request.tax_benefit_model_name, session
             )
 
-    return _build_response(report, baseline_sim, reform_sim, session)
+    return _build_response(report, baseline_sim, reform_sim, session, region)
 
 
 @router.get("/economic-impact/{report_id}", response_model=EconomicImpactResponse)
