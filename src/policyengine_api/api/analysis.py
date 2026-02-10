@@ -170,10 +170,12 @@ def _get_deterministic_simulation_id(
     dynamic_id: UUID | None,
     dataset_id: UUID | None = None,
     household_id: UUID | None = None,
+    filter_field: str | None = None,
+    filter_value: str | None = None,
 ) -> UUID:
     """Generate a deterministic UUID from simulation parameters."""
     if simulation_type == SimulationType.ECONOMY:
-        key = f"economy:{dataset_id}:{model_version_id}:{policy_id}:{dynamic_id}"
+        key = f"economy:{dataset_id}:{model_version_id}:{policy_id}:{dynamic_id}:{filter_field}:{filter_value}"
     else:
         key = f"household:{household_id}:{model_version_id}:{policy_id}:{dynamic_id}"
     return uuid5(SIMULATION_NAMESPACE, key)
@@ -196,6 +198,8 @@ def _get_or_create_simulation(
     session: Session,
     dataset_id: UUID | None = None,
     household_id: UUID | None = None,
+    filter_field: str | None = None,
+    filter_value: str | None = None,
 ) -> Simulation:
     """Get existing simulation or create a new one."""
     sim_id = _get_deterministic_simulation_id(
@@ -205,6 +209,8 @@ def _get_or_create_simulation(
         dynamic_id,
         dataset_id=dataset_id,
         household_id=household_id,
+        filter_field=filter_field,
+        filter_value=filter_value,
     )
 
     existing = session.get(Simulation, sim_id)
@@ -220,6 +226,8 @@ def _get_or_create_simulation(
         policy_id=policy_id,
         dynamic_id=dynamic_id,
         status=SimulationStatus.PENDING,
+        filter_field=filter_field,
+        filter_value=filter_value,
     )
     session.add(simulation)
     session.commit()
@@ -487,12 +495,14 @@ def _run_local_economy_comparison_uk(job_id: str, session: Session) -> None:
         year=dataset.year,
     )
 
-    # Run simulations
+    # Run simulations (with optional regional filtering)
     pe_baseline_sim = PESimulation(
         dataset=pe_dataset,
         tax_benefit_model_version=pe_model_version,
         policy=baseline_policy,
         dynamic=baseline_dynamic,
+        filter_field=baseline_sim.filter_field,
+        filter_value=baseline_sim.filter_value,
     )
     pe_baseline_sim.ensure()
 
@@ -501,6 +511,8 @@ def _run_local_economy_comparison_uk(job_id: str, session: Session) -> None:
         tax_benefit_model_version=pe_model_version,
         policy=reform_policy,
         dynamic=reform_dynamic,
+        filter_field=reform_sim.filter_field,
+        filter_value=reform_sim.filter_value,
     )
     pe_reform_sim.ensure()
 
@@ -678,6 +690,10 @@ def economic_impact(
     # Resolve dataset (and optionally region)
     dataset, region = _resolve_dataset_and_region(request, session)
 
+    # Extract filter parameters from region (if present)
+    filter_field = region.filter_field if region and region.requires_filter else None
+    filter_value = region.filter_value if region and region.requires_filter else None
+
     # Get model version
     model_version = _get_model_version(request.tax_benefit_model_name, session)
 
@@ -689,6 +705,8 @@ def economic_impact(
         dynamic_id=request.dynamic_id,
         session=session,
         dataset_id=dataset.id,
+        filter_field=filter_field,
+        filter_value=filter_value,
     )
 
     reform_sim = _get_or_create_simulation(
@@ -698,6 +716,8 @@ def economic_impact(
         dynamic_id=request.dynamic_id,
         session=session,
         dataset_id=dataset.id,
+        filter_field=filter_field,
+        filter_value=filter_value,
     )
 
     # Get or create report
