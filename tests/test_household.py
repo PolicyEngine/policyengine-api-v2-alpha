@@ -289,5 +289,202 @@ class TestValidation:
         assert response.status_code == 422
 
 
+class TestUSPolicyReform:
+    """Tests for US household calculations with policy reforms."""
+
+    def _get_us_model_id(self) -> str:
+        """Get the US tax benefit model ID."""
+        response = client.get("/tax-benefit-models/")
+        assert response.status_code == 200
+        models = response.json()
+        for model in models:
+            if "us" in model["name"].lower():
+                return model["id"]
+        raise AssertionError("US model not found")
+
+    def _get_parameter_id(self, model_id: str, param_name: str) -> str:
+        """Get a parameter ID by name."""
+        response = client.get(
+            f"/parameters/?tax_benefit_model_id={model_id}&limit=10000"
+        )
+        assert response.status_code == 200
+        params = response.json()
+        for param in params:
+            if param["name"] == param_name:
+                return param["id"]
+        raise AssertionError(f"Parameter {param_name} not found")
+
+    def _create_policy(self, param_id: str, value: float) -> str:
+        """Create a policy with a parameter value."""
+        response = client.post(
+            "/policies/",
+            json={
+                "name": "Test Reform",
+                "description": "Test reform for household calculation",
+                "parameter_values": [
+                    {
+                        "parameter_id": param_id,
+                        "value_json": value,
+                        "start_date": "2024-01-01T00:00:00Z",
+                    }
+                ],
+            },
+        )
+        assert response.status_code == 200
+        return response.json()["id"]
+
+    def test_us_reform_changes_household_net_income(self):
+        """Test that a US policy reform changes household net income.
+
+        This test verifies the fix for the US reform application bug where
+        reforms were not being applied correctly due to the shared singleton
+        TaxBenefitSystem in policyengine-us.
+        """
+        # Get the US model and a UBI parameter
+        model_id = self._get_us_model_id()
+        param_name = "gov.contrib.ubi_center.basic_income.amount.person.by_age[3].amount"
+        param_id = self._get_parameter_id(model_id, param_name)
+
+        # Create a policy with $1000 UBI for older adults
+        policy_id = self._create_policy(param_id, 1000)
+
+        # Run baseline calculation (no policy)
+        baseline_response = client.post(
+            "/household/calculate",
+            json={
+                "tax_benefit_model_name": "policyengine_us",
+                "people": [{"age": 40, "employment_income": 70000}],
+                "tax_unit": [{"state_code": "CA"}],
+                "household": [{"state_fips": 6}],
+                "year": 2024,
+            },
+        )
+        assert baseline_response.status_code == 200
+        baseline_data = _poll_job(baseline_response.json()["job_id"])
+        baseline_net_income = baseline_data["result"]["household"][0][
+            "household_net_income"
+        ]
+
+        # Run reform calculation (with UBI policy)
+        reform_response = client.post(
+            "/household/calculate",
+            json={
+                "tax_benefit_model_name": "policyengine_us",
+                "people": [{"age": 40, "employment_income": 70000}],
+                "tax_unit": [{"state_code": "CA"}],
+                "household": [{"state_fips": 6}],
+                "year": 2024,
+                "policy_id": policy_id,
+            },
+        )
+        assert reform_response.status_code == 200
+        reform_data = _poll_job(reform_response.json()["job_id"])
+        reform_net_income = reform_data["result"]["household"][0][
+            "household_net_income"
+        ]
+
+        # Verify the reform increased net income by approximately $1000
+        difference = reform_net_income - baseline_net_income
+        assert abs(difference - 1000) < 1, (
+            f"Expected ~$1000 difference, got ${difference:.2f}. "
+            f"Baseline: ${baseline_net_income:.2f}, Reform: ${reform_net_income:.2f}"
+        )
+
+
+class TestUKPolicyReform:
+    """Tests for UK household calculations with policy reforms."""
+
+    def _get_uk_model_id(self) -> str | None:
+        """Get the UK tax benefit model ID, or None if not seeded."""
+        response = client.get("/tax-benefit-models/")
+        assert response.status_code == 200
+        models = response.json()
+        for model in models:
+            if "uk" in model["name"].lower():
+                return model["id"]
+        return None
+
+    def _get_parameter_id(self, model_id: str, param_name: str) -> str:
+        """Get a parameter ID by name."""
+        response = client.get(
+            f"/parameters/?tax_benefit_model_id={model_id}&limit=10000"
+        )
+        assert response.status_code == 200
+        params = response.json()
+        for param in params:
+            if param["name"] == param_name:
+                return param["id"]
+        raise AssertionError(f"Parameter {param_name} not found")
+
+    def _create_policy(self, param_id: str, value: float) -> str:
+        """Create a policy with a parameter value."""
+        response = client.post(
+            "/policies/",
+            json={
+                "name": "Test UK Reform",
+                "description": "Test reform for UK household calculation",
+                "parameter_values": [
+                    {
+                        "parameter_id": param_id,
+                        "value_json": value,
+                        "start_date": "2026-01-01T00:00:00Z",
+                    }
+                ],
+            },
+        )
+        assert response.status_code == 200
+        return response.json()["id"]
+
+    def test_uk_reform_changes_household_net_income(self):
+        """Test that a UK policy reform changes household net income."""
+        # Get the UK model and a UBI parameter
+        model_id = self._get_uk_model_id()
+        if model_id is None:
+            pytest.skip("UK model not seeded in database")
+        param_name = "gov.contrib.ubi_center.basic_income.adult"
+        param_id = self._get_parameter_id(model_id, param_name)
+
+        # Create a policy with £1000 UBI for adults
+        policy_id = self._create_policy(param_id, 1000)
+
+        # Run baseline calculation (no policy)
+        baseline_response = client.post(
+            "/household/calculate",
+            json={
+                "tax_benefit_model_name": "policyengine_uk",
+                "people": [{"age": 30, "employment_income": 30000}],
+                "year": 2026,
+            },
+        )
+        assert baseline_response.status_code == 200
+        baseline_data = _poll_job(baseline_response.json()["job_id"])
+        baseline_net_income = baseline_data["result"]["household"][0][
+            "household_net_income"
+        ]
+
+        # Run reform calculation (with UBI policy)
+        reform_response = client.post(
+            "/household/calculate",
+            json={
+                "tax_benefit_model_name": "policyengine_uk",
+                "people": [{"age": 30, "employment_income": 30000}],
+                "year": 2026,
+                "policy_id": policy_id,
+            },
+        )
+        assert reform_response.status_code == 200
+        reform_data = _poll_job(reform_response.json()["job_id"])
+        reform_net_income = reform_data["result"]["household"][0][
+            "household_net_income"
+        ]
+
+        # Verify the reform increased net income
+        difference = reform_net_income - baseline_net_income
+        assert difference > 0, (
+            f"Expected positive difference, got £{difference:.2f}. "
+            f"Baseline: £{baseline_net_income:.2f}, Reform: £{reform_net_income:.2f}"
+        )
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
