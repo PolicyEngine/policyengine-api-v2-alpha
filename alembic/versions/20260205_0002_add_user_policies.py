@@ -7,6 +7,10 @@ Create Date: 2026-02-05
 This migration adds:
 1. tax_benefit_model_id foreign key to policies table
 2. user_policies table for user-policy associations
+
+Note: user_id in user_policies is NOT a foreign key to users table.
+It's a client-generated UUID stored in localStorage, allowing anonymous
+users to save policies without authentication.
 """
 
 from typing import Sequence, Union
@@ -44,6 +48,7 @@ def upgrade() -> None:
     )
 
     # Create user_policies table
+    # Note: user_id is NOT a foreign key - it's a client-generated UUID from localStorage
     op.create_table(
         "user_policies",
         sa.Column("user_id", sa.Uuid(), nullable=False),
@@ -53,7 +58,6 @@ def upgrade() -> None:
         sa.Column("created_at", sa.DateTime(), nullable=False),
         sa.Column("updated_at", sa.DateTime(), nullable=False),
         sa.ForeignKeyConstraint(["policy_id"], ["policies.id"]),
-        sa.ForeignKeyConstraint(["user_id"], ["users.id"]),
         sa.PrimaryKeyConstraint("id"),
     )
     op.create_index(

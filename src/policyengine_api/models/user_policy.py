@@ -6,13 +6,16 @@ from sqlmodel import Field, Relationship, SQLModel
 
 if TYPE_CHECKING:
     from .policy import Policy
-    from .user import User
 
 
 class UserPolicyBase(SQLModel):
     """Base user-policy association fields."""
 
-    user_id: UUID = Field(foreign_key="users.id", index=True)
+    # user_id is a client-generated UUID stored in localStorage, not a foreign key.
+    # This allows anonymous users to save policies without requiring authentication.
+    # The UUID is generated once per browser via crypto.randomUUID() and persisted
+    # in localStorage for stable identity across sessions.
+    user_id: UUID = Field(index=True)
     policy_id: UUID = Field(foreign_key="policies.id", index=True)
     label: str | None = None
 
@@ -27,7 +30,6 @@ class UserPolicy(UserPolicyBase, table=True):
     updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
     # Relationships
-    user: "User" = Relationship()
     policy: "Policy" = Relationship()
 
 
