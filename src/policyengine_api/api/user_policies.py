@@ -3,6 +3,10 @@
 Associates users with policies they've saved/created. This enables users to
 maintain a list of their policies across sessions without duplicating the
 underlying policy data.
+
+Note: user_id is a client-generated UUID (via crypto.randomUUID()) stored in
+the browser's localStorage. It is NOT validated against a users table, allowing
+anonymous users to save policies without authentication.
 """
 
 from datetime import datetime, timezone
@@ -13,7 +17,6 @@ from sqlmodel import Session, select
 
 from policyengine_api.models import (
     Policy,
-    User,
     UserPolicy,
     UserPolicyCreate,
     UserPolicyRead,
@@ -34,12 +37,9 @@ def create_user_policy(
     Associates a user with a policy, allowing them to save it to their list.
     Duplicates are allowed - users can save the same policy multiple times
     with different labels (matching FE localStorage behavior).
-    """
-    # Validate user exists
-    user = session.get(User, user_policy.user_id)
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
 
+    Note: user_id is not validated - it's a client-generated UUID from localStorage.
+    """
     # Validate policy exists
     policy = session.get(Policy, user_policy.policy_id)
     if not policy:
