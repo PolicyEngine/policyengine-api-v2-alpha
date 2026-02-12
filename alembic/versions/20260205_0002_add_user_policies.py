@@ -1,7 +1,7 @@
 """add_user_policies
 
 Revision ID: 0002_user_policies
-Revises: 0001_initial
+Revises: 36f9d434e95b
 Create Date: 2026-02-05
 
 This migration adds:
@@ -18,7 +18,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "0002_user_policies"
-down_revision: Union[str, Sequence[str], None] = "0001_initial"
+down_revision: Union[str, Sequence[str], None] = "36f9d434e95b"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
