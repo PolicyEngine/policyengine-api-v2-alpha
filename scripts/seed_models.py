@@ -1,106 +1,59 @@
-"""Shared utilities for seed scripts."""
+"""Seed tax-benefit models with variables and parameters.
 
-import io
+This script seeds TaxBenefitModel, TaxBenefitModelVersion, Variables,
+Parameters, and ParameterValues from policyengine.py.
+
+Usage:
+    python scripts/seed_models.py              # Seed UK and US models
+    python scripts/seed_models.py --us-only    # Seed only US model
+    python scripts/seed_models.py --uk-only    # Seed only UK model
+    python scripts/seed_models.py --skip-state-params  # Skip US state parameters
+"""
+
+import argparse
 import json
-import logging
 import math
-import sys
-import warnings
 from datetime import datetime, timezone
-from pathlib import Path
 from uuid import uuid4
 
 import logfire
-from rich.console import Console
 from rich.progress import Progress, SpinnerColumn, TextColumn
-from sqlmodel import Session, create_engine
+from sqlmodel import Session, select
 
-# Disable all SQLAlchemy and database logging BEFORE any imports
-logging.basicConfig(level=logging.ERROR)
-logging.getLogger("sqlalchemy").setLevel(logging.ERROR)
-warnings.filterwarnings("ignore")
+from seed_utils import bulk_insert, console, get_session
 
-# Add src to path
-sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
-
-from policyengine_api.config.settings import settings  # noqa: E402
-
-# Configure logfire
-if settings.logfire_token:
-    logfire.configure(
-        token=settings.logfire_token,
-        environment=settings.logfire_environment,
-        console=False,
-    )
-
-console = Console()
+# Import after seed_utils sets up path
+from policyengine_api.models import (  # noqa: E402
+    Parameter,
+    ParameterValue,
+    TaxBenefitModel,
+    TaxBenefitModelVersion,
+)
 
 
-def get_session():
-    """Get database session with logging disabled."""
-    engine = create_engine(settings.database_url, echo=False)
-    return Session(engine)
-
-
-def bulk_insert(session, table: str, columns: list[str], rows: list[dict]):
-    """Fast bulk insert using PostgreSQL COPY via StringIO."""
-    if not rows:
-        return
-
-    # Get raw psycopg2 connection
-    connection = session.connection()
-    raw_conn = connection.connection.dbapi_connection
-    cursor = raw_conn.cursor()
-
-    # Build CSV-like data in memory
-    output = io.StringIO()
-    for row in rows:
-        values = []
-        for col in columns:
-            val = row[col]
-            if val is None:
-                values.append("\\N")
-            elif isinstance(val, str):
-                # Escape special characters for COPY
-                val = (
-                    val.replace("\\", "\\\\").replace("\t", "\\t").replace("\n", "\\n")
-                )
-                values.append(val)
-            else:
-                values.append(str(val))
-        output.write("\t".join(values) + "\n")
-
-    output.seek(0)
-
-    # COPY is the fastest way to bulk load PostgreSQL
-    cursor.copy_from(output, table, columns=columns, null="\\N")
-    session.commit()
-
-
-def seed_model(model_version, session, lite: bool = False):
+def seed_model(
+    model_version,
+    session: Session,
+    skip_state_params: bool = False,
+) -> TaxBenefitModelVersion:
     """Seed a tax-benefit model with its variables and parameters.
 
     Args:
-        model_version: The policyengine package model version
+        model_version: The policyengine.py model version object
         session: Database session
-        lite: If True, skip state-level parameters
+        skip_state_params: Skip US state-level parameters (gov.states.*)
 
-    Returns the TaxBenefitModelVersion that was created or found.
+    Returns:
+        The created or existing TaxBenefitModelVersion
     """
-    from policyengine_api.models import (
-        TaxBenefitModel,
-        TaxBenefitModelVersion,
-    )
-    from sqlmodel import select
-
     with logfire.span(
         "seed_model",
         model=model_version.model.id,
         version=model_version.version,
     ):
-        # Create or get the model
         console.print(f"[bold blue]Seeding {model_version.model.id}...")
 
+        # Create or get the model
         existing_model = session.exec(
             select(TaxBenefitModel).where(
                 TaxBenefitModel.name == model_version.model.id
@@ -157,10 +110,6 @@ def seed_model(model_version, session, lite: bool = False):
                     total=len(model_version.variables),
                 )
                 for var in model_version.variables:
-                    # default_value is pre-serialized by policyengine.py:
-                    # - Enum values are converted to their name (e.g., "SINGLE")
-                    # - datetime.date values are converted to ISO format
-                    # - Primitives (bool, int, float, str) are kept as-is
                     var_rows.append(
                         {
                             "id": uuid4(),
@@ -171,7 +120,6 @@ def seed_model(model_version, session, lite: bool = False):
                             if hasattr(var.data_type, "__name__")
                             else str(var.data_type),
                             "possible_values": None,
-                            "default_value": json.dumps(var.default_value),
                             "tax_benefit_model_version_id": db_version.id,
                             "created_at": datetime.now(timezone.utc),
                         }
@@ -189,7 +137,6 @@ def seed_model(model_version, session, lite: bool = False):
                     "description",
                     "data_type",
                     "possible_values",
-                    "default_value",
                     "tax_benefit_model_version_id",
                     "created_at",
                 ],
@@ -200,43 +147,30 @@ def seed_model(model_version, session, lite: bool = False):
                 f"  [green]✓[/green] Added {len(model_version.variables)} variables"
             )
 
-        # Add parameters - deduplicate by name (keep first occurrence)
-        #
-        # WHY DEDUPLICATION IS NEEDED:
-        # The policyengine package can provide multiple parameter entries with the same
-        # name. This happens because parameters can have multiple bracket entries or
-        # state-specific variants that share the same base name. We keep only the first
-        # occurrence to avoid database unique constraint violations and reduce redundancy.
-        #
-        # NOTE: We do NOT filter by label. Parameters without labels (bracket params,
-        # breakdown params) are still valid and needed for policy analysis.
-        #
-        # In lite mode, exclude US state parameters (gov.states.*)
+        # Add parameters (only user-facing ones: those with labels)
+        # Deduplicate by name - keep first occurrence
         seen_names = set()
         parameters_to_add = []
-        skipped_state_params = 0
-        skipped_duplicate = 0
-
+        skipped_state_params_count = 0
         for p in model_version.parameters:
-            if p.name in seen_names:
-                skipped_duplicate += 1
+            if p.label is None or p.name in seen_names:
                 continue
-            # In lite mode, skip state-level parameters for faster seeding
-            if lite and p.name.startswith("gov.states."):
-                skipped_state_params += 1
+            # Skip state-level parameters if requested
+            if skip_state_params and p.name.startswith("gov.states."):
+                skipped_state_params_count += 1
                 continue
             parameters_to_add.append(p)
             seen_names.add(p.name)
 
-        console.print(f"  Parameter filtering:")
-        console.print(f"    - Total from source: {len(model_version.parameters)}")
-        console.print(f"    - Skipped (duplicate name): {skipped_duplicate}")
-        if lite and skipped_state_params > 0:
-            console.print(f"    - Skipped (state params, lite mode): {skipped_state_params}")
-        console.print(f"    - To add: {len(parameters_to_add)}")
+        filter_msg = f"  Filtered to {len(parameters_to_add)} user-facing parameters"
+        filter_msg += (
+            f" (from {len(model_version.parameters)} total, deduplicated by name)"
+        )
+        if skip_state_params and skipped_state_params_count > 0:
+            filter_msg += f", skipped {skipped_state_params_count} state params"
+        console.print(filter_msg)
 
         with logfire.span("add_parameters", count=len(parameters_to_add)):
-            # Build list of parameter dicts for bulk insert
             param_rows = []
             param_names = []  # Track (pe_id, name, generated_uuid)
 
@@ -293,7 +227,6 @@ def seed_model(model_version, session, lite: bool = False):
             )
 
         # Add parameter values
-        # Filter to only include values for parameters we added
         parameter_values_to_add = [
             pv
             for pv in model_version.parameter_values
@@ -324,7 +257,6 @@ def seed_model(model_version, session, lite: bool = False):
                         continue
 
                     # Source data has dates swapped (start > end), fix ordering
-                    # Only swap if both dates are set, otherwise keep original
                     if pv.start_date and pv.end_date:
                         start = pv.end_date  # Swap: source end is our start
                         end = pv.start_date  # Swap: source start is our end
@@ -368,3 +300,56 @@ def seed_model(model_version, session, lite: bool = False):
             )
 
         return db_version
+
+
+def seed_uk_model(session: Session, skip_state_params: bool = False):
+    """Seed UK model."""
+    from policyengine.tax_benefit_models.uk import uk_latest
+
+    version = seed_model(uk_latest, session, skip_state_params=skip_state_params)
+    console.print(f"[green]✓[/green] UK model seeded: {version.id}\n")
+    return version
+
+
+def seed_us_model(session: Session, skip_state_params: bool = False):
+    """Seed US model."""
+    from policyengine.tax_benefit_models.us import us_latest
+
+    version = seed_model(us_latest, session, skip_state_params=skip_state_params)
+    console.print(f"[green]✓[/green] US model seeded: {version.id}\n")
+    return version
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Seed tax-benefit models")
+    parser.add_argument(
+        "--us-only",
+        action="store_true",
+        help="Only seed US model",
+    )
+    parser.add_argument(
+        "--uk-only",
+        action="store_true",
+        help="Only seed UK model",
+    )
+    parser.add_argument(
+        "--skip-state-params",
+        action="store_true",
+        help="Skip US state-level parameters (gov.states.*)",
+    )
+    args = parser.parse_args()
+
+    console.print("[bold green]Seeding tax-benefit models...[/bold green]\n")
+
+    with get_session() as session:
+        if not args.us_only:
+            seed_uk_model(session, skip_state_params=args.skip_state_params)
+
+        if not args.uk_only:
+            seed_us_model(session, skip_state_params=args.skip_state_params)
+
+    console.print("[bold green]✓ Model seeding complete![/bold green]")
+
+
+if __name__ == "__main__":
+    main()

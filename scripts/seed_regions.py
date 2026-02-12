@@ -16,27 +16,15 @@ Usage:
 """
 
 import argparse
-import sys
 import time
-from pathlib import Path
 
-# Add src to path
-sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
-
-from rich.console import Console
 from rich.progress import Progress, SpinnerColumn, TextColumn
-from sqlmodel import Session, create_engine, select
+from sqlmodel import Session, select
 
-from policyengine_api.config.settings import settings
-from policyengine_api.models import Dataset, Region, TaxBenefitModel
+from seed_utils import console, get_session
 
-console = Console()
-
-
-def get_session() -> Session:
-    """Get database session."""
-    engine = create_engine(settings.database_url)
-    return Session(engine)
+# Import after seed_utils sets up path
+from policyengine_api.models import Dataset, Region, TaxBenefitModel  # noqa: E402
 
 
 def seed_us_regions(
