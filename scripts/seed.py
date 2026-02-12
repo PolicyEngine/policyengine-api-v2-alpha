@@ -637,14 +637,14 @@ def main():
         help="Skip seeding regions",
     )
     parser.add_argument(
-        "--include-places",
+        "--skip-places",
         action="store_true",
-        help="Include US places (cities over 100K population) when seeding regions",
+        help="Skip US places (cities over 100K population) when seeding regions",
     )
     parser.add_argument(
-        "--include-districts",
+        "--skip-districts",
         action="store_true",
-        help="Include US congressional districts when seeding regions",
+        help="Skip US congressional districts when seeding regions",
     )
     args = parser.parse_args()
 
@@ -674,8 +674,8 @@ def main():
                 console.print("\n[bold]Seeding regions...[/bold]")
                 us_created, us_skipped = seed_us_regions(
                     session,
-                    include_places=args.include_places,
-                    include_districts=args.include_districts,
+                    skip_places=args.skip_places,
+                    skip_districts=args.skip_districts,
                 )
                 console.print(
                     f"[green]✓[/green] US regions: {us_created} created, {us_skipped} skipped"

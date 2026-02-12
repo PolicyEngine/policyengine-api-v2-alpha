@@ -1,17 +1,18 @@
 """Seed regions for US and UK geographic analysis.
 
 This script populates the regions table with:
-- US: National, 51 states (incl. DC), and optionally places/cities
+- US: National, 51 states (incl. DC), 436 congressional districts, 333 places/cities
 - UK: National and 4 countries (England, Scotland, Wales, Northern Ireland)
 
 Regions are sourced from policyengine.py's region registries and linked
 to the appropriate datasets in the database.
 
 Usage:
-    python scripts/seed_regions.py              # Seed US and UK regions
+    python scripts/seed_regions.py              # Seed all US and UK regions
     python scripts/seed_regions.py --us-only    # Seed only US regions
     python scripts/seed_regions.py --uk-only    # Seed only UK regions
-    python scripts/seed_regions.py --include-places  # Include US places (cities)
+    python scripts/seed_regions.py --skip-places     # Exclude US places (cities)
+    python scripts/seed_regions.py --skip-districts  # Exclude US congressional districts
 """
 
 import argparse
@@ -40,15 +41,15 @@ def get_session() -> Session:
 
 def seed_us_regions(
     session: Session,
-    include_places: bool = False,
-    include_districts: bool = False,
+    skip_places: bool = False,
+    skip_districts: bool = False,
 ) -> tuple[int, int]:
     """Seed US regions from policyengine.py registry.
 
     Args:
         session: Database session
-        include_places: Include US places (cities over 100K population)
-        include_districts: Include congressional districts
+        skip_places: Skip US places (cities over 100K population)
+        skip_districts: Skip congressional districts
 
     Returns:
         Tuple of (created_count, skipped_count)
@@ -86,9 +87,9 @@ def seed_us_regions(
             regions_to_seed.append(region)
         elif region.region_type == "state":
             regions_to_seed.append(region)
-        elif region.region_type == "congressional_district" and include_districts:
+        elif region.region_type == "congressional_district" and not skip_districts:
             regions_to_seed.append(region)
-        elif region.region_type == "place" and include_places:
+        elif region.region_type == "place" and not skip_places:
             regions_to_seed.append(region)
 
     with Progress(
@@ -229,14 +230,14 @@ def main():
         help="Only seed UK regions",
     )
     parser.add_argument(
-        "--include-places",
+        "--skip-places",
         action="store_true",
-        help="Include US places (cities over 100K population)",
+        help="Skip US places (cities over 100K population)",
     )
     parser.add_argument(
-        "--include-districts",
+        "--skip-districts",
         action="store_true",
-        help="Include US congressional districts",
+        help="Skip US congressional districts",
     )
     args = parser.parse_args()
 
@@ -252,8 +253,8 @@ def main():
             console.print("[bold]US Regions[/bold]")
             us_created, us_skipped = seed_us_regions(
                 session,
-                include_places=args.include_places,
-                include_districts=args.include_districts,
+                skip_places=args.skip_places,
+                skip_districts=args.skip_districts,
             )
             total_created += us_created
             total_skipped += us_skipped
