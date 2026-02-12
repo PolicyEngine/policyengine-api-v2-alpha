@@ -631,6 +631,21 @@ def main():
         action="store_true",
         help="Skip UK datasets (useful when HuggingFace token is not available)",
     )
+    parser.add_argument(
+        "--skip-regions",
+        action="store_true",
+        help="Skip seeding regions",
+    )
+    parser.add_argument(
+        "--include-places",
+        action="store_true",
+        help="Include US places (cities over 100K population) when seeding regions",
+    )
+    parser.add_argument(
+        "--include-districts",
+        action="store_true",
+        help="Include US congressional districts when seeding regions",
+    )
     args = parser.parse_args()
 
     with logfire.span("database_seeding"):
@@ -651,6 +666,26 @@ def main():
 
             # Seed example policies
             seed_example_policies(session)
+
+            # Seed regions
+            if not args.skip_regions:
+                from seed_regions import seed_us_regions, seed_uk_regions
+
+                console.print("\n[bold]Seeding regions...[/bold]")
+                us_created, us_skipped = seed_us_regions(
+                    session,
+                    include_places=args.include_places,
+                    include_districts=args.include_districts,
+                )
+                console.print(
+                    f"[green]✓[/green] US regions: {us_created} created, {us_skipped} skipped"
+                )
+
+                if not args.skip_uk_datasets:
+                    uk_created, uk_skipped = seed_uk_regions(session)
+                    console.print(
+                        f"[green]✓[/green] UK regions: {uk_created} created, {uk_skipped} skipped"
+                    )
 
         console.print("\n[bold green]✓ Database seeding complete![/bold green]")
 
