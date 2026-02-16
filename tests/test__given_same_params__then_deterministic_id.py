@@ -10,6 +10,7 @@ from uuid import uuid4
 import pytest
 
 from policyengine_api.api.analysis import _get_deterministic_simulation_id
+from policyengine_api.models import SimulationType
 
 
 class TestDeterministicSimulationId:
@@ -27,20 +28,22 @@ class TestDeterministicSimulationId:
 
         # When
         id1 = _get_deterministic_simulation_id(
-            dataset_id,
+            SimulationType.ECONOMY,
             model_version_id,
             policy_id,
             dynamic_id,
-            filter_field,
-            filter_value,
+            dataset_id=dataset_id,
+            filter_field=filter_field,
+            filter_value=filter_value,
         )
         id2 = _get_deterministic_simulation_id(
-            dataset_id,
+            SimulationType.ECONOMY,
             model_version_id,
             policy_id,
             dynamic_id,
-            filter_field,
-            filter_value,
+            dataset_id=dataset_id,
+            filter_field=filter_field,
+            filter_value=filter_value,
         )
 
         # Then
@@ -56,18 +59,20 @@ class TestDeterministicSimulationId:
 
         # When
         id1 = _get_deterministic_simulation_id(
-            dataset_id,
+            SimulationType.ECONOMY,
             model_version_id,
             policy_id,
             dynamic_id,
+            dataset_id=dataset_id,
             filter_field="country",
             filter_value="ENGLAND",
         )
         id2 = _get_deterministic_simulation_id(
-            dataset_id,
+            SimulationType.ECONOMY,
             model_version_id,
             policy_id,
             dynamic_id,
+            dataset_id=dataset_id,
             filter_field="state_code",
             filter_value="ENGLAND",
         )
@@ -85,18 +90,20 @@ class TestDeterministicSimulationId:
 
         # When
         id1 = _get_deterministic_simulation_id(
-            dataset_id,
+            SimulationType.ECONOMY,
             model_version_id,
             policy_id,
             dynamic_id,
+            dataset_id=dataset_id,
             filter_field="country",
             filter_value="ENGLAND",
         )
         id2 = _get_deterministic_simulation_id(
-            dataset_id,
+            SimulationType.ECONOMY,
             model_version_id,
             policy_id,
             dynamic_id,
+            dataset_id=dataset_id,
             filter_field="country",
             filter_value="SCOTLAND",
         )
@@ -114,18 +121,20 @@ class TestDeterministicSimulationId:
 
         # When
         id_no_filter = _get_deterministic_simulation_id(
-            dataset_id,
+            SimulationType.ECONOMY,
             model_version_id,
             policy_id,
             dynamic_id,
+            dataset_id=dataset_id,
             filter_field=None,
             filter_value=None,
         )
         id_with_filter = _get_deterministic_simulation_id(
-            dataset_id,
+            SimulationType.ECONOMY,
             model_version_id,
             policy_id,
             dynamic_id,
+            dataset_id=dataset_id,
             filter_field="country",
             filter_value="ENGLAND",
         )
@@ -144,10 +153,22 @@ class TestDeterministicSimulationId:
 
         # When
         id1 = _get_deterministic_simulation_id(
-            uuid4(), model_version_id, policy_id, dynamic_id, filter_field, filter_value
+            SimulationType.ECONOMY,
+            model_version_id,
+            policy_id,
+            dynamic_id,
+            dataset_id=uuid4(),
+            filter_field=filter_field,
+            filter_value=filter_value,
         )
         id2 = _get_deterministic_simulation_id(
-            uuid4(), model_version_id, policy_id, dynamic_id, filter_field, filter_value
+            SimulationType.ECONOMY,
+            model_version_id,
+            policy_id,
+            dynamic_id,
+            dataset_id=uuid4(),
+            filter_field=filter_field,
+            filter_value=filter_value,
         )
 
         # Then
@@ -161,10 +182,22 @@ class TestDeterministicSimulationId:
 
         # When
         id1 = _get_deterministic_simulation_id(
-            dataset_id, model_version_id, None, None, None, None
+            SimulationType.ECONOMY,
+            model_version_id,
+            None,
+            None,
+            dataset_id=dataset_id,
+            filter_field=None,
+            filter_value=None,
         )
         id2 = _get_deterministic_simulation_id(
-            dataset_id, model_version_id, None, None, None, None
+            SimulationType.ECONOMY,
+            model_version_id,
+            None,
+            None,
+            dataset_id=dataset_id,
+            filter_field=None,
+            filter_value=None,
         )
 
         # Then

@@ -13,6 +13,7 @@ from policyengine_api.api.analysis import (
     _get_or_create_simulation,
     _resolve_dataset_and_region,
 )
+from policyengine_api.models import SimulationType
 from test_fixtures.fixtures_regions import (
     create_dataset,
     create_region,
@@ -134,6 +135,7 @@ class TestSimulationCreationWithFilter:
 
         # When
         simulation = _get_or_create_simulation(
+            simulation_type=SimulationType.ECONOMY,
             dataset_id=dataset.id,
             model_version_id=model_version.id,
             policy_id=None,
@@ -158,6 +160,7 @@ class TestSimulationCreationWithFilter:
 
         # When
         simulation = _get_or_create_simulation(
+            simulation_type=SimulationType.ECONOMY,
             dataset_id=dataset.id,
             model_version_id=model_version.id,
             policy_id=None,
