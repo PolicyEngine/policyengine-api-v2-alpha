@@ -9,6 +9,8 @@ from . import (
     datasets,
     dynamics,
     household,
+    household_analysis,
+    households,
     outputs,
     parameter_values,
     parameters,
@@ -16,6 +18,7 @@ from . import (
     simulations,
     tax_benefit_model_versions,
     tax_benefit_models,
+    user_household_associations,
     variables,
 )
 
@@ -33,7 +36,10 @@ api_router.include_router(tax_benefit_models.router)
 api_router.include_router(tax_benefit_model_versions.router)
 api_router.include_router(change_aggregates.router)
 api_router.include_router(household.router)
+api_router.include_router(household_analysis.router)
+api_router.include_router(households.router)
 api_router.include_router(analysis.router)
 api_router.include_router(agent.router)
+api_router.include_router(user_household_associations.router)
 
 __all__ = ["api_router"]

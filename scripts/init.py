@@ -1,12 +1,19 @@
-"""Initialise Supabase: reset database, recreate tables, buckets, and permissions.
+"""Initialise Supabase database with tables, buckets, and permissions.
 
-This script performs a complete reset of the Supabase instance:
-1. Drops and recreates the public schema (all tables)
-2. Deletes and recreates the storage bucket
-3. Creates all tables from SQLModel definitions
-4. Applies RLS policies and storage permissions
+This script can run in two modes:
+1. Init mode (default): Creates tables via Alembic, applies RLS policies
+2. Reset mode (--reset): Drops everything and recreates from scratch (DESTRUCTIVE)
+
+Usage:
+    uv run python scripts/init.py          # Safe init (creates if not exists)
+    uv run python scripts/init.py --reset  # Destructive reset (drops everything)
+
+For local development after `supabase start`, use init mode.
+For production, use init mode to ensure tables and policies exist.
+Reset mode should only be used when you need a completely fresh database.
 """
 
+import subprocess
 import sys
 from pathlib import Path
 
@@ -14,16 +21,14 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 from rich.console import Console
 from rich.panel import Panel
-from sqlmodel import SQLModel, create_engine
+from sqlmodel import create_engine
 
-# Import all models to register them with SQLModel.metadata
-from policyengine_api import models  # noqa: F401
 from policyengine_api.config.settings import settings
 from policyengine_api.services.storage import get_service_role_client
 
 console = Console()
 
-MIGRATIONS_DIR = Path(__file__).parent.parent / "supabase" / "migrations"
+PROJECT_ROOT = Path(__file__).parent.parent
 
 
 def reset_storage_bucket():
@@ -57,30 +62,61 @@ def reset_storage_bucket():
         console.print(f"[yellow]⚠ Warning with storage bucket: {e}[/yellow]")
 
 
+def ensure_storage_bucket():
+    """Ensure storage bucket exists (non-destructive)."""
+    console.print("[bold blue]Ensuring storage bucket exists...")
+
+    try:
+        supabase = get_service_role_client()
+        bucket_name = settings.storage_bucket
+
+        # Try to get bucket info
+        try:
+            supabase.storage.get_bucket(bucket_name)
+            console.print(f"[green]✓[/green] Bucket '{bucket_name}' exists")
+        except Exception:
+            # Bucket doesn't exist, create it
+            supabase.storage.create_bucket(bucket_name, options={"public": True})
+            console.print(f"[green]✓[/green] Created bucket '{bucket_name}'")
+
+    except Exception as e:
+        console.print(f"[yellow]⚠ Warning with storage bucket: {e}[/yellow]")
+
+
 def reset_database():
-    """Drop and recreate all tables."""
-    console.print("[bold blue]Resetting database...")
+    """Drop and recreate the public schema (DESTRUCTIVE)."""
+    console.print("[bold red]Dropping database schema...")
 
     engine = create_engine(settings.database_url, echo=False)
 
-    # Drop and recreate public schema
-    console.print("  Dropping public schema...")
     with engine.begin() as conn:
         conn.exec_driver_sql("DROP SCHEMA public CASCADE")
         conn.exec_driver_sql("CREATE SCHEMA public")
         conn.exec_driver_sql("GRANT ALL ON SCHEMA public TO postgres")
         conn.exec_driver_sql("GRANT ALL ON SCHEMA public TO public")
 
-    # Create all tables from SQLModel
-    console.print("  Creating tables...")
-    SQLModel.metadata.create_all(engine)
-
-    tables = list(SQLModel.metadata.tables.keys())
-    console.print(f"[green]✓[/green] Created {len(tables)} tables:")
-    for table in sorted(tables):
-        console.print(f"    {table}")
-
+    console.print("[green]✓[/green] Schema dropped and recreated")
     return engine
+
+
+def run_alembic_migrations():
+    """Run Alembic migrations to create/update tables."""
+    console.print("[bold blue]Running Alembic migrations...")
+
+    result = subprocess.run(
+        ["uv", "run", "alembic", "upgrade", "head"],
+        cwd=PROJECT_ROOT,
+        capture_output=True,
+        text=True,
+    )
+
+    if result.returncode != 0:
+        console.print(f"[red]✗ Alembic migration failed:[/red]")
+        console.print(result.stderr)
+        raise RuntimeError("Alembic migration failed")
+
+    console.print("[green]✓[/green] Alembic migrations complete")
+    console.print(result.stdout)
 
 
 def apply_storage_policies(engine):
@@ -158,6 +194,10 @@ def apply_rls_policies(engine):
         "parameter_values",
         "users",
         "household_jobs",
+        "households",
+        "user_household_associations",
+        "poverty",
+        "inequality",
     ]
 
     # Read-only tables (public can read, only service role can write)
@@ -178,6 +218,7 @@ def apply_rls_policies(engine):
         "dynamics",
         "reports",
         "household_jobs",
+        "households",
     ]
 
     # Read-only results tables
@@ -186,6 +227,8 @@ def apply_rls_policies(engine):
         "change_aggregates",
         "decile_impacts",
         "program_statistics",
+        "poverty",
+        "inequality",
     ]
 
     sql_parts = []
@@ -230,6 +273,13 @@ def apply_rls_policies(engine):
         FOR SELECT TO anon, authenticated USING (true);
         """)
 
+    # User-household associations need special handling
+    sql_parts.append("""
+    DROP POLICY IF EXISTS "Users can manage own associations" ON user_household_associations;
+    CREATE POLICY "Users can manage own associations" ON user_household_associations
+    FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+    """)
+
     sql = "\n".join(sql_parts)
 
     conn = engine.raw_connection()
@@ -246,30 +296,53 @@ def apply_rls_policies(engine):
 
 
 def main():
-    """Run full Supabase initialisation."""
-    console.print(
-        Panel.fit(
-            "[bold red]⚠ WARNING: This will DELETE ALL DATA[/bold red]\n"
-            "This script resets the entire Supabase instance.",
-            title="Supabase init",
+    """Run Supabase initialisation."""
+    reset_mode = "--reset" in sys.argv
+
+    if reset_mode:
+        console.print(
+            Panel.fit(
+                "[bold red]⚠ WARNING: This will DELETE ALL DATA[/bold red]\n"
+                "This script will reset the entire Supabase instance.",
+                title="Supabase RESET",
+            )
         )
-    )
 
-    # Confirm unless running non-interactively
-    if sys.stdin.isatty():
-        response = console.input("\nType 'yes' to continue: ")
-        if response.lower() != "yes":
-            console.print("[yellow]Aborted[/yellow]")
-            return
+        # Confirm unless running non-interactively
+        if sys.stdin.isatty():
+            response = console.input("\nType 'yes' to continue: ")
+            if response.lower() != "yes":
+                console.print("[yellow]Aborted[/yellow]")
+                return
 
-    console.print()
+        console.print()
 
-    # Reset storage bucket
-    reset_storage_bucket()
-    console.print()
+        # Reset storage bucket
+        reset_storage_bucket()
+        console.print()
 
-    # Reset database and create tables
-    engine = reset_database()
+        # Drop database schema
+        engine = reset_database()
+        console.print()
+    else:
+        console.print(
+            Panel.fit(
+                "[bold blue]Initialising Supabase[/bold blue]\n"
+                "This will create tables if they don't exist (safe/idempotent).\n"
+                "Use [cyan]--reset[/cyan] flag to drop and recreate everything.",
+                title="Supabase init",
+            )
+        )
+        console.print()
+
+        # Ensure storage bucket exists
+        ensure_storage_bucket()
+        console.print()
+
+        engine = create_engine(settings.database_url, echo=False)
+
+    # Run Alembic migrations to create/update tables
+    run_alembic_migrations()
     console.print()
 
     # Apply storage policies

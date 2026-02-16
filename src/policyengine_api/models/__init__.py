@@ -11,6 +11,7 @@ from .dataset import Dataset, DatasetCreate, DatasetRead
 from .dataset_version import DatasetVersion, DatasetVersionCreate, DatasetVersionRead
 from .decile_impact import DecileImpact, DecileImpactCreate, DecileImpactRead
 from .dynamic import Dynamic, DynamicCreate, DynamicRead
+from .household import Household, HouseholdCreate, HouseholdRead
 from .household_job import (
     HouseholdJob,
     HouseholdJobCreate,
@@ -35,7 +36,13 @@ from .program_statistics import (
     ProgramStatisticsRead,
 )
 from .report import Report, ReportCreate, ReportRead, ReportStatus
-from .simulation import Simulation, SimulationCreate, SimulationRead, SimulationStatus
+from .simulation import (
+    Simulation,
+    SimulationCreate,
+    SimulationRead,
+    SimulationStatus,
+    SimulationType,
+)
 from .tax_benefit_model import (
     TaxBenefitModel,
     TaxBenefitModelCreate,
@@ -47,6 +54,12 @@ from .tax_benefit_model_version import (
     TaxBenefitModelVersionRead,
 )
 from .user import User, UserCreate, UserRead
+from .user_household_association import (
+    UserHouseholdAssociation,
+    UserHouseholdAssociationCreate,
+    UserHouseholdAssociationRead,
+    UserHouseholdAssociationUpdate,
+)
 from .variable import Variable, VariableCreate, VariableRead
 
 __all__ = [
@@ -72,6 +85,9 @@ __all__ = [
     "Dynamic",
     "DynamicCreate",
     "DynamicRead",
+    "Household",
+    "HouseholdCreate",
+    "HouseholdRead",
     "HouseholdJob",
     "HouseholdJobCreate",
     "HouseholdJobRead",
@@ -102,6 +118,7 @@ __all__ = [
     "SimulationCreate",
     "SimulationRead",
     "SimulationStatus",
+    "SimulationType",
     "TaxBenefitModel",
     "TaxBenefitModelCreate",
     "TaxBenefitModelRead",
@@ -110,6 +127,10 @@ __all__ = [
     "TaxBenefitModelVersionRead",
     "User",
     "UserCreate",
+    "UserHouseholdAssociation",
+    "UserHouseholdAssociationCreate",
+    "UserHouseholdAssociationRead",
+    "UserHouseholdAssociationUpdate",
     "UserRead",
     "Variable",
     "VariableCreate",

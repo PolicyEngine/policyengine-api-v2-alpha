@@ -35,6 +35,7 @@ from policyengine_api.models import (
     ReportStatus,
     Simulation,
     SimulationStatus,
+    SimulationType,
     TaxBenefitModel,
     TaxBenefitModelVersion,
 )
@@ -138,19 +139,24 @@ def _get_model_version(
 
 
 def _get_deterministic_simulation_id(
-    dataset_id: UUID,
+    simulation_type: SimulationType,
     model_version_id: UUID,
     policy_id: UUID | None,
     dynamic_id: UUID | None,
+    dataset_id: UUID | None = None,
+    household_id: UUID | None = None,
 ) -> UUID:
     """Generate a deterministic UUID from simulation parameters."""
-    key = f"{dataset_id}:{model_version_id}:{policy_id}:{dynamic_id}"
+    if simulation_type == SimulationType.ECONOMY:
+        key = f"economy:{dataset_id}:{model_version_id}:{policy_id}:{dynamic_id}"
+    else:
+        key = f"household:{household_id}:{model_version_id}:{policy_id}:{dynamic_id}"
     return uuid5(SIMULATION_NAMESPACE, key)
 
 
 def _get_deterministic_report_id(
     baseline_sim_id: UUID,
-    reform_sim_id: UUID,
+    reform_sim_id: UUID | None,
 ) -> UUID:
     """Generate a deterministic UUID from report parameters."""
     key = f"{baseline_sim_id}:{reform_sim_id}"
@@ -158,15 +164,22 @@ def _get_deterministic_report_id(
 
 
 def _get_or_create_simulation(
-    dataset_id: UUID,
+    simulation_type: SimulationType,
     model_version_id: UUID,
     policy_id: UUID | None,
     dynamic_id: UUID | None,
     session: Session,
+    dataset_id: UUID | None = None,
+    household_id: UUID | None = None,
 ) -> Simulation:
     """Get existing simulation or create a new one."""
     sim_id = _get_deterministic_simulation_id(
-        dataset_id, model_version_id, policy_id, dynamic_id
+        simulation_type,
+        model_version_id,
+        policy_id,
+        dynamic_id,
+        dataset_id=dataset_id,
+        household_id=household_id,
     )
 
     existing = session.get(Simulation, sim_id)
@@ -175,7 +188,9 @@ def _get_or_create_simulation(
 
     simulation = Simulation(
         id=sim_id,
+        simulation_type=simulation_type,
         dataset_id=dataset_id,
+        household_id=household_id,
         tax_benefit_model_version_id=model_version_id,
         policy_id=policy_id,
         dynamic_id=dynamic_id,
@@ -189,8 +204,9 @@ def _get_or_create_simulation(
 
 def _get_or_create_report(
     baseline_sim_id: UUID,
-    reform_sim_id: UUID,
+    reform_sim_id: UUID | None,
     label: str,
+    report_type: str,
     session: Session,
 ) -> Report:
     """Get existing report or create a new one."""
@@ -203,6 +219,7 @@ def _get_or_create_report(
     report = Report(
         id=report_id,
         label=label,
+        report_type=report_type,
         baseline_simulation_id=baseline_sim_id,
         reform_simulation_id=reform_sim_id,
         status=ReportStatus.PENDING,
@@ -580,19 +597,21 @@ def economic_impact(
 
     # Get or create simulations
     baseline_sim = _get_or_create_simulation(
-        dataset_id=request.dataset_id,
+        simulation_type=SimulationType.ECONOMY,
         model_version_id=model_version.id,
         policy_id=None,
         dynamic_id=request.dynamic_id,
         session=session,
+        dataset_id=request.dataset_id,
     )
 
     reform_sim = _get_or_create_simulation(
-        dataset_id=request.dataset_id,
+        simulation_type=SimulationType.ECONOMY,
         model_version_id=model_version.id,
         policy_id=request.policy_id,
         dynamic_id=request.dynamic_id,
         session=session,
+        dataset_id=request.dataset_id,
     )
 
     # Get or create report
@@ -600,7 +619,9 @@ def economic_impact(
     if request.policy_id:
         label += f" (policy {request.policy_id})"
 
-    report = _get_or_create_report(baseline_sim.id, reform_sim.id, label, session)
+    report = _get_or_create_report(
+        baseline_sim.id, reform_sim.id, label, "economy_comparison", session
+    )
 
     # Trigger computation if report is pending
     if report.status == ReportStatus.PENDING:

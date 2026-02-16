@@ -40,10 +40,21 @@ class Settings(BaseSettings):
 
     @property
     def database_url(self) -> str:
-        """Get database URL from Supabase."""
+        """Get database URL from Supabase.
+
+        For local development, the database runs on port 54322 (not 54321 which is the API).
+        Use supabase_db_url to override, or rely on the default local URL.
+        """
+        if self.supabase_db_url:
+            return self.supabase_db_url
+
+        # For local development, default to the standard Supabase local DB port
+        if "localhost" in self.supabase_url or "127.0.0.1" in self.supabase_url:
+            return "postgresql://postgres:postgres@127.0.0.1:54322/postgres"
+
+        # For remote Supabase, construct URL from API URL (usually need supabase_db_url set)
         return (
-            self.supabase_db_url
-            or self.supabase_url.replace(
+            self.supabase_url.replace(
                 "http://", "postgresql://postgres:postgres@"
             ).replace("https://", "postgresql://postgres:postgres@")
             + "/postgres"
