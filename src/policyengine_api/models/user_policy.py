@@ -17,6 +17,7 @@ class UserPolicyBase(SQLModel):
     # in localStorage for stable identity across sessions.
     user_id: UUID = Field(index=True)
     policy_id: UUID = Field(foreign_key="policies.id", index=True)
+    country_id: str  # e.g., "us", "uk" - denormalized for efficient filtering
     label: str | None = None
 
 
