@@ -53,6 +53,7 @@ def upgrade() -> None:
         "user_policies",
         sa.Column("user_id", sa.Uuid(), nullable=False),
         sa.Column("policy_id", sa.Uuid(), nullable=False),
+        sa.Column("country_id", sqlmodel.sql.sqltypes.AutoString(), nullable=False),
         sa.Column("label", sqlmodel.sql.sqltypes.AutoString(), nullable=True),
         sa.Column("id", sa.Uuid(), nullable=False),
         sa.Column("created_at", sa.DateTime(), nullable=False),
@@ -69,11 +70,18 @@ def upgrade() -> None:
     op.create_index(
         op.f("ix_user_policies_user_id"), "user_policies", ["user_id"], unique=False
     )
+    op.create_index(
+        op.f("ix_user_policies_country_id"),
+        "user_policies",
+        ["country_id"],
+        unique=False,
+    )
 
 
 def downgrade() -> None:
     """Remove user_policies table and policy.tax_benefit_model_id."""
     # Drop user_policies table
+    op.drop_index(op.f("ix_user_policies_country_id"), table_name="user_policies")
     op.drop_index(op.f("ix_user_policies_user_id"), table_name="user_policies")
     op.drop_index(op.f("ix_user_policies_policy_id"), table_name="user_policies")
     op.drop_table("user_policies")
