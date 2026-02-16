@@ -52,3 +52,12 @@ docs/.env.local
 data/
 *.h5
 *.db
+
+# macOS
+.DS_Store
+
+# Docs (Next.js site)
+docs/
+
+# Supabase temp files
+supabase/.temp/
