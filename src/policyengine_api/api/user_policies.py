@@ -15,6 +15,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlmodel import Session, select
 
+from policyengine_api.config.constants import CountryId
 from policyengine_api.models import (
     Policy,
     UserPolicy,
@@ -23,9 +24,6 @@ from policyengine_api.models import (
     UserPolicyUpdate,
 )
 from policyengine_api.services.database import get_session
-
-# Valid country IDs
-VALID_COUNTRY_IDS = {"us", "uk"}
 
 router = APIRouter(prefix="/user-policies", tags=["user-policies"])
 
@@ -42,14 +40,8 @@ def create_user_policy(
     with different labels (matching FE localStorage behavior).
 
     Note: user_id is not validated - it's a client-generated UUID from localStorage.
+    Note: country_id is validated via Pydantic Literal type to "us" or "uk".
     """
-    # Validate country_id
-    if user_policy.country_id not in VALID_COUNTRY_IDS:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Invalid country_id: {user_policy.country_id}. Must be one of: {list(VALID_COUNTRY_IDS)}",
-        )
-
     # Validate policy exists
     policy = session.get(Policy, user_policy.policy_id)
     if not policy:
@@ -66,23 +58,19 @@ def create_user_policy(
 @router.get("/", response_model=list[UserPolicyRead])
 def list_user_policies(
     user_id: UUID = Query(..., description="User ID to filter by"),
-    country_id: str | None = Query(
-        None, description="Filter by country (e.g., 'us', 'uk')"
+    country_id: CountryId | None = Query(
+        None, description="Filter by country ('us' or 'uk')"
     ),
     session: Session = Depends(get_session),
 ):
     """List all policy associations for a user.
 
     Returns all policies saved by the specified user. Optionally filter by country.
+    Country ID is validated via Pydantic Literal type.
     """
     query = select(UserPolicy).where(UserPolicy.user_id == user_id)
 
     if country_id:
-        if country_id not in VALID_COUNTRY_IDS:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Invalid country_id: {country_id}. Must be one of: {list(VALID_COUNTRY_IDS)}",
-            )
         query = query.where(UserPolicy.country_id == country_id)
 
     user_policies = session.exec(query).all()
@@ -105,10 +93,19 @@ def get_user_policy(
 def update_user_policy(
     user_policy_id: UUID,
     updates: UserPolicyUpdate,
+    user_id: UUID = Query(..., description="User ID for ownership verification"),
     session: Session = Depends(get_session),
 ):
-    """Update a user-policy association (e.g., rename label)."""
-    user_policy = session.get(UserPolicy, user_policy_id)
+    """Update a user-policy association (e.g., rename label).
+
+    Requires user_id to verify ownership - only the owner can update.
+    """
+    user_policy = session.exec(
+        select(UserPolicy).where(
+            UserPolicy.id == user_policy_id,
+            UserPolicy.user_id == user_id,
+        )
+    ).first()
     if not user_policy:
         raise HTTPException(status_code=404, detail="User-policy association not found")
 
@@ -129,13 +126,20 @@ def update_user_policy(
 @router.delete("/{user_policy_id}", status_code=204)
 def delete_user_policy(
     user_policy_id: UUID,
+    user_id: UUID = Query(..., description="User ID for ownership verification"),
     session: Session = Depends(get_session),
 ):
     """Delete a user-policy association.
 
     This only removes the association, not the underlying policy.
+    Requires user_id to verify ownership - only the owner can delete.
     """
-    user_policy = session.get(UserPolicy, user_policy_id)
+    user_policy = session.exec(
+        select(UserPolicy).where(
+            UserPolicy.id == user_policy_id,
+            UserPolicy.user_id == user_id,
+        )
+    ).first()
     if not user_policy:
         raise HTTPException(status_code=404, detail="User-policy association not found")
 

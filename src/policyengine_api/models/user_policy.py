@@ -4,6 +4,8 @@ from uuid import UUID, uuid4
 
 from sqlmodel import Field, Relationship, SQLModel
 
+from policyengine_api.config.constants import CountryId
+
 if TYPE_CHECKING:
     from .policy import Policy
 
@@ -17,7 +19,7 @@ class UserPolicyBase(SQLModel):
     # in localStorage for stable identity across sessions.
     user_id: UUID = Field(index=True)
     policy_id: UUID = Field(foreign_key="policies.id", index=True)
-    country_id: str  # e.g., "us", "uk" - denormalized for efficient filtering
+    country_id: str  # Stored as string in DB, validated via Pydantic in Create schema
     label: str | None = None
 
 
@@ -34,10 +36,16 @@ class UserPolicy(UserPolicyBase, table=True):
     policy: "Policy" = Relationship()
 
 
-class UserPolicyCreate(UserPolicyBase):
-    """Schema for creating user-policy associations."""
+class UserPolicyCreate(SQLModel):
+    """Schema for creating user-policy associations.
 
-    pass
+    Uses CountryId Literal type for validation of country_id.
+    """
+
+    user_id: UUID
+    policy_id: UUID
+    country_id: CountryId  # Validated to "us" or "uk"
+    label: str | None = None
 
 
 class UserPolicyRead(UserPolicyBase):

@@ -278,7 +278,7 @@ def test_update_user_policy(client, session, tax_benefit_model):
     session.refresh(user_policy)
 
     response = client.patch(
-        f"/user-policies/{user_policy.id}",
+        f"/user-policies/{user_policy.id}?user_id={user_id}",
         json={"label": "New label"},
     )
     assert response.status_code == 200
@@ -290,12 +290,48 @@ def test_update_user_policy(client, session, tax_benefit_model):
 def test_update_user_policy_not_found(client):
     """Update a non-existent user-policy association returns 404."""
     fake_id = uuid4()
+    fake_user_id = uuid4()
     response = client.patch(
-        f"/user-policies/{fake_id}",
+        f"/user-policies/{fake_id}?user_id={fake_user_id}",
         json={"label": "New label"},
     )
     assert response.status_code == 404
     assert response.json()["detail"] == "User-policy association not found"
+
+
+def test_update_user_policy_wrong_user(client, session, tax_benefit_model):
+    """Update with wrong user_id returns 404 (ownership check)."""
+    user_id = uuid4()
+    wrong_user_id = uuid4()
+    policy = Policy(
+        name="Test policy",
+        description="A test policy",
+        tax_benefit_model_id=tax_benefit_model.id,
+    )
+    session.add(policy)
+    session.commit()
+    session.refresh(policy)
+
+    user_policy = UserPolicy(
+        user_id=user_id,
+        policy_id=policy.id,
+        country_id="us",
+        label="Original label",
+    )
+    session.add(user_policy)
+    session.commit()
+    session.refresh(user_policy)
+
+    # Try to update with wrong user_id
+    response = client.patch(
+        f"/user-policies/{user_policy.id}?user_id={wrong_user_id}",
+        json={"label": "Hacked label"},
+    )
+    assert response.status_code == 404
+
+    # Verify original label unchanged
+    response = client.get(f"/user-policies/{user_policy.id}")
+    assert response.json()["label"] == "Original label"
 
 
 def test_delete_user_policy(client, session, tax_benefit_model):
@@ -319,7 +355,7 @@ def test_delete_user_policy(client, session, tax_benefit_model):
     session.commit()
     session.refresh(user_policy)
 
-    response = client.delete(f"/user-policies/{user_policy.id}")
+    response = client.delete(f"/user-policies/{user_policy.id}?user_id={user_id}")
     assert response.status_code == 204
 
     # Verify it's deleted
@@ -330,6 +366,38 @@ def test_delete_user_policy(client, session, tax_benefit_model):
 def test_delete_user_policy_not_found(client):
     """Delete a non-existent user-policy association returns 404."""
     fake_id = uuid4()
-    response = client.delete(f"/user-policies/{fake_id}")
+    fake_user_id = uuid4()
+    response = client.delete(f"/user-policies/{fake_id}?user_id={fake_user_id}")
     assert response.status_code == 404
     assert response.json()["detail"] == "User-policy association not found"
+
+
+def test_delete_user_policy_wrong_user(client, session, tax_benefit_model):
+    """Delete with wrong user_id returns 404 (ownership check)."""
+    user_id = uuid4()
+    wrong_user_id = uuid4()
+    policy = Policy(
+        name="Test policy",
+        description="A test policy",
+        tax_benefit_model_id=tax_benefit_model.id,
+    )
+    session.add(policy)
+    session.commit()
+    session.refresh(policy)
+
+    user_policy = UserPolicy(
+        user_id=user_id,
+        policy_id=policy.id,
+        country_id="us",
+    )
+    session.add(user_policy)
+    session.commit()
+    session.refresh(user_policy)
+
+    # Try to delete with wrong user_id
+    response = client.delete(f"/user-policies/{user_policy.id}?user_id={wrong_user_id}")
+    assert response.status_code == 404
+
+    # Verify it still exists
+    response = client.get(f"/user-policies/{user_policy.id}")
+    assert response.status_code == 200
