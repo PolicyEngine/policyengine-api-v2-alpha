@@ -8,7 +8,7 @@ import pytest
 from sqlmodel import Session
 
 from policyengine_api.api.analysis import _get_or_create_simulation
-from policyengine_api.models import SimulationStatus
+from policyengine_api.models import SimulationStatus, SimulationType
 from test_fixtures.fixtures_regions import (
     create_dataset,
     create_simulation,
@@ -29,6 +29,7 @@ class TestSimulationReuse:
 
         # Create initial simulation with filter params
         first_sim = _get_or_create_simulation(
+            simulation_type=SimulationType.ECONOMY,
             dataset_id=dataset.id,
             model_version_id=model_version.id,
             policy_id=None,
@@ -40,6 +41,7 @@ class TestSimulationReuse:
 
         # When - request same simulation again
         second_sim = _get_or_create_simulation(
+            simulation_type=SimulationType.ECONOMY,
             dataset_id=dataset.id,
             model_version_id=model_version.id,
             policy_id=None,
@@ -61,6 +63,7 @@ class TestSimulationReuse:
 
         # Create simulation for England
         england_sim = _get_or_create_simulation(
+            simulation_type=SimulationType.ECONOMY,
             dataset_id=dataset.id,
             model_version_id=model_version.id,
             policy_id=None,
@@ -72,6 +75,7 @@ class TestSimulationReuse:
 
         # When - request simulation for Scotland
         scotland_sim = _get_or_create_simulation(
+            simulation_type=SimulationType.ECONOMY,
             dataset_id=dataset.id,
             model_version_id=model_version.id,
             policy_id=None,
@@ -97,6 +101,7 @@ class TestSimulationReuse:
 
         # Create national (no filter) simulation
         national_sim = _get_or_create_simulation(
+            simulation_type=SimulationType.ECONOMY,
             dataset_id=dataset.id,
             model_version_id=model_version.id,
             policy_id=None,
@@ -108,6 +113,7 @@ class TestSimulationReuse:
 
         # When - request filtered simulation
         filtered_sim = _get_or_create_simulation(
+            simulation_type=SimulationType.ECONOMY,
             dataset_id=dataset.id,
             model_version_id=model_version.id,
             policy_id=None,
@@ -131,6 +137,7 @@ class TestSimulationReuse:
 
         # When
         simulation = _get_or_create_simulation(
+            simulation_type=SimulationType.ECONOMY,
             dataset_id=dataset.id,
             model_version_id=model_version.id,
             policy_id=None,
