@@ -31,7 +31,7 @@ from datetime import datetime
 from typing import List
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlmodel import Session, select
 
 from policyengine_api.models import (
@@ -40,6 +40,7 @@ from policyengine_api.models import (
     Policy,
     PolicyCreate,
     PolicyRead,
+    TaxBenefitModel,
 )
 from policyengine_api.services.database import get_session
 
@@ -67,8 +68,17 @@ def create_policy(policy: PolicyCreate, session: Session = Depends(get_session))
         ]
     }
     """
+    # Validate tax_benefit_model exists
+    tax_model = session.get(TaxBenefitModel, policy.tax_benefit_model_id)
+    if not tax_model:
+        raise HTTPException(status_code=404, detail="Tax benefit model not found")
+
     # Create the policy
-    db_policy = Policy(name=policy.name, description=policy.description)
+    db_policy = Policy(
+        name=policy.name,
+        description=policy.description,
+        tax_benefit_model_id=policy.tax_benefit_model_id,
+    )
     session.add(db_policy)
     session.flush()  # Get the policy ID before adding parameter values
 
@@ -112,10 +122,17 @@ def create_policy(policy: PolicyCreate, session: Session = Depends(get_session))
 
 
 @router.get("/", response_model=List[PolicyRead])
-def list_policies(session: Session = Depends(get_session)):
-    """List all policies."""
-    policies = session.exec(select(Policy)).all()
-    return policies
+def list_policies(
+    tax_benefit_model_id: UUID | None = Query(
+        None, description="Filter by tax benefit model"
+    ),
+    session: Session = Depends(get_session),
+):
+    """List all policies, optionally filtered by tax benefit model."""
+    query = select(Policy)
+    if tax_benefit_model_id:
+        query = query.where(Policy.tax_benefit_model_id == tax_benefit_model_id)
+    return session.exec(query).all()
 
 
 @router.get("/{policy_id}", response_model=PolicyRead)

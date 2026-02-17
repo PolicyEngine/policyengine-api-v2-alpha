@@ -9,6 +9,7 @@ pytestmark = pytest.mark.integration
 
 import json
 from unittest.mock import AsyncMock, MagicMock, patch
+
 from fastapi.testclient import TestClient
 
 from policyengine_api.main import app

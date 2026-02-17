@@ -242,13 +242,13 @@ def simulate_household_uk(
             engine = create_engine(database_url)
 
             try:
-                from policyengine.core import Simulation
                 from microdf import MicroDataFrame
+                from policyengine.core import Simulation
                 from policyengine.tax_benefit_models.uk import uk_latest
                 from policyengine.tax_benefit_models.uk.datasets import (
                     PolicyEngineUKDataset,
+                    UKYearData,
                 )
-                from policyengine.tax_benefit_models.uk.datasets import UKYearData
 
                 n_people = len(people)
                 n_benunits = max(1, len(benunit))
@@ -487,13 +487,13 @@ def simulate_household_us(
             engine = create_engine(database_url)
 
             try:
-                from policyengine.core import Simulation
                 from microdf import MicroDataFrame
+                from policyengine.core import Simulation
                 from policyengine.tax_benefit_models.us import us_latest
                 from policyengine.tax_benefit_models.us.datasets import (
                     PolicyEngineUSDataset,
+                    USYearData,
                 )
-                from policyengine.tax_benefit_models.us.datasets import USYearData
 
                 n_people = len(people)
                 n_households = max(1, len(household))

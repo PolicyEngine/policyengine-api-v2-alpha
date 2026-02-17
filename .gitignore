@@ -52,3 +52,6 @@ docs/.env.local
 data/
 *.h5
 *.db
+
+# macOS
+.DS_Store

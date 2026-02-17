@@ -341,9 +341,9 @@ class TestHouseholdImpactRecordCreation:
 
     def test_comparison_creates_two_simulations(self, client, session):
         """Comparison (with policy_id) creates two simulations."""
-        _, version = setup_uk_model_and_version(session)
+        model, version = setup_uk_model_and_version(session)
         household = create_household_for_analysis(session)
-        policy = create_policy(session, version.id)
+        policy = create_policy(session, model.id)
 
         response = client.post(
             "/analysis/household-impact",
@@ -381,9 +381,9 @@ class TestHouseholdImpactRecordCreation:
 
     def test_report_links_simulations(self, client, session):
         """Report correctly links baseline and reform simulations."""
-        _, version = setup_uk_model_and_version(session)
+        model, version = setup_uk_model_and_version(session)
         household = create_household_for_analysis(session)
-        policy = create_policy(session, version.id)
+        policy = create_policy(session, model.id)
 
         response = client.post(
             "/analysis/household-impact",
@@ -435,10 +435,10 @@ class TestHouseholdImpactDeduplication:
 
     def test_different_policy_creates_different_simulation(self, client, session):
         """Different policy creates different simulation."""
-        _, version = setup_uk_model_and_version(session)
+        model, version = setup_uk_model_and_version(session)
         household = create_household_for_analysis(session)
-        policy1 = create_policy(session, version.id, name="Policy 1")
-        policy2 = create_policy(session, version.id, name="Policy 2")
+        policy1 = create_policy(session, model.id, name="Policy 1")
+        policy2 = create_policy(session, model.id, name="Policy 2")
 
         # Request with policy1
         response1 = client.post(
