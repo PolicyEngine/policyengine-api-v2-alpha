@@ -6,7 +6,12 @@ so tests use uuid4() directly rather than creating User records.
 
 from uuid import uuid4
 
-from policyengine_api.models import Policy, UserPolicy
+from test_fixtures.fixtures_user_policies import (
+    UK_COUNTRY_ID,
+    US_COUNTRY_ID,
+    create_policy,
+    create_user_policy,
+)
 
 
 def test_list_user_policies_empty(client):
@@ -20,21 +25,14 @@ def test_list_user_policies_empty(client):
 def test_create_user_policy(client, session, tax_benefit_model):
     """Create a new user-policy association."""
     user_id = uuid4()
-    policy = Policy(
-        name="Test policy",
-        description="A test policy",
-        tax_benefit_model_id=tax_benefit_model.id,
-    )
-    session.add(policy)
-    session.commit()
-    session.refresh(policy)
+    policy = create_policy(session, tax_benefit_model)
 
     response = client.post(
         "/user-policies",
         json={
             "user_id": str(user_id),
             "policy_id": str(policy.id),
-            "country_id": "us",
+            "country_id": US_COUNTRY_ID,
             "label": "My test policy",
         },
     )
@@ -42,7 +40,7 @@ def test_create_user_policy(client, session, tax_benefit_model):
     data = response.json()
     assert data["user_id"] == str(user_id)
     assert data["policy_id"] == str(policy.id)
-    assert data["country_id"] == "us"
+    assert data["country_id"] == US_COUNTRY_ID
     assert data["label"] == "My test policy"
     assert "id" in data
     assert "created_at" in data
@@ -52,27 +50,20 @@ def test_create_user_policy(client, session, tax_benefit_model):
 def test_create_user_policy_without_label(client, session, tax_benefit_model):
     """Create a user-policy association without a label."""
     user_id = uuid4()
-    policy = Policy(
-        name="Test policy",
-        description="A test policy",
-        tax_benefit_model_id=tax_benefit_model.id,
-    )
-    session.add(policy)
-    session.commit()
-    session.refresh(policy)
+    policy = create_policy(session, tax_benefit_model)
 
     response = client.post(
         "/user-policies",
         json={
             "user_id": str(user_id),
             "policy_id": str(policy.id),
-            "country_id": "us",
+            "country_id": US_COUNTRY_ID,
         },
     )
     assert response.status_code == 200
     data = response.json()
     assert data["label"] is None
-    assert data["country_id"] == "us"
+    assert data["country_id"] == US_COUNTRY_ID
 
 
 def test_create_user_policy_policy_not_found(client):
@@ -85,7 +76,7 @@ def test_create_user_policy_policy_not_found(client):
         json={
             "user_id": str(user_id),
             "policy_id": str(fake_policy_id),
-            "country_id": "us",
+            "country_id": US_COUNTRY_ID,
         },
     )
     assert response.status_code == 404
@@ -95,23 +86,8 @@ def test_create_user_policy_policy_not_found(client):
 def test_create_user_policy_duplicate_allowed(client, session, tax_benefit_model):
     """Creating duplicate user-policy association is allowed (matches FE localStorage behavior)."""
     user_id = uuid4()
-    policy = Policy(
-        name="Test policy",
-        description="A test policy",
-        tax_benefit_model_id=tax_benefit_model.id,
-    )
-    session.add(policy)
-    session.commit()
-    session.refresh(policy)
-
-    # Create first association
-    user_policy = UserPolicy(
-        user_id=user_id,
-        policy_id=policy.id,
-        country_id="us",
-    )
-    session.add(user_policy)
-    session.commit()
+    policy = create_policy(session, tax_benefit_model)
+    user_policy = create_user_policy(session, user_id, policy, country_id=US_COUNTRY_ID)
 
     # Create duplicate - should succeed with a new ID
     response = client.post(
@@ -119,7 +95,7 @@ def test_create_user_policy_duplicate_allowed(client, session, tax_benefit_model
         json={
             "user_id": str(user_id),
             "policy_id": str(policy.id),
-            "country_id": "us",
+            "country_id": US_COUNTRY_ID,
         },
     )
     assert response.status_code == 200
@@ -134,37 +110,10 @@ def test_list_user_policies_with_data(
 ):
     """List user policies returns all associations for a user."""
     user_id = uuid4()
-    policy1 = Policy(
-        name="Policy 1",
-        description="First policy",
-        tax_benefit_model_id=tax_benefit_model.id,
-    )
-    policy2 = Policy(
-        name="Policy 2",
-        description="Second policy",
-        tax_benefit_model_id=uk_tax_benefit_model.id,
-    )
-    session.add(policy1)
-    session.add(policy2)
-    session.commit()
-    session.refresh(policy1)
-    session.refresh(policy2)
-
-    user_policy1 = UserPolicy(
-        user_id=user_id,
-        policy_id=policy1.id,
-        country_id="us",
-        label="US policy",
-    )
-    user_policy2 = UserPolicy(
-        user_id=user_id,
-        policy_id=policy2.id,
-        country_id="uk",
-        label="UK policy",
-    )
-    session.add(user_policy1)
-    session.add(user_policy2)
-    session.commit()
+    policy1 = create_policy(session, tax_benefit_model, name="Policy 1", description="First policy")
+    policy2 = create_policy(session, uk_tax_benefit_model, name="Policy 2", description="Second policy")
+    create_user_policy(session, user_id, policy1, country_id=US_COUNTRY_ID, label="US policy")
+    create_user_policy(session, user_id, policy2, country_id=UK_COUNTRY_ID, label="UK policy")
 
     response = client.get(f"/user-policies?user_id={user_id}")
     assert response.status_code == 200
@@ -177,74 +126,33 @@ def test_list_user_policies_filter_by_country(
 ):
     """List user policies filtered by country_id."""
     user_id = uuid4()
-    policy1 = Policy(
-        name="Policy 1",
-        description="First policy",
-        tax_benefit_model_id=tax_benefit_model.id,
-    )
-    policy2 = Policy(
-        name="Policy 2",
-        description="Second policy",
-        tax_benefit_model_id=uk_tax_benefit_model.id,
-    )
-    session.add(policy1)
-    session.add(policy2)
-    session.commit()
-    session.refresh(policy1)
-    session.refresh(policy2)
-
-    user_policy1 = UserPolicy(
-        user_id=user_id,
-        policy_id=policy1.id,
-        country_id="us",
-    )
-    user_policy2 = UserPolicy(
-        user_id=user_id,
-        policy_id=policy2.id,
-        country_id="uk",
-    )
-    session.add(user_policy1)
-    session.add(user_policy2)
-    session.commit()
+    policy1 = create_policy(session, tax_benefit_model, name="Policy 1", description="First policy")
+    policy2 = create_policy(session, uk_tax_benefit_model, name="Policy 2", description="Second policy")
+    create_user_policy(session, user_id, policy1, country_id=US_COUNTRY_ID)
+    create_user_policy(session, user_id, policy2, country_id=UK_COUNTRY_ID)
 
     response = client.get(
-        f"/user-policies?user_id={user_id}&country_id=us"
+        f"/user-policies?user_id={user_id}&country_id={US_COUNTRY_ID}"
     )
     assert response.status_code == 200
     data = response.json()
     assert len(data) == 1
     assert data[0]["policy_id"] == str(policy1.id)
-    assert data[0]["country_id"] == "us"
+    assert data[0]["country_id"] == US_COUNTRY_ID
 
 
 def test_get_user_policy(client, session, tax_benefit_model):
     """Get a specific user-policy association by ID."""
     user_id = uuid4()
-    policy = Policy(
-        name="Test policy",
-        description="A test policy",
-        tax_benefit_model_id=tax_benefit_model.id,
-    )
-    session.add(policy)
-    session.commit()
-    session.refresh(policy)
-
-    user_policy = UserPolicy(
-        user_id=user_id,
-        policy_id=policy.id,
-        country_id="us",
-        label="My policy",
-    )
-    session.add(user_policy)
-    session.commit()
-    session.refresh(user_policy)
+    policy = create_policy(session, tax_benefit_model)
+    user_policy = create_user_policy(session, user_id, policy, country_id=US_COUNTRY_ID, label="My policy")
 
     response = client.get(f"/user-policies/{user_policy.id}")
     assert response.status_code == 200
     data = response.json()
     assert data["id"] == str(user_policy.id)
     assert data["label"] == "My policy"
-    assert data["country_id"] == "us"
+    assert data["country_id"] == US_COUNTRY_ID
 
 
 def test_get_user_policy_not_found(client):
@@ -258,24 +166,8 @@ def test_get_user_policy_not_found(client):
 def test_update_user_policy(client, session, tax_benefit_model):
     """Update a user-policy association label."""
     user_id = uuid4()
-    policy = Policy(
-        name="Test policy",
-        description="A test policy",
-        tax_benefit_model_id=tax_benefit_model.id,
-    )
-    session.add(policy)
-    session.commit()
-    session.refresh(policy)
-
-    user_policy = UserPolicy(
-        user_id=user_id,
-        policy_id=policy.id,
-        country_id="us",
-        label="Old label",
-    )
-    session.add(user_policy)
-    session.commit()
-    session.refresh(user_policy)
+    policy = create_policy(session, tax_benefit_model)
+    user_policy = create_user_policy(session, user_id, policy, country_id=US_COUNTRY_ID, label="Old label")
 
     response = client.patch(
         f"/user-policies/{user_policy.id}?user_id={user_id}",
@@ -284,7 +176,7 @@ def test_update_user_policy(client, session, tax_benefit_model):
     assert response.status_code == 200
     data = response.json()
     assert data["label"] == "New label"
-    assert data["country_id"] == "us"
+    assert data["country_id"] == US_COUNTRY_ID
 
 
 def test_update_user_policy_not_found(client):
@@ -303,24 +195,8 @@ def test_update_user_policy_wrong_user(client, session, tax_benefit_model):
     """Update with wrong user_id returns 404 (ownership check)."""
     user_id = uuid4()
     wrong_user_id = uuid4()
-    policy = Policy(
-        name="Test policy",
-        description="A test policy",
-        tax_benefit_model_id=tax_benefit_model.id,
-    )
-    session.add(policy)
-    session.commit()
-    session.refresh(policy)
-
-    user_policy = UserPolicy(
-        user_id=user_id,
-        policy_id=policy.id,
-        country_id="us",
-        label="Original label",
-    )
-    session.add(user_policy)
-    session.commit()
-    session.refresh(user_policy)
+    policy = create_policy(session, tax_benefit_model)
+    user_policy = create_user_policy(session, user_id, policy, country_id=US_COUNTRY_ID, label="Original label")
 
     # Try to update with wrong user_id
     response = client.patch(
@@ -337,23 +213,8 @@ def test_update_user_policy_wrong_user(client, session, tax_benefit_model):
 def test_delete_user_policy(client, session, tax_benefit_model):
     """Delete a user-policy association."""
     user_id = uuid4()
-    policy = Policy(
-        name="Test policy",
-        description="A test policy",
-        tax_benefit_model_id=tax_benefit_model.id,
-    )
-    session.add(policy)
-    session.commit()
-    session.refresh(policy)
-
-    user_policy = UserPolicy(
-        user_id=user_id,
-        policy_id=policy.id,
-        country_id="us",
-    )
-    session.add(user_policy)
-    session.commit()
-    session.refresh(user_policy)
+    policy = create_policy(session, tax_benefit_model)
+    user_policy = create_user_policy(session, user_id, policy, country_id=US_COUNTRY_ID)
 
     response = client.delete(f"/user-policies/{user_policy.id}?user_id={user_id}")
     assert response.status_code == 204
@@ -376,23 +237,8 @@ def test_delete_user_policy_wrong_user(client, session, tax_benefit_model):
     """Delete with wrong user_id returns 404 (ownership check)."""
     user_id = uuid4()
     wrong_user_id = uuid4()
-    policy = Policy(
-        name="Test policy",
-        description="A test policy",
-        tax_benefit_model_id=tax_benefit_model.id,
-    )
-    session.add(policy)
-    session.commit()
-    session.refresh(policy)
-
-    user_policy = UserPolicy(
-        user_id=user_id,
-        policy_id=policy.id,
-        country_id="us",
-    )
-    session.add(user_policy)
-    session.commit()
-    session.refresh(user_policy)
+    policy = create_policy(session, tax_benefit_model)
+    user_policy = create_user_policy(session, user_id, policy, country_id=US_COUNTRY_ID)
 
     # Try to delete with wrong user_id
     response = client.delete(f"/user-policies/{user_policy.id}?user_id={wrong_user_id}")
