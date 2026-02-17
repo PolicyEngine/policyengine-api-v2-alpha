@@ -272,13 +272,13 @@ def create_parameter(
 
 def create_policy(
     session: Session,
-    model_version_id: UUID,
+    model_id: UUID,
     name: str = "Test Policy",
     description: str = "A test policy",
 ) -> Policy:
     """Create and persist a Policy record."""
     policy = Policy(
-        tax_benefit_model_version_id=model_version_id,
+        tax_benefit_model_id=model_id,
         name=name,
         description=description,
     )
@@ -290,13 +290,13 @@ def create_policy(
 
 def create_policy_with_parameter_value(
     session: Session,
-    model_version_id: UUID,
+    model_id: UUID,
     parameter_id: UUID,
     value: float,
     name: str = "Test Policy",
 ) -> Policy:
     """Create a Policy with an associated ParameterValue."""
-    policy = create_policy(session, model_version_id, name=name)
+    policy = create_policy(session, model_id, name=name)
 
     param_value = ParameterValue(
         policy_id=policy.id,
