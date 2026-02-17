@@ -698,6 +698,7 @@ class TestEconomicImpactValidation:
         assert response.status_code == 422
 
 
+@pytest.mark.integration
 class TestEconomicImpactNotFound:
     """Tests for 404 responses."""
 
