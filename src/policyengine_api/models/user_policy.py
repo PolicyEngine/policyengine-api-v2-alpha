@@ -59,4 +59,6 @@ class UserPolicyRead(UserPolicyBase):
 class UserPolicyUpdate(SQLModel):
     """Schema for updating user-policy associations."""
 
+    model_config = {"extra": "forbid"}
+
     label: str | None = None
