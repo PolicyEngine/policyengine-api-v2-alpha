@@ -841,6 +841,8 @@ def simulate_economy_uk(simulation_id: str, traceparent: str | None = None) -> N
                             tax_benefit_model_version=pe_model_version,
                             policy=policy,
                             dynamic=dynamic,
+                            filter_field=simulation.filter_field,
+                            filter_value=simulation.filter_value,
                         )
                         pe_sim.ensure()
 
@@ -1007,6 +1009,8 @@ def simulate_economy_us(simulation_id: str, traceparent: str | None = None) -> N
                             tax_benefit_model_version=pe_model_version,
                             policy=policy,
                             dynamic=dynamic,
+                            filter_field=simulation.filter_field,
+                            filter_value=simulation.filter_value,
                         )
                         pe_sim.ensure()
 
@@ -1112,11 +1116,12 @@ def economy_comparison_uk(job_id: str, traceparent: str | None = None) -> None:
             # Debug: log the key role
             import base64
             import json
+
             try:
-                payload = supabase_key.split('.')[1]
-                payload += '=' * (4 - len(payload) % 4)
+                payload = supabase_key.split(".")[1]
+                payload += "=" * (4 - len(payload) % 4)
                 decoded = json.loads(base64.urlsafe_b64decode(payload))
-                logfire.info("Supabase key info", role=decoded.get('role', 'unknown'))
+                logfire.info("Supabase key info", role=decoded.get("role", "unknown"))
             except Exception as e:
                 logfire.warn("Could not decode key", error=str(e))
 
@@ -1213,6 +1218,8 @@ def economy_comparison_uk(job_id: str, traceparent: str | None = None) -> None:
                             tax_benefit_model_version=pe_model_version,
                             policy=baseline_policy,
                             dynamic=baseline_dynamic,
+                            filter_field=baseline_sim.filter_field,
+                            filter_value=baseline_sim.filter_value,
                         )
                         pe_baseline_sim.ensure()
 
@@ -1222,6 +1229,8 @@ def economy_comparison_uk(job_id: str, traceparent: str | None = None) -> None:
                             tax_benefit_model_version=pe_model_version,
                             policy=reform_policy,
                             dynamic=reform_dynamic,
+                            filter_field=reform_sim.filter_field,
+                            filter_value=reform_sim.filter_value,
                         )
                         pe_reform_sim.ensure()
 
@@ -1535,6 +1544,8 @@ def economy_comparison_us(job_id: str, traceparent: str | None = None) -> None:
                             tax_benefit_model_version=pe_model_version,
                             policy=baseline_policy,
                             dynamic=baseline_dynamic,
+                            filter_field=baseline_sim.filter_field,
+                            filter_value=baseline_sim.filter_value,
                         )
                         pe_baseline_sim.ensure()
 
@@ -1544,6 +1555,8 @@ def economy_comparison_us(job_id: str, traceparent: str | None = None) -> None:
                             tax_benefit_model_version=pe_model_version,
                             policy=reform_policy,
                             dynamic=reform_dynamic,
+                            filter_field=reform_sim.filter_field,
+                            filter_value=reform_sim.filter_value,
                         )
                         pe_reform_sim.ensure()
 
@@ -1930,7 +1943,9 @@ def compute_aggregate_uk(aggregate_id: str, traceparent: str | None = None) -> N
                         pe_aggregate = PEAggregate(
                             simulation=pe_sim,
                             variable=aggregate.variable,
-                            aggregate_type=PEAggregateType(aggregate.aggregate_type.value),
+                            aggregate_type=PEAggregateType(
+                                aggregate.aggregate_type.value
+                            ),
                             entity=aggregate.entity,
                         )
                         pe_aggregate.run()
@@ -2074,7 +2089,9 @@ def compute_aggregate_us(aggregate_id: str, traceparent: str | None = None) -> N
                         pe_aggregate = PEAggregate(
                             simulation=pe_sim,
                             variable=aggregate.variable,
-                            aggregate_type=PEAggregateType(aggregate.aggregate_type.value),
+                            aggregate_type=PEAggregateType(
+                                aggregate.aggregate_type.value
+                            ),
                             entity=aggregate.entity,
                         )
                         pe_aggregate.run()

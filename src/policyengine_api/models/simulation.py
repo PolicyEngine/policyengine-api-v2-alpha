@@ -46,6 +46,16 @@ class SimulationBase(SQLModel):
     status: SimulationStatus = SimulationStatus.PENDING
     error_message: str | None = None
 
+    # Regional filtering parameters (passed to policyengine.py)
+    filter_field: str | None = Field(
+        default=None,
+        description="Household-level variable to filter dataset by (e.g., 'place_fips', 'country')",
+    )
+    filter_value: str | None = Field(
+        default=None,
+        description="Value to match when filtering (e.g., '44000', 'ENGLAND')",
+    )
+
 
 class Simulation(SimulationBase, table=True):
     """Simulation database model."""

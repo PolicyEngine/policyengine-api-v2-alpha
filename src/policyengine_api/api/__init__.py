@@ -15,6 +15,7 @@ from . import (
     parameter_values,
     parameters,
     policies,
+    regions,
     simulations,
     tax_benefit_model_versions,
     tax_benefit_models,
@@ -26,6 +27,7 @@ api_router = APIRouter()
 
 api_router.include_router(datasets.router)
 api_router.include_router(policies.router)
+api_router.include_router(regions.router)
 api_router.include_router(simulations.router)
 api_router.include_router(outputs.router)
 api_router.include_router(variables.router)

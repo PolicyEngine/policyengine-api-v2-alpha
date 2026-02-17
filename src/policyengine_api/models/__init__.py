@@ -30,6 +30,7 @@ from .parameter import Parameter, ParameterCreate, ParameterRead
 from .parameter_value import ParameterValue, ParameterValueCreate, ParameterValueRead
 from .policy import Policy, PolicyCreate, PolicyRead
 from .poverty import Poverty, PovertyCreate, PovertyRead
+from .region import Region, RegionCreate, RegionRead
 from .program_statistics import (
     ProgramStatistics,
     ProgramStatisticsCreate,
@@ -107,6 +108,9 @@ __all__ = [
     "Poverty",
     "PovertyCreate",
     "PovertyRead",
+    "Region",
+    "RegionCreate",
+    "RegionRead",
     "ProgramStatistics",
     "ProgramStatisticsCreate",
     "ProgramStatisticsRead",
