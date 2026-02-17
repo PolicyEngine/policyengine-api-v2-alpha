@@ -210,6 +210,19 @@ def test_update_user_policy_wrong_user(client, session, tax_benefit_model):
     assert response.json()["label"] == "Original label"
 
 
+def test_update_user_policy_rejects_extra_fields(client, session, tax_benefit_model):
+    """Update with extra fields returns 422 (extra='forbid')."""
+    user_id = uuid4()
+    policy = create_policy(session, tax_benefit_model)
+    user_policy = create_user_policy(session, user_id, policy, country_id=US_COUNTRY_ID, label="Original")
+
+    response = client.patch(
+        f"/user-policies/{user_policy.id}?user_id={user_id}",
+        json={"label": "New", "user_id": str(uuid4())},
+    )
+    assert response.status_code == 422
+
+
 def test_delete_user_policy(client, session, tax_benefit_model):
     """Delete a user-policy association."""
     user_id = uuid4()
