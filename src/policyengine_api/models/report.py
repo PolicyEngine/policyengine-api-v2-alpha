@@ -22,7 +22,6 @@ class ReportBase(SQLModel):
     report_type: str | None = None
     user_id: UUID | None = Field(default=None, foreign_key="users.id")
     markdown: str | None = Field(default=None, sa_column=Column(Text))
-    parent_report_id: UUID | None = Field(default=None, foreign_key="reports.id")
     status: ReportStatus = ReportStatus.PENDING
     error_message: str | None = None
     baseline_simulation_id: UUID | None = Field(
