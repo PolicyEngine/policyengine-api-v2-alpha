@@ -21,6 +21,7 @@ from . import (
     tax_benefit_models,
     user_household_associations,
     user_policies,
+    user_simulation_associations,
     variables,
 )
 
@@ -45,5 +46,6 @@ api_router.include_router(analysis.router)
 api_router.include_router(agent.router)
 api_router.include_router(user_household_associations.router)
 api_router.include_router(user_policies.router)
+api_router.include_router(user_simulation_associations.router)
 
 __all__ = ["api_router"]
