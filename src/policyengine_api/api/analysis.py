@@ -444,6 +444,7 @@ def _run_local_economy_comparison_uk(job_id: str, session: Session) -> None:
     from policyengine.outputs.inequality import calculate_uk_inequality
     from policyengine.outputs.poverty import (
         calculate_uk_poverty_by_age,
+        calculate_uk_poverty_by_gender,
         calculate_uk_poverty_rates,
     )
     from policyengine.tax_benefit_models.uk import uk_latest
@@ -672,6 +673,25 @@ def _run_local_economy_comparison_uk(job_id: str, session: Session) -> None:
             )
             session.add(poverty_record)
 
+    # Calculate poverty rates by gender for baseline and reform
+    for pe_sim, db_sim in [
+        (pe_baseline_sim, baseline_sim),
+        (pe_reform_sim, reform_sim),
+    ]:
+        gender_poverty_results = calculate_uk_poverty_by_gender(pe_sim)
+        for pov in gender_poverty_results.outputs:
+            poverty_record = Poverty(
+                simulation_id=db_sim.id,
+                report_id=report.id,
+                poverty_type=pov.poverty_type,
+                entity=pov.entity,
+                filter_variable=pov.filter_variable,
+                headcount=pov.headcount,
+                total_population=pov.total_population,
+                rate=pov.rate,
+            )
+            session.add(poverty_record)
+
     # Calculate inequality for baseline and reform
     for pe_sim, db_sim in [
         (pe_baseline_sim, baseline_sim),
@@ -716,6 +736,7 @@ def _run_local_economy_comparison_us(job_id: str, session: Session) -> None:
     from policyengine.outputs.inequality import calculate_us_inequality
     from policyengine.outputs.poverty import (
         calculate_us_poverty_by_age,
+        calculate_us_poverty_by_gender,
         calculate_us_poverty_rates,
     )
     from policyengine.tax_benefit_models.us import us_latest
@@ -934,6 +955,25 @@ def _run_local_economy_comparison_us(job_id: str, session: Session) -> None:
     ]:
         age_poverty_results = calculate_us_poverty_by_age(pe_sim)
         for pov in age_poverty_results.outputs:
+            poverty_record = Poverty(
+                simulation_id=db_sim.id,
+                report_id=report.id,
+                poverty_type=pov.poverty_type,
+                entity=pov.entity,
+                filter_variable=pov.filter_variable,
+                headcount=pov.headcount,
+                total_population=pov.total_population,
+                rate=pov.rate,
+            )
+            session.add(poverty_record)
+
+    # Calculate poverty rates by gender for baseline and reform
+    for pe_sim, db_sim in [
+        (pe_baseline_sim, baseline_sim),
+        (pe_reform_sim, reform_sim),
+    ]:
+        gender_poverty_results = calculate_us_poverty_by_gender(pe_sim)
+        for pov in gender_poverty_results.outputs:
             poverty_record = Poverty(
                 simulation_id=db_sim.id,
                 report_id=report.id,
