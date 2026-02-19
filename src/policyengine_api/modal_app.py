@@ -1798,6 +1798,7 @@ def economy_comparison_us(job_id: str, traceparent: str | None = None) -> None:
                     from policyengine.outputs.poverty import (
                         calculate_us_poverty_by_age,
                         calculate_us_poverty_by_gender,
+                        calculate_us_poverty_by_race,
                         calculate_us_poverty_rates,
                     )
 
@@ -1849,6 +1850,27 @@ def economy_comparison_us(job_id: str, traceparent: str | None = None) -> None:
                             calculate_us_poverty_by_gender(pe_sim)
                         )
                         for pov in gender_poverty_results.outputs:
+                            poverty_record = Poverty(
+                                simulation_id=db_sim.id,
+                                report_id=report.id,
+                                poverty_type=pov.poverty_type,
+                                entity=pov.entity,
+                                filter_variable=pov.filter_variable,
+                                headcount=pov.headcount,
+                                total_population=pov.total_population,
+                                rate=pov.rate,
+                            )
+                            session.add(poverty_record)
+
+                    # Calculate poverty rates by race (US only)
+                    for pe_sim, db_sim in [
+                        (pe_baseline_sim, baseline_sim),
+                        (pe_reform_sim, reform_sim),
+                    ]:
+                        race_poverty_results = (
+                            calculate_us_poverty_by_race(pe_sim)
+                        )
+                        for pov in race_poverty_results.outputs:
                             poverty_record = Poverty(
                                 simulation_id=db_sim.id,
                                 report_id=report.id,
