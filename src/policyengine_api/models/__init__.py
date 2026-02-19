@@ -61,6 +61,18 @@ from .user_household_association import (
     UserHouseholdAssociationRead,
     UserHouseholdAssociationUpdate,
 )
+from .user_simulation_association import (
+    UserSimulationAssociation,
+    UserSimulationAssociationCreate,
+    UserSimulationAssociationRead,
+    UserSimulationAssociationUpdate,
+)
+from .user_report_association import (
+    UserReportAssociation,
+    UserReportAssociationCreate,
+    UserReportAssociationRead,
+    UserReportAssociationUpdate,
+)
 from .user_policy import (
     UserPolicy,
     UserPolicyCreate,
@@ -142,6 +154,14 @@ __all__ = [
     "UserHouseholdAssociationRead",
     "UserHouseholdAssociationUpdate",
     "UserRead",
+    "UserSimulationAssociation",
+    "UserSimulationAssociationCreate",
+    "UserSimulationAssociationRead",
+    "UserSimulationAssociationUpdate",
+    "UserReportAssociation",
+    "UserReportAssociationCreate",
+    "UserReportAssociationRead",
+    "UserReportAssociationUpdate",
     "UserPolicy",
     "UserPolicyCreate",
     "UserPolicyRead",
