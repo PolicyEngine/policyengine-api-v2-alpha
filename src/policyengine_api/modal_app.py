@@ -1132,6 +1132,7 @@ def economy_comparison_uk(job_id: str, traceparent: str | None = None) -> None:
                 from policyengine_api.models import (
                     Dataset,
                     DecileImpact,
+                    Inequality,
                     Poverty,
                     ProgramStatistics,
                     Report,
@@ -1423,6 +1424,29 @@ def economy_comparison_uk(job_id: str, traceparent: str | None = None) -> None:
                             )
                             session.add(poverty_record)
 
+                    # Calculate inequality for baseline and reform
+                    from policyengine.outputs.inequality import (
+                        calculate_uk_inequality,
+                    )
+
+                    for pe_sim, db_sim in [
+                        (pe_baseline_sim, baseline_sim),
+                        (pe_reform_sim, reform_sim),
+                    ]:
+                        ineq = calculate_uk_inequality(pe_sim)
+                        ineq.run()
+                        inequality_record = Inequality(
+                            simulation_id=db_sim.id,
+                            report_id=report.id,
+                            income_variable=ineq.income_variable,
+                            entity=ineq.entity,
+                            gini=ineq.gini,
+                            top_10_share=ineq.top_10_share,
+                            top_1_share=ineq.top_1_share,
+                            bottom_50_share=ineq.bottom_50_share,
+                        )
+                        session.add(inequality_record)
+
                     # Mark simulations and report as completed
                     baseline_sim.status = SimulationStatus.COMPLETED
                     baseline_sim.completed_at = datetime.now(timezone.utc)
@@ -1491,6 +1515,7 @@ def economy_comparison_us(job_id: str, traceparent: str | None = None) -> None:
                 from policyengine_api.models import (
                     Dataset,
                     DecileImpact,
+                    Inequality,
                     Poverty,
                     ProgramStatistics,
                     Report,
@@ -1747,6 +1772,29 @@ def economy_comparison_us(job_id: str, traceparent: str | None = None) -> None:
                                 rate=pov.rate,
                             )
                             session.add(poverty_record)
+
+                    # Calculate inequality for baseline and reform
+                    from policyengine.outputs.inequality import (
+                        calculate_us_inequality,
+                    )
+
+                    for pe_sim, db_sim in [
+                        (pe_baseline_sim, baseline_sim),
+                        (pe_reform_sim, reform_sim),
+                    ]:
+                        ineq = calculate_us_inequality(pe_sim)
+                        ineq.run()
+                        inequality_record = Inequality(
+                            simulation_id=db_sim.id,
+                            report_id=report.id,
+                            income_variable=ineq.income_variable,
+                            entity=ineq.entity,
+                            gini=ineq.gini,
+                            top_10_share=ineq.top_10_share,
+                            top_1_share=ineq.top_1_share,
+                            bottom_50_share=ineq.bottom_50_share,
+                        )
+                        session.add(inequality_record)
 
                     # Mark simulations and report as completed
                     baseline_sim.status = SimulationStatus.COMPLETED
