@@ -29,6 +29,8 @@ from policyengine_api.models import (
     Dataset,
     DecileImpact,
     DecileImpactRead,
+    Poverty,
+    PovertyRead,
     ProgramStatistics,
     ProgramStatisticsRead,
     Region,
@@ -134,6 +136,7 @@ class EconomicImpactResponse(BaseModel):
     error_message: str | None = None
     decile_impacts: list[DecileImpactRead] | None = None
     program_statistics: list[ProgramStatisticsRead] | None = None
+    poverty: list[PovertyRead] | None = None
 
 
 def _get_model_version(
@@ -273,6 +276,7 @@ def _build_response(
     """Build response from report and simulations."""
     decile_impacts = None
     program_statistics = None
+    poverty_records = None
 
     if report.status == ReportStatus.COMPLETED:
         # Fetch decile impacts for this report
@@ -326,6 +330,26 @@ def _build_response(
             for s in stats
         ]
 
+        # Fetch poverty records for this report
+        pov_rows = session.exec(
+            select(Poverty).where(Poverty.report_id == report.id)
+        ).all()
+        poverty_records = [
+            PovertyRead(
+                id=p.id,
+                created_at=p.created_at,
+                simulation_id=p.simulation_id,
+                report_id=p.report_id,
+                poverty_type=p.poverty_type,
+                entity=p.entity,
+                filter_variable=p.filter_variable,
+                headcount=_safe_float(p.headcount),
+                total_population=_safe_float(p.total_population),
+                rate=_safe_float(p.rate),
+            )
+            for p in pov_rows
+        ]
+
     region_info = None
     if region:
         region_info = RegionInfo(
@@ -354,6 +378,7 @@ def _build_response(
         error_message=report.error_message,
         decile_impacts=decile_impacts,
         program_statistics=program_statistics,
+        poverty=poverty_records,
     )
 
 
@@ -391,6 +416,7 @@ def _run_local_economy_comparison_uk(job_id: str, session: Session) -> None:
     from policyengine.core.policy import ParameterValue as PEParameterValue
     from policyengine.core.policy import Policy as PEPolicy
     from policyengine.outputs import DecileImpact as PEDecileImpact
+    from policyengine.outputs.poverty import calculate_uk_poverty_rates
     from policyengine.tax_benefit_models.uk import uk_latest
     from policyengine.tax_benefit_models.uk.datasets import PolicyEngineUKDataset
     from policyengine.tax_benefit_models.uk.outputs import (
@@ -579,6 +605,25 @@ def _run_local_economy_comparison_uk(job_id: str, session: Session) -> None:
         except KeyError:
             pass  # Variable not found in model
 
+    # Calculate poverty rates for baseline and reform
+    for pe_sim, db_sim in [
+        (pe_baseline_sim, baseline_sim),
+        (pe_reform_sim, reform_sim),
+    ]:
+        poverty_results = calculate_uk_poverty_rates(pe_sim)
+        for pov in poverty_results.outputs:
+            poverty_record = Poverty(
+                simulation_id=db_sim.id,
+                report_id=report.id,
+                poverty_type=pov.poverty_type,
+                entity=pov.entity,
+                filter_variable=pov.filter_variable,
+                headcount=pov.headcount,
+                total_population=pov.total_population,
+                rate=pov.rate,
+            )
+            session.add(poverty_record)
+
     # Mark completed
     baseline_sim.status = SimulationStatus.COMPLETED
     baseline_sim.completed_at = datetime.now(timezone.utc)
@@ -601,6 +646,7 @@ def _run_local_economy_comparison_us(job_id: str, session: Session) -> None:
     from policyengine.core.policy import ParameterValue as PEParameterValue
     from policyengine.core.policy import Policy as PEPolicy
     from policyengine.outputs import DecileImpact as PEDecileImpact
+    from policyengine.outputs.poverty import calculate_us_poverty_rates
     from policyengine.tax_benefit_models.us import us_latest
     from policyengine.tax_benefit_models.us.datasets import PolicyEngineUSDataset
     from policyengine.tax_benefit_models.us.outputs import (
@@ -790,6 +836,25 @@ def _run_local_economy_comparison_us(job_id: str, session: Session) -> None:
             session.add(program_stat)
         except KeyError:
             pass  # Variable not found in model
+
+    # Calculate poverty rates for baseline and reform
+    for pe_sim, db_sim in [
+        (pe_baseline_sim, baseline_sim),
+        (pe_reform_sim, reform_sim),
+    ]:
+        poverty_results = calculate_us_poverty_rates(pe_sim)
+        for pov in poverty_results.outputs:
+            poverty_record = Poverty(
+                simulation_id=db_sim.id,
+                report_id=report.id,
+                poverty_type=pov.poverty_type,
+                entity=pov.entity,
+                filter_variable=pov.filter_variable,
+                headcount=pov.headcount,
+                total_population=pov.total_population,
+                rate=pov.rate,
+            )
+            session.add(poverty_record)
 
     # Mark completed
     baseline_sim.status = SimulationStatus.COMPLETED

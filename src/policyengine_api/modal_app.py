@@ -1132,6 +1132,7 @@ def economy_comparison_uk(job_id: str, traceparent: str | None = None) -> None:
                 from policyengine_api.models import (
                     Dataset,
                     DecileImpact,
+                    Poverty,
                     ProgramStatistics,
                     Report,
                     ReportStatus,
@@ -1399,6 +1400,29 @@ def economy_comparison_uk(job_id: str, traceparent: str | None = None) -> None:
                             except KeyError:
                                 pass  # Variable not in model, skip silently
 
+                    # Calculate poverty rates for baseline and reform
+                    from policyengine.outputs.poverty import (
+                        calculate_uk_poverty_rates,
+                    )
+
+                    for pe_sim, db_sim in [
+                        (pe_baseline_sim, baseline_sim),
+                        (pe_reform_sim, reform_sim),
+                    ]:
+                        poverty_results = calculate_uk_poverty_rates(pe_sim)
+                        for pov in poverty_results.outputs:
+                            poverty_record = Poverty(
+                                simulation_id=db_sim.id,
+                                report_id=report.id,
+                                poverty_type=pov.poverty_type,
+                                entity=pov.entity,
+                                filter_variable=pov.filter_variable,
+                                headcount=pov.headcount,
+                                total_population=pov.total_population,
+                                rate=pov.rate,
+                            )
+                            session.add(poverty_record)
+
                     # Mark simulations and report as completed
                     baseline_sim.status = SimulationStatus.COMPLETED
                     baseline_sim.completed_at = datetime.now(timezone.utc)
@@ -1467,6 +1491,7 @@ def economy_comparison_us(job_id: str, traceparent: str | None = None) -> None:
                 from policyengine_api.models import (
                     Dataset,
                     DecileImpact,
+                    Poverty,
                     ProgramStatistics,
                     Report,
                     ReportStatus,
@@ -1699,6 +1724,29 @@ def economy_comparison_us(job_id: str, traceparent: str | None = None) -> None:
                                 session.add(program_stat)
                             except KeyError:
                                 pass  # Variable not in model, skip silently
+
+                    # Calculate poverty rates for baseline and reform
+                    from policyengine.outputs.poverty import (
+                        calculate_us_poverty_rates,
+                    )
+
+                    for pe_sim, db_sim in [
+                        (pe_baseline_sim, baseline_sim),
+                        (pe_reform_sim, reform_sim),
+                    ]:
+                        poverty_results = calculate_us_poverty_rates(pe_sim)
+                        for pov in poverty_results.outputs:
+                            poverty_record = Poverty(
+                                simulation_id=db_sim.id,
+                                report_id=report.id,
+                                poverty_type=pov.poverty_type,
+                                entity=pov.entity,
+                                filter_variable=pov.filter_variable,
+                                headcount=pov.headcount,
+                                total_population=pov.total_population,
+                                rate=pov.rate,
+                            )
+                            session.add(poverty_record)
 
                     # Mark simulations and report as completed
                     baseline_sim.status = SimulationStatus.COMPLETED
