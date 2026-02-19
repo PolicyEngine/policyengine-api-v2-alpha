@@ -1403,6 +1403,7 @@ def economy_comparison_uk(job_id: str, traceparent: str | None = None) -> None:
 
                     # Calculate poverty rates for baseline and reform
                     from policyengine.outputs.poverty import (
+                        calculate_uk_poverty_by_age,
                         calculate_uk_poverty_rates,
                     )
 
@@ -1412,6 +1413,27 @@ def economy_comparison_uk(job_id: str, traceparent: str | None = None) -> None:
                     ]:
                         poverty_results = calculate_uk_poverty_rates(pe_sim)
                         for pov in poverty_results.outputs:
+                            poverty_record = Poverty(
+                                simulation_id=db_sim.id,
+                                report_id=report.id,
+                                poverty_type=pov.poverty_type,
+                                entity=pov.entity,
+                                filter_variable=pov.filter_variable,
+                                headcount=pov.headcount,
+                                total_population=pov.total_population,
+                                rate=pov.rate,
+                            )
+                            session.add(poverty_record)
+
+                    # Calculate poverty rates by age group
+                    for pe_sim, db_sim in [
+                        (pe_baseline_sim, baseline_sim),
+                        (pe_reform_sim, reform_sim),
+                    ]:
+                        age_poverty_results = calculate_uk_poverty_by_age(
+                            pe_sim
+                        )
+                        for pov in age_poverty_results.outputs:
                             poverty_record = Poverty(
                                 simulation_id=db_sim.id,
                                 report_id=report.id,
@@ -1752,6 +1774,7 @@ def economy_comparison_us(job_id: str, traceparent: str | None = None) -> None:
 
                     # Calculate poverty rates for baseline and reform
                     from policyengine.outputs.poverty import (
+                        calculate_us_poverty_by_age,
                         calculate_us_poverty_rates,
                     )
 
@@ -1761,6 +1784,27 @@ def economy_comparison_us(job_id: str, traceparent: str | None = None) -> None:
                     ]:
                         poverty_results = calculate_us_poverty_rates(pe_sim)
                         for pov in poverty_results.outputs:
+                            poverty_record = Poverty(
+                                simulation_id=db_sim.id,
+                                report_id=report.id,
+                                poverty_type=pov.poverty_type,
+                                entity=pov.entity,
+                                filter_variable=pov.filter_variable,
+                                headcount=pov.headcount,
+                                total_population=pov.total_population,
+                                rate=pov.rate,
+                            )
+                            session.add(poverty_record)
+
+                    # Calculate poverty rates by age group
+                    for pe_sim, db_sim in [
+                        (pe_baseline_sim, baseline_sim),
+                        (pe_reform_sim, reform_sim),
+                    ]:
+                        age_poverty_results = calculate_us_poverty_by_age(
+                            pe_sim
+                        )
+                        for pov in age_poverty_results.outputs:
                             poverty_record = Poverty(
                                 simulation_id=db_sim.id,
                                 report_id=report.id,
