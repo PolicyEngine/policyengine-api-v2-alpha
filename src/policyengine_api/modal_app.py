@@ -1736,6 +1736,294 @@ def economy_comparison_us(job_id: str, traceparent: str | None = None) -> None:
         logfire.force_flush()
 
 
+# ---------------------------------------------------------------------------
+# Household impact (report-based) — called by _trigger_household_impact()
+# ---------------------------------------------------------------------------
+
+
+@app.function(
+    image=uk_image,
+    secrets=[db_secrets, logfire_secrets],
+    memory=4096,
+    cpu=4,
+    timeout=600,
+)
+def household_impact_uk(report_id: str, traceparent: str | None = None) -> None:
+    """Run UK household impact analysis for a report.
+
+    Loads the Report and its Simulations from the database, runs household
+    calculations for each simulation, stores results, and marks the report
+    as completed. Called via Modal.spawn() from _trigger_household_impact().
+    """
+    import logfire
+
+    configure_logfire("policyengine-modal-uk", traceparent)
+
+    try:
+        with logfire.span("household_impact_uk", report_id=report_id):
+            from datetime import datetime, timezone
+            from uuid import UUID
+
+            from sqlmodel import Session, create_engine
+
+            database_url = get_database_url()
+            engine = create_engine(database_url)
+
+            try:
+                from policyengine_api.api.household import _calculate_household_uk
+                from policyengine_api.api.household_analysis import (
+                    _ensure_list,
+                    _extract_policy_data,
+                )
+                from policyengine_api.models import (
+                    Household,
+                    Report,
+                    ReportStatus,
+                    Simulation,
+                    SimulationStatus,
+                )
+
+                with Session(engine) as session:
+                    report = session.get(Report, UUID(report_id))
+                    if not report:
+                        raise ValueError(f"Report {report_id} not found")
+
+                    report.status = ReportStatus.RUNNING
+                    session.add(report)
+                    session.commit()
+
+                    # Run each simulation (baseline, then reform if present)
+                    for sim_id in [
+                        report.baseline_simulation_id,
+                        report.reform_simulation_id,
+                    ]:
+                        if not sim_id:
+                            continue
+
+                        simulation = session.get(Simulation, sim_id)
+                        if not simulation or simulation.status != SimulationStatus.PENDING:
+                            continue
+
+                        household = session.get(Household, simulation.household_id)
+                        if not household:
+                            raise ValueError(
+                                f"Household {simulation.household_id} not found"
+                            )
+
+                        # Convert policy to calculation format
+                        policy_data = None
+                        if simulation.policy_id:
+                            from policyengine_api.models import Policy
+
+                            policy = session.get(Policy, simulation.policy_id)
+                            policy_data = _extract_policy_data(policy)
+
+                        # Mark simulation as running
+                        simulation.status = SimulationStatus.RUNNING
+                        simulation.started_at = datetime.now(timezone.utc)
+                        session.add(simulation)
+                        session.commit()
+
+                        try:
+                            hh_data = household.household_data
+                            with logfire.span(
+                                "run_household_calculation",
+                                simulation_id=str(sim_id),
+                            ):
+                                result = _calculate_household_uk(
+                                    people=hh_data.get("people", []),
+                                    benunit=_ensure_list(hh_data.get("benunit")),
+                                    household=_ensure_list(hh_data.get("household")),
+                                    year=household.year,
+                                    policy_data=policy_data,
+                                )
+
+                            simulation.household_result = result
+                            simulation.status = SimulationStatus.COMPLETED
+                            simulation.completed_at = datetime.now(timezone.utc)
+                            session.add(simulation)
+                            session.commit()
+                        except Exception as e:
+                            simulation.status = SimulationStatus.FAILED
+                            simulation.error_message = str(e)
+                            simulation.completed_at = datetime.now(timezone.utc)
+                            session.add(simulation)
+                            session.commit()
+                            raise
+
+                    report.status = ReportStatus.COMPLETED
+                    session.add(report)
+                    session.commit()
+
+            except Exception as e:
+                logfire.error(
+                    "UK household impact failed",
+                    report_id=report_id,
+                    error=str(e),
+                )
+                try:
+                    from sqlmodel import text
+
+                    with Session(engine) as session:
+                        session.execute(
+                            text(
+                                "UPDATE reports SET status = 'FAILED', "
+                                "error_message = :error WHERE id = :report_id"
+                            ),
+                            {"report_id": report_id, "error": str(e)[:1000]},
+                        )
+                        session.commit()
+                except Exception as db_error:
+                    logfire.error("Failed to update DB", error=str(db_error))
+                raise
+    finally:
+        logfire.force_flush()
+
+
+@app.function(
+    image=us_image,
+    secrets=[db_secrets, logfire_secrets],
+    memory=4096,
+    cpu=4,
+    timeout=600,
+)
+def household_impact_us(report_id: str, traceparent: str | None = None) -> None:
+    """Run US household impact analysis for a report.
+
+    Loads the Report and its Simulations from the database, runs household
+    calculations for each simulation, stores results, and marks the report
+    as completed. Called via Modal.spawn() from _trigger_household_impact().
+    """
+    import logfire
+
+    configure_logfire("policyengine-modal-us", traceparent)
+
+    try:
+        with logfire.span("household_impact_us", report_id=report_id):
+            from datetime import datetime, timezone
+            from uuid import UUID
+
+            from sqlmodel import Session, create_engine
+
+            database_url = get_database_url()
+            engine = create_engine(database_url)
+
+            try:
+                from policyengine_api.api.household import _calculate_household_us
+                from policyengine_api.api.household_analysis import (
+                    _ensure_list,
+                    _extract_policy_data,
+                )
+                from policyengine_api.models import (
+                    Household,
+                    Report,
+                    ReportStatus,
+                    Simulation,
+                    SimulationStatus,
+                )
+
+                with Session(engine) as session:
+                    report = session.get(Report, UUID(report_id))
+                    if not report:
+                        raise ValueError(f"Report {report_id} not found")
+
+                    report.status = ReportStatus.RUNNING
+                    session.add(report)
+                    session.commit()
+
+                    # Run each simulation (baseline, then reform if present)
+                    for sim_id in [
+                        report.baseline_simulation_id,
+                        report.reform_simulation_id,
+                    ]:
+                        if not sim_id:
+                            continue
+
+                        simulation = session.get(Simulation, sim_id)
+                        if not simulation or simulation.status != SimulationStatus.PENDING:
+                            continue
+
+                        household = session.get(Household, simulation.household_id)
+                        if not household:
+                            raise ValueError(
+                                f"Household {simulation.household_id} not found"
+                            )
+
+                        # Convert policy to calculation format
+                        policy_data = None
+                        if simulation.policy_id:
+                            from policyengine_api.models import Policy
+
+                            policy = session.get(Policy, simulation.policy_id)
+                            policy_data = _extract_policy_data(policy)
+
+                        # Mark simulation as running
+                        simulation.status = SimulationStatus.RUNNING
+                        simulation.started_at = datetime.now(timezone.utc)
+                        session.add(simulation)
+                        session.commit()
+
+                        try:
+                            hh_data = household.household_data
+                            with logfire.span(
+                                "run_household_calculation",
+                                simulation_id=str(sim_id),
+                            ):
+                                result = _calculate_household_us(
+                                    people=hh_data.get("people", []),
+                                    marital_unit=_ensure_list(
+                                        hh_data.get("marital_unit")
+                                    ),
+                                    family=_ensure_list(hh_data.get("family")),
+                                    spm_unit=_ensure_list(hh_data.get("spm_unit")),
+                                    tax_unit=_ensure_list(hh_data.get("tax_unit")),
+                                    household=_ensure_list(hh_data.get("household")),
+                                    year=household.year,
+                                    policy_data=policy_data,
+                                )
+
+                            simulation.household_result = result
+                            simulation.status = SimulationStatus.COMPLETED
+                            simulation.completed_at = datetime.now(timezone.utc)
+                            session.add(simulation)
+                            session.commit()
+                        except Exception as e:
+                            simulation.status = SimulationStatus.FAILED
+                            simulation.error_message = str(e)
+                            simulation.completed_at = datetime.now(timezone.utc)
+                            session.add(simulation)
+                            session.commit()
+                            raise
+
+                    report.status = ReportStatus.COMPLETED
+                    session.add(report)
+                    session.commit()
+
+            except Exception as e:
+                logfire.error(
+                    "US household impact failed",
+                    report_id=report_id,
+                    error=str(e),
+                )
+                try:
+                    from sqlmodel import text
+
+                    with Session(engine) as session:
+                        session.execute(
+                            text(
+                                "UPDATE reports SET status = 'FAILED', "
+                                "error_message = :error WHERE id = :report_id"
+                            ),
+                            {"report_id": report_id, "error": str(e)[:1000]},
+                        )
+                        session.commit()
+                except Exception as db_error:
+                    logfire.error("Failed to update DB", error=str(db_error))
+                raise
+    finally:
+        logfire.force_flush()
+
+
 def _get_pe_policy_uk(policy_id, model_version, session):
     """Convert database Policy to policyengine Policy for UK."""
     if policy_id is None:
