@@ -10,6 +10,11 @@ from .congressional_district_impact import (
     CongressionalDistrictImpactCreate,
     CongressionalDistrictImpactRead,
 )
+from .constituency_impact import (
+    ConstituencyImpact,
+    ConstituencyImpactCreate,
+    ConstituencyImpactRead,
+)
 from .change_aggregate import (
     ChangeAggregate,
     ChangeAggregateCreate,
@@ -108,6 +113,9 @@ __all__ = [
     "CongressionalDistrictImpact",
     "CongressionalDistrictImpactCreate",
     "CongressionalDistrictImpactRead",
+    "ConstituencyImpact",
+    "ConstituencyImpactCreate",
+    "ConstituencyImpactRead",
     "ChangeAggregate",
     "ChangeAggregateCreate",
     "ChangeAggregateRead",
