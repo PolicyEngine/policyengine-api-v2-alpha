@@ -146,6 +146,7 @@ class EconomicImpactResponse(BaseModel):
     inequality: list[InequalityRead] | None = None
     budget_summary: list[BudgetSummaryRead] | None = None
     intra_decile: list[IntraDecileImpactRead] | None = None
+    detailed_budget: dict[str, dict[str, float | None]] | None = None
 
 
 def _get_model_version(
@@ -289,6 +290,7 @@ def _build_response(
     inequality_records = None
     budget_summary_records = None
     intra_decile_records = None
+    detailed_budget = None
 
     if report.status == ReportStatus.COMPLETED:
         # Fetch decile impacts for this report
@@ -341,6 +343,17 @@ def _build_response(
             )
             for s in stats
         ]
+
+        # Build detailed_budget: V1-compatible per-program breakdown
+        # keyed by program name with baseline/reform/difference values.
+        detailed_budget = {
+            s.program_name: {
+                "baseline": _safe_float(s.baseline_total),
+                "reform": _safe_float(s.reform_total),
+                "difference": _safe_float(s.change),
+            }
+            for s in stats
+        }
 
         # Fetch poverty records for this report
         pov_rows = session.exec(
@@ -457,6 +470,7 @@ def _build_response(
         inequality=inequality_records,
         budget_summary=budget_summary_records,
         intra_decile=intra_decile_records,
+        detailed_budget=detailed_budget,
     )
 
 
@@ -658,8 +672,14 @@ def _run_local_economy_comparison_uk(job_id: str, session: Session) -> None:
     programmes = {
         "income_tax": {"entity": "person", "is_tax": True},
         "national_insurance": {"entity": "person", "is_tax": True},
+        "vat": {"entity": "household", "is_tax": True},
+        "council_tax": {"entity": "household", "is_tax": True},
         "universal_credit": {"entity": "person", "is_tax": False},
         "child_benefit": {"entity": "person", "is_tax": False},
+        "pension_credit": {"entity": "person", "is_tax": False},
+        "income_support": {"entity": "person", "is_tax": False},
+        "working_tax_credit": {"entity": "person", "is_tax": False},
+        "child_tax_credit": {"entity": "person", "is_tax": False},
     }
     for prog_name, prog_info in programmes.items():
         try:
