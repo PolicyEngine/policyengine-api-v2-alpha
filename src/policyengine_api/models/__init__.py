@@ -1,5 +1,10 @@
 """Database models for PolicyEngine API."""
 
+from .budget_summary import (
+    BudgetSummary,
+    BudgetSummaryCreate,
+    BudgetSummaryRead,
+)
 from .change_aggregate import (
     ChangeAggregate,
     ChangeAggregateCreate,
@@ -82,6 +87,9 @@ from .user_policy import (
 from .variable import Variable, VariableCreate, VariableRead
 
 __all__ = [
+    "BudgetSummary",
+    "BudgetSummaryCreate",
+    "BudgetSummaryRead",
     "AggregateOutput",
     "AggregateOutputCreate",
     "AggregateOutputRead",
