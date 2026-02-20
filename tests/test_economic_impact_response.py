@@ -12,19 +12,29 @@ from test_fixtures.fixtures_economic_impact_response import (
     BUDGET_VARIABLES_UK,
     INTRA_DECILE_DECILE_COUNT,
     SAMPLE_BOTTOM_50_SHARE,
+    SAMPLE_CONSTITUENCY_COUNT,
+    SAMPLE_DISTRICT_COUNT,
     SAMPLE_GINI,
     SAMPLE_INEQUALITY_INCOME_VAR,
+    SAMPLE_INTRA_WEALTH_DECILE_COUNT,
+    SAMPLE_LA_COUNT,
     SAMPLE_POVERTY_TYPES,
     SAMPLE_TOP_1_SHARE,
     SAMPLE_TOP_10_SHARE,
+    SAMPLE_WEALTH_DECILE_COUNT,
     UK_PROGRAM_COUNT,
     UK_PROGRAMS,
     add_budget_summary_records,
+    add_congressional_district_records,
+    add_constituency_records,
     add_inequality_records,
     add_intra_decile_records,
+    add_intra_wealth_decile_records,
+    add_local_authority_records,
     add_poverty_by_age_records,
     add_poverty_records,
     add_program_statistics_records,
+    add_wealth_decile_records,
     create_fully_populated_report,
     create_report_with_simulations,
 )
@@ -462,6 +472,11 @@ class TestBuildResponseFullyPopulated:
         assert response.intra_decile is not None
         assert response.program_statistics is not None
         assert response.detailed_budget is not None
+        assert response.congressional_district_impact is not None
+        assert response.constituency_impact is not None
+        assert response.local_authority_impact is not None
+        assert response.wealth_decile is not None
+        assert response.intra_wealth_decile is not None
 
     def test__given_fully_populated_report__then_report_id_matches(self, session):
         # Given
@@ -483,3 +498,188 @@ class TestBuildResponseFullyPopulated:
         # Then
         assert response.baseline_simulation.id == baseline_sim.id
         assert response.reform_simulation.id == reform_sim.id
+
+
+# ---------------------------------------------------------------------------
+# _build_response — congressional_district_impact
+# ---------------------------------------------------------------------------
+
+
+class TestBuildResponseCongressionalDistrict:
+    """Tests for congressional_district_impact in _build_response output."""
+
+    def test__given_district_records__then_correct_count(self, session):
+        report, baseline_sim, reform_sim = create_report_with_simulations(session)
+        add_congressional_district_records(session, report, baseline_sim, reform_sim)
+
+        response = _build_response(report, baseline_sim, reform_sim, session)
+
+        assert response.congressional_district_impact is not None
+        assert len(response.congressional_district_impact) == SAMPLE_DISTRICT_COUNT
+
+    def test__given_no_district_records__then_field_is_none(self, session):
+        report, baseline_sim, reform_sim = create_report_with_simulations(session)
+
+        response = _build_response(report, baseline_sim, reform_sim, session)
+
+        assert response.congressional_district_impact is None
+
+    def test__given_district_records__then_geoid_fields_populated(self, session):
+        report, baseline_sim, reform_sim = create_report_with_simulations(session)
+        add_congressional_district_records(session, report, baseline_sim, reform_sim)
+
+        response = _build_response(report, baseline_sim, reform_sim, session)
+
+        for d in response.congressional_district_impact:
+            assert d.district_geoid > 0
+            assert d.state_fips >= 0
+            assert d.population > 0
+
+
+# ---------------------------------------------------------------------------
+# _build_response — constituency_impact
+# ---------------------------------------------------------------------------
+
+
+class TestBuildResponseConstituency:
+    """Tests for constituency_impact in _build_response output."""
+
+    def test__given_constituency_records__then_correct_count(self, session):
+        report, baseline_sim, reform_sim = create_report_with_simulations(session)
+        add_constituency_records(session, report, baseline_sim, reform_sim)
+
+        response = _build_response(report, baseline_sim, reform_sim, session)
+
+        assert response.constituency_impact is not None
+        assert len(response.constituency_impact) == SAMPLE_CONSTITUENCY_COUNT
+
+    def test__given_no_constituency_records__then_field_is_none(self, session):
+        report, baseline_sim, reform_sim = create_report_with_simulations(session)
+
+        response = _build_response(report, baseline_sim, reform_sim, session)
+
+        assert response.constituency_impact is None
+
+    def test__given_constituency_records__then_code_and_name_populated(self, session):
+        report, baseline_sim, reform_sim = create_report_with_simulations(session)
+        add_constituency_records(session, report, baseline_sim, reform_sim)
+
+        response = _build_response(report, baseline_sim, reform_sim, session)
+
+        for c in response.constituency_impact:
+            assert c.constituency_code is not None
+            assert c.constituency_name is not None
+            assert c.population > 0
+
+
+# ---------------------------------------------------------------------------
+# _build_response — local_authority_impact
+# ---------------------------------------------------------------------------
+
+
+class TestBuildResponseLocalAuthority:
+    """Tests for local_authority_impact in _build_response output."""
+
+    def test__given_la_records__then_correct_count(self, session):
+        report, baseline_sim, reform_sim = create_report_with_simulations(session)
+        add_local_authority_records(session, report, baseline_sim, reform_sim)
+
+        response = _build_response(report, baseline_sim, reform_sim, session)
+
+        assert response.local_authority_impact is not None
+        assert len(response.local_authority_impact) == SAMPLE_LA_COUNT
+
+    def test__given_no_la_records__then_field_is_none(self, session):
+        report, baseline_sim, reform_sim = create_report_with_simulations(session)
+
+        response = _build_response(report, baseline_sim, reform_sim, session)
+
+        assert response.local_authority_impact is None
+
+    def test__given_la_records__then_code_and_name_populated(self, session):
+        report, baseline_sim, reform_sim = create_report_with_simulations(session)
+        add_local_authority_records(session, report, baseline_sim, reform_sim)
+
+        response = _build_response(report, baseline_sim, reform_sim, session)
+
+        for la in response.local_authority_impact:
+            assert la.local_authority_code is not None
+            assert la.local_authority_name is not None
+            assert la.population > 0
+
+
+# ---------------------------------------------------------------------------
+# _build_response — wealth_decile
+# ---------------------------------------------------------------------------
+
+
+class TestBuildResponseWealthDecile:
+    """Tests for wealth_decile in _build_response output."""
+
+    def test__given_wealth_decile_records__then_correct_count(self, session):
+        report, baseline_sim, reform_sim = create_report_with_simulations(session)
+        add_wealth_decile_records(session, report, baseline_sim, reform_sim)
+
+        response = _build_response(report, baseline_sim, reform_sim, session)
+
+        assert response.wealth_decile is not None
+        assert len(response.wealth_decile) == SAMPLE_WEALTH_DECILE_COUNT
+
+    def test__given_no_wealth_decile_records__then_field_is_none(self, session):
+        report, baseline_sim, reform_sim = create_report_with_simulations(session)
+
+        response = _build_response(report, baseline_sim, reform_sim, session)
+
+        assert response.wealth_decile is None
+
+    def test__given_wealth_decile_records__then_income_variable_is_wealth(self, session):
+        report, baseline_sim, reform_sim = create_report_with_simulations(session)
+        add_wealth_decile_records(session, report, baseline_sim, reform_sim)
+
+        response = _build_response(report, baseline_sim, reform_sim, session)
+
+        for d in response.wealth_decile:
+            assert d.income_variable == "household_wealth_decile"
+
+
+# ---------------------------------------------------------------------------
+# _build_response — intra_wealth_decile
+# ---------------------------------------------------------------------------
+
+
+class TestBuildResponseIntraWealthDecile:
+    """Tests for intra_wealth_decile in _build_response output."""
+
+    def test__given_intra_wealth_records__then_correct_count(self, session):
+        report, baseline_sim, reform_sim = create_report_with_simulations(session)
+        add_intra_wealth_decile_records(session, report, baseline_sim, reform_sim)
+
+        response = _build_response(report, baseline_sim, reform_sim, session)
+
+        assert response.intra_wealth_decile is not None
+        assert len(response.intra_wealth_decile) == SAMPLE_INTRA_WEALTH_DECILE_COUNT
+
+    def test__given_no_intra_wealth_records__then_field_is_none(self, session):
+        report, baseline_sim, reform_sim = create_report_with_simulations(session)
+
+        response = _build_response(report, baseline_sim, reform_sim, session)
+
+        assert response.intra_wealth_decile is None
+
+    def test__given_intra_wealth_records__then_decile_type_is_wealth(self, session):
+        report, baseline_sim, reform_sim = create_report_with_simulations(session)
+        add_intra_wealth_decile_records(session, report, baseline_sim, reform_sim)
+
+        response = _build_response(report, baseline_sim, reform_sim, session)
+
+        for r in response.intra_wealth_decile:
+            assert r.decile_type == "wealth"
+
+    def test__given_intra_wealth_records__then_overall_row_present(self, session):
+        report, baseline_sim, reform_sim = create_report_with_simulations(session)
+        add_intra_wealth_decile_records(session, report, baseline_sim, reform_sim)
+
+        response = _build_response(report, baseline_sim, reform_sim, session)
+
+        decile_numbers = {r.decile for r in response.intra_wealth_decile}
+        assert 0 in decile_numbers
