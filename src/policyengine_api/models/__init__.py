@@ -24,6 +24,11 @@ from .household_job import (
     HouseholdJobStatus,
 )
 from .inequality import Inequality, InequalityCreate, InequalityRead
+from .intra_decile_impact import (
+    IntraDecileImpact,
+    IntraDecileImpactCreate,
+    IntraDecileImpactRead,
+)
 from .output import (
     AggregateOutput,
     AggregateOutputCreate,
@@ -122,6 +127,9 @@ __all__ = [
     "Inequality",
     "InequalityCreate",
     "InequalityRead",
+    "IntraDecileImpact",
+    "IntraDecileImpactCreate",
+    "IntraDecileImpactRead",
     "Parameter",
     "ParameterCreate",
     "ParameterRead",

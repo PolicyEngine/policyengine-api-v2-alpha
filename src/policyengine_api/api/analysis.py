@@ -33,6 +33,8 @@ from policyengine_api.models import (
     DecileImpactRead,
     Inequality,
     InequalityRead,
+    IntraDecileImpact,
+    IntraDecileImpactRead,
     Poverty,
     PovertyRead,
     ProgramStatistics,
@@ -143,6 +145,7 @@ class EconomicImpactResponse(BaseModel):
     poverty: list[PovertyRead] | None = None
     inequality: list[InequalityRead] | None = None
     budget_summary: list[BudgetSummaryRead] | None = None
+    intra_decile: list[IntraDecileImpactRead] | None = None
 
 
 def _get_model_version(
@@ -285,6 +288,7 @@ def _build_response(
     poverty_records = None
     inequality_records = None
     budget_summary_records = None
+    intra_decile_records = None
 
     if report.status == ReportStatus.COMPLETED:
         # Fetch decile impacts for this report
@@ -398,6 +402,29 @@ def _build_response(
             for b in budget_rows
         ]
 
+        # Fetch intra-decile impact records for this report
+        intra_rows = session.exec(
+            select(IntraDecileImpact).where(
+                IntraDecileImpact.report_id == report.id
+            )
+        ).all()
+        intra_decile_records = [
+            IntraDecileImpactRead(
+                id=r.id,
+                created_at=r.created_at,
+                baseline_simulation_id=r.baseline_simulation_id,
+                reform_simulation_id=r.reform_simulation_id,
+                report_id=r.report_id,
+                decile=r.decile,
+                lose_more_than_5pct=_safe_float(r.lose_more_than_5pct),
+                lose_less_than_5pct=_safe_float(r.lose_less_than_5pct),
+                no_change=_safe_float(r.no_change),
+                gain_less_than_5pct=_safe_float(r.gain_less_than_5pct),
+                gain_more_than_5pct=_safe_float(r.gain_more_than_5pct),
+            )
+            for r in intra_rows
+        ]
+
     region_info = None
     if region:
         region_info = RegionInfo(
@@ -429,6 +456,7 @@ def _build_response(
         poverty=poverty_records,
         inequality=inequality_records,
         budget_summary=budget_summary_records,
+        intra_decile=intra_decile_records,
     )
 
 
@@ -799,6 +827,37 @@ def _run_local_economy_comparison_uk(job_id: str, session: Session) -> None:
         change=reform_hh_count - baseline_hh_count,
     )
     session.add(budget_record)
+
+    # Calculate intra-decile impact (5-category income change distribution)
+    from policyengine_api.api.intra_decile import compute_intra_decile
+
+    baseline_hh_data = {
+        k: pe_baseline_sim.output_dataset.data.household[k].values
+        for k in [
+            "household_net_income",
+            "household_weight",
+            "household_count_people",
+            "household_income_decile",
+        ]
+    }
+    reform_hh_data = {
+        k: pe_reform_sim.output_dataset.data.household[k].values
+        for k in [
+            "household_net_income",
+            "household_weight",
+            "household_count_people",
+            "household_income_decile",
+        ]
+    }
+    intra_decile_rows = compute_intra_decile(baseline_hh_data, reform_hh_data)
+    for row in intra_decile_rows:
+        record = IntraDecileImpact(
+            baseline_simulation_id=baseline_sim.id,
+            reform_simulation_id=reform_sim.id,
+            report_id=report.id,
+            **row,
+        )
+        session.add(record)
 
     # Mark completed
     baseline_sim.status = SimulationStatus.COMPLETED
@@ -1178,6 +1237,37 @@ def _run_local_economy_comparison_us(job_id: str, session: Session) -> None:
         change=reform_hh_count - baseline_hh_count,
     )
     session.add(budget_record)
+
+    # Calculate intra-decile impact (5-category income change distribution)
+    from policyengine_api.api.intra_decile import compute_intra_decile
+
+    baseline_hh_data = {
+        k: pe_baseline_sim.output_dataset.data.household[k].values
+        for k in [
+            "household_net_income",
+            "household_weight",
+            "household_count_people",
+            "household_income_decile",
+        ]
+    }
+    reform_hh_data = {
+        k: pe_reform_sim.output_dataset.data.household[k].values
+        for k in [
+            "household_net_income",
+            "household_weight",
+            "household_count_people",
+            "household_income_decile",
+        ]
+    }
+    intra_decile_rows = compute_intra_decile(baseline_hh_data, reform_hh_data)
+    for row in intra_decile_rows:
+        record = IntraDecileImpact(
+            baseline_simulation_id=baseline_sim.id,
+            reform_simulation_id=reform_sim.id,
+            report_id=report.id,
+            **row,
+        )
+        session.add(record)
 
     # Mark completed
     baseline_sim.status = SimulationStatus.COMPLETED
