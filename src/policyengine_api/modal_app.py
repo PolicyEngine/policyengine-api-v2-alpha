@@ -1672,6 +1672,7 @@ def economy_comparison_us(job_id: str, traceparent: str | None = None) -> None:
                 # Import models inline
                 from policyengine_api.models import (
                     BudgetSummary,
+                    CongressionalDistrictImpact,
                     Dataset,
                     DecileImpact,
                     Inequality,
@@ -2134,6 +2135,40 @@ def economy_comparison_us(job_id: str, traceparent: str | None = None) -> None:
                             **row,
                         )
                         session.add(record)
+
+                    # Calculate congressional district impact
+                    from policyengine.outputs.congressional_district_impact import (
+                        compute_us_congressional_district_impacts,
+                    )
+
+                    try:
+                        district_impact = (
+                            compute_us_congressional_district_impacts(
+                                pe_baseline_sim, pe_reform_sim
+                            )
+                        )
+                        if district_impact.district_results:
+                            for dr in district_impact.district_results:
+                                record = CongressionalDistrictImpact(
+                                    baseline_simulation_id=baseline_sim.id,
+                                    reform_simulation_id=reform_sim.id,
+                                    report_id=report.id,
+                                    district_geoid=dr["district_geoid"],
+                                    state_fips=dr["state_fips"],
+                                    district_number=dr[
+                                        "district_number"
+                                    ],
+                                    average_household_income_change=dr[
+                                        "average_household_income_change"
+                                    ],
+                                    relative_household_income_change=dr[
+                                        "relative_household_income_change"
+                                    ],
+                                    population=dr["population"],
+                                )
+                                session.add(record)
+                    except KeyError:
+                        pass  # congressional_district_geoid not in dataset
 
                     # Mark simulations and report as completed
                     baseline_sim.status = SimulationStatus.COMPLETED

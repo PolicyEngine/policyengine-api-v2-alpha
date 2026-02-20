@@ -28,6 +28,8 @@ from sqlmodel import Session, select
 from policyengine_api.models import (
     BudgetSummary,
     BudgetSummaryRead,
+    CongressionalDistrictImpact,
+    CongressionalDistrictImpactRead,
     Dataset,
     DecileImpact,
     DecileImpactRead,
@@ -147,6 +149,7 @@ class EconomicImpactResponse(BaseModel):
     budget_summary: list[BudgetSummaryRead] | None = None
     intra_decile: list[IntraDecileImpactRead] | None = None
     detailed_budget: dict[str, dict[str, float | None]] | None = None
+    congressional_district_impact: list[CongressionalDistrictImpactRead] | None = None
 
 
 def _get_model_version(
@@ -291,6 +294,7 @@ def _build_response(
     budget_summary_records = None
     intra_decile_records = None
     detailed_budget = None
+    district_impact_records = None
 
     if report.status == ReportStatus.COMPLETED:
         # Fetch decile impacts for this report
@@ -438,6 +442,34 @@ def _build_response(
             for r in intra_rows
         ]
 
+        # Fetch congressional district impact records for this report
+        district_rows = session.exec(
+            select(CongressionalDistrictImpact).where(
+                CongressionalDistrictImpact.report_id == report.id
+            )
+        ).all()
+        if district_rows:
+            district_impact_records = [
+                CongressionalDistrictImpactRead(
+                    id=d.id,
+                    created_at=d.created_at,
+                    baseline_simulation_id=d.baseline_simulation_id,
+                    reform_simulation_id=d.reform_simulation_id,
+                    report_id=d.report_id,
+                    district_geoid=d.district_geoid,
+                    state_fips=d.state_fips,
+                    district_number=d.district_number,
+                    average_household_income_change=_safe_float(
+                        d.average_household_income_change
+                    ),
+                    relative_household_income_change=_safe_float(
+                        d.relative_household_income_change
+                    ),
+                    population=_safe_float(d.population),
+                )
+                for d in district_rows
+            ]
+
     region_info = None
     if region:
         region_info = RegionInfo(
@@ -471,6 +503,7 @@ def _build_response(
         budget_summary=budget_summary_records,
         intra_decile=intra_decile_records,
         detailed_budget=detailed_budget,
+        congressional_district_impact=district_impact_records,
     )
 
 
@@ -1288,6 +1321,36 @@ def _run_local_economy_comparison_us(job_id: str, session: Session) -> None:
             **row,
         )
         session.add(record)
+
+    # Calculate congressional district impact
+    from policyengine.outputs.congressional_district_impact import (
+        compute_us_congressional_district_impacts,
+    )
+
+    try:
+        district_impact = compute_us_congressional_district_impacts(
+            pe_baseline_sim, pe_reform_sim
+        )
+        if district_impact.district_results:
+            for dr in district_impact.district_results:
+                record = CongressionalDistrictImpact(
+                    baseline_simulation_id=baseline_sim.id,
+                    reform_simulation_id=reform_sim.id,
+                    report_id=report.id,
+                    district_geoid=dr["district_geoid"],
+                    state_fips=dr["state_fips"],
+                    district_number=dr["district_number"],
+                    average_household_income_change=dr[
+                        "average_household_income_change"
+                    ],
+                    relative_household_income_change=dr[
+                        "relative_household_income_change"
+                    ],
+                    population=dr["population"],
+                )
+                session.add(record)
+    except KeyError:
+        pass  # congressional_district_geoid not in dataset
 
     # Mark completed
     baseline_sim.status = SimulationStatus.COMPLETED
