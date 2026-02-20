@@ -30,6 +30,8 @@ from policyengine_api.models import (
     BudgetSummaryRead,
     CongressionalDistrictImpact,
     CongressionalDistrictImpactRead,
+    ConstituencyImpact,
+    ConstituencyImpactRead,
     Dataset,
     DecileImpact,
     DecileImpactRead,
@@ -150,6 +152,7 @@ class EconomicImpactResponse(BaseModel):
     intra_decile: list[IntraDecileImpactRead] | None = None
     detailed_budget: dict[str, dict[str, float | None]] | None = None
     congressional_district_impact: list[CongressionalDistrictImpactRead] | None = None
+    constituency_impact: list[ConstituencyImpactRead] | None = None
 
 
 def _get_model_version(
@@ -295,6 +298,7 @@ def _build_response(
     intra_decile_records = None
     detailed_budget = None
     district_impact_records = None
+    constituency_impact_records = None
 
     if report.status == ReportStatus.COMPLETED:
         # Fetch decile impacts for this report
@@ -470,6 +474,35 @@ def _build_response(
                 for d in district_rows
             ]
 
+        # Fetch constituency impact records for this report
+        constituency_rows = session.exec(
+            select(ConstituencyImpact).where(
+                ConstituencyImpact.report_id == report.id
+            )
+        ).all()
+        if constituency_rows:
+            constituency_impact_records = [
+                ConstituencyImpactRead(
+                    id=c.id,
+                    created_at=c.created_at,
+                    baseline_simulation_id=c.baseline_simulation_id,
+                    reform_simulation_id=c.reform_simulation_id,
+                    report_id=c.report_id,
+                    constituency_code=c.constituency_code,
+                    constituency_name=c.constituency_name,
+                    x=c.x,
+                    y=c.y,
+                    average_household_income_change=_safe_float(
+                        c.average_household_income_change
+                    ),
+                    relative_household_income_change=_safe_float(
+                        c.relative_household_income_change
+                    ),
+                    population=_safe_float(c.population),
+                )
+                for c in constituency_rows
+            ]
+
     region_info = None
     if region:
         region_info = RegionInfo(
@@ -504,6 +537,7 @@ def _build_response(
         intra_decile=intra_decile_records,
         detailed_budget=detailed_budget,
         congressional_district_impact=district_impact_records,
+        constituency_impact=constituency_impact_records,
     )
 
 
@@ -911,6 +945,50 @@ def _run_local_economy_comparison_uk(job_id: str, session: Session) -> None:
             **row,
         )
         session.add(record)
+
+    # Calculate constituency impact (UK only, requires weight matrix)
+    from policyengine.outputs.constituency_impact import (
+        compute_uk_constituency_impacts,
+    )
+
+    try:
+        from policyengine_core.tools.google_cloud import download as gcs_download
+
+        weight_matrix_path = gcs_download(
+            gcs_bucket="policyengine-uk-data-private",
+            gcs_key="parliamentary_constituency_weights.h5",
+        )
+        constituency_csv_path = gcs_download(
+            gcs_bucket="policyengine-uk-data-private",
+            gcs_key="constituencies_2024.csv",
+        )
+        constituency_impact = compute_uk_constituency_impacts(
+            pe_baseline_sim,
+            pe_reform_sim,
+            weight_matrix_path=weight_matrix_path,
+            constituency_csv_path=constituency_csv_path,
+        )
+        if constituency_impact.constituency_results:
+            for cr in constituency_impact.constituency_results:
+                record = ConstituencyImpact(
+                    baseline_simulation_id=baseline_sim.id,
+                    reform_simulation_id=reform_sim.id,
+                    report_id=report.id,
+                    constituency_code=cr["constituency_code"],
+                    constituency_name=cr["constituency_name"],
+                    x=cr["x"],
+                    y=cr["y"],
+                    average_household_income_change=cr[
+                        "average_household_income_change"
+                    ],
+                    relative_household_income_change=cr[
+                        "relative_household_income_change"
+                    ],
+                    population=cr["population"],
+                )
+                session.add(record)
+    except Exception:
+        pass  # Weight matrix not available, skip constituency impact
 
     # Mark completed
     baseline_sim.status = SimulationStatus.COMPLETED

@@ -1131,6 +1131,7 @@ def economy_comparison_uk(job_id: str, traceparent: str | None = None) -> None:
                 # Import models inline
                 from policyengine_api.models import (
                     BudgetSummary,
+                    ConstituencyImpact,
                     Dataset,
                     DecileImpact,
                     Inequality,
@@ -1604,6 +1605,60 @@ def economy_comparison_uk(job_id: str, traceparent: str | None = None) -> None:
                             **row,
                         )
                         session.add(record)
+
+                    # Calculate constituency impact
+                    from policyengine.outputs.constituency_impact import (
+                        compute_uk_constituency_impacts,
+                    )
+
+                    try:
+                        from policyengine_core.tools.google_cloud import (
+                            download as gcs_download,
+                        )
+
+                        weight_matrix_path = gcs_download(
+                            gcs_bucket="policyengine-uk-data-private",
+                            gcs_key="parliamentary_constituency_weights.h5",
+                        )
+                        constituency_csv_path = gcs_download(
+                            gcs_bucket="policyengine-uk-data-private",
+                            gcs_key="constituencies_2024.csv",
+                        )
+                        constituency_impact = (
+                            compute_uk_constituency_impacts(
+                                pe_baseline_sim,
+                                pe_reform_sim,
+                                weight_matrix_path=weight_matrix_path,
+                                constituency_csv_path=constituency_csv_path,
+                            )
+                        )
+                        if constituency_impact.constituency_results:
+                            for cr in (
+                                constituency_impact.constituency_results
+                            ):
+                                record = ConstituencyImpact(
+                                    baseline_simulation_id=baseline_sim.id,
+                                    reform_simulation_id=reform_sim.id,
+                                    report_id=report.id,
+                                    constituency_code=cr[
+                                        "constituency_code"
+                                    ],
+                                    constituency_name=cr[
+                                        "constituency_name"
+                                    ],
+                                    x=cr["x"],
+                                    y=cr["y"],
+                                    average_household_income_change=cr[
+                                        "average_household_income_change"
+                                    ],
+                                    relative_household_income_change=cr[
+                                        "relative_household_income_change"
+                                    ],
+                                    population=cr["population"],
+                                )
+                                session.add(record)
+                    except Exception:
+                        pass  # Weight matrix not available, skip
 
                     # Mark simulations and report as completed
                     baseline_sim.status = SimulationStatus.COMPLETED
