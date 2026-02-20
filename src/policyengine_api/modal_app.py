@@ -1569,41 +1569,27 @@ def economy_comparison_uk(job_id: str, traceparent: str | None = None) -> None:
                     session.add(budget_record)
 
                     # Calculate intra-decile impact
-                    from policyengine_api.api.intra_decile import (
-                        compute_intra_decile,
+                    from policyengine.outputs.intra_decile_impact import (
+                        compute_intra_decile_impacts as pe_compute_intra_decile,
                     )
 
-                    baseline_hh_data = {
-                        k: pe_baseline_sim.output_dataset.data.household[
-                            k
-                        ].values
-                        for k in [
-                            "household_net_income",
-                            "household_weight",
-                            "household_count_people",
-                            "household_income_decile",
-                        ]
-                    }
-                    reform_hh_data = {
-                        k: pe_reform_sim.output_dataset.data.household[
-                            k
-                        ].values
-                        for k in [
-                            "household_net_income",
-                            "household_weight",
-                            "household_count_people",
-                            "household_income_decile",
-                        ]
-                    }
-                    intra_decile_rows = compute_intra_decile(
-                        baseline_hh_data, reform_hh_data
+                    intra_decile_results = pe_compute_intra_decile(
+                        baseline_simulation=pe_baseline_sim,
+                        reform_simulation=pe_reform_sim,
+                        income_variable="household_net_income",
+                        entity="household",
                     )
-                    for row in intra_decile_rows:
+                    for r in intra_decile_results.outputs:
                         record = IntraDecileImpact(
                             baseline_simulation_id=baseline_sim.id,
                             reform_simulation_id=reform_sim.id,
                             report_id=report.id,
-                            **row,
+                            decile=r.decile,
+                            lose_more_than_5pct=r.lose_more_than_5pct,
+                            lose_less_than_5pct=r.lose_less_than_5pct,
+                            no_change=r.no_change,
+                            gain_less_than_5pct=r.gain_less_than_5pct,
+                            gain_more_than_5pct=r.gain_more_than_5pct,
                         )
                         session.add(record)
 
@@ -1712,6 +1698,65 @@ def economy_comparison_uk(job_id: str, traceparent: str | None = None) -> None:
                                 session.add(record)
                     except Exception:
                         pass  # Weight matrix not available, skip
+
+                    # Calculate wealth decile impact (UK only)
+                    try:
+                        from policyengine.outputs.decile_impact import (
+                            DecileImpact as PEDecileImpact,
+                        )
+
+                        PEDecileImpact.model_rebuild(
+                            _types_namespace={"Simulation": PESimulation}
+                        )
+                        for decile_num in range(1, 11):
+                            wealth_di = PEDecileImpact(
+                                baseline_simulation=pe_baseline_sim,
+                                reform_simulation=pe_reform_sim,
+                                income_variable="household_net_income",
+                                decile_variable="household_wealth_decile",
+                                entity="household",
+                                decile=decile_num,
+                            )
+                            wealth_di.run()
+                            record = DecileImpact(
+                                baseline_simulation_id=baseline_sim.id,
+                                reform_simulation_id=reform_sim.id,
+                                report_id=report.id,
+                                income_variable="household_wealth_decile",
+                                entity="household",
+                                decile=decile_num,
+                                quantiles=10,
+                                baseline_mean=wealth_di.baseline_mean,
+                                reform_mean=wealth_di.reform_mean,
+                                absolute_change=wealth_di.absolute_change,
+                                relative_change=wealth_di.relative_change,
+                            )
+                            session.add(record)
+
+                        # Calculate intra-wealth-decile impact
+                        intra_wealth_results = pe_compute_intra_decile(
+                            baseline_simulation=pe_baseline_sim,
+                            reform_simulation=pe_reform_sim,
+                            income_variable="household_net_income",
+                            decile_variable="household_wealth_decile",
+                            entity="household",
+                        )
+                        for r in intra_wealth_results.outputs:
+                            record = IntraDecileImpact(
+                                baseline_simulation_id=baseline_sim.id,
+                                reform_simulation_id=reform_sim.id,
+                                report_id=report.id,
+                                decile_type="wealth",
+                                decile=r.decile,
+                                lose_more_than_5pct=r.lose_more_than_5pct,
+                                lose_less_than_5pct=r.lose_less_than_5pct,
+                                no_change=r.no_change,
+                                gain_less_than_5pct=r.gain_less_than_5pct,
+                                gain_more_than_5pct=r.gain_more_than_5pct,
+                            )
+                            session.add(record)
+                    except (KeyError, Exception):
+                        pass  # household_wealth_decile not available, skip
 
                     # Mark simulations and report as completed
                     baseline_sim.status = SimulationStatus.COMPLETED
@@ -2206,41 +2251,27 @@ def economy_comparison_us(job_id: str, traceparent: str | None = None) -> None:
                     session.add(budget_record)
 
                     # Calculate intra-decile impact
-                    from policyengine_api.api.intra_decile import (
-                        compute_intra_decile,
+                    from policyengine.outputs.intra_decile_impact import (
+                        compute_intra_decile_impacts as pe_compute_intra_decile_us,
                     )
 
-                    baseline_hh_data = {
-                        k: pe_baseline_sim.output_dataset.data.household[
-                            k
-                        ].values
-                        for k in [
-                            "household_net_income",
-                            "household_weight",
-                            "household_count_people",
-                            "household_income_decile",
-                        ]
-                    }
-                    reform_hh_data = {
-                        k: pe_reform_sim.output_dataset.data.household[
-                            k
-                        ].values
-                        for k in [
-                            "household_net_income",
-                            "household_weight",
-                            "household_count_people",
-                            "household_income_decile",
-                        ]
-                    }
-                    intra_decile_rows = compute_intra_decile(
-                        baseline_hh_data, reform_hh_data
+                    intra_decile_results_us = pe_compute_intra_decile_us(
+                        baseline_simulation=pe_baseline_sim,
+                        reform_simulation=pe_reform_sim,
+                        income_variable="household_net_income",
+                        entity="household",
                     )
-                    for row in intra_decile_rows:
+                    for r in intra_decile_results_us.outputs:
                         record = IntraDecileImpact(
                             baseline_simulation_id=baseline_sim.id,
                             reform_simulation_id=reform_sim.id,
                             report_id=report.id,
-                            **row,
+                            decile=r.decile,
+                            lose_more_than_5pct=r.lose_more_than_5pct,
+                            lose_less_than_5pct=r.lose_less_than_5pct,
+                            no_change=r.no_change,
+                            gain_less_than_5pct=r.gain_less_than_5pct,
+                            gain_more_than_5pct=r.gain_more_than_5pct,
                         )
                         session.add(record)
 
