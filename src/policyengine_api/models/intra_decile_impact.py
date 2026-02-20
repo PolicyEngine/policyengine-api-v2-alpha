@@ -27,6 +27,7 @@ class IntraDecileImpactBase(SQLModel):
     baseline_simulation_id: UUID = Field(foreign_key="simulations.id")
     reform_simulation_id: UUID = Field(foreign_key="simulations.id")
     report_id: UUID | None = Field(default=None, foreign_key="reports.id")
+    decile_type: str = Field(default="income")  # "income" or "wealth"
     decile: int  # 1-10 for individual deciles, 0 for overall average
     lose_more_than_5pct: float | None = None
     lose_less_than_5pct: float | None = None
