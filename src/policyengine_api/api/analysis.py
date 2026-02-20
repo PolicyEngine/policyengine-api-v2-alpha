@@ -26,9 +26,17 @@ from pydantic import BaseModel, Field
 from sqlmodel import Session, select
 
 from policyengine_api.models import (
+    BudgetSummary,
+    BudgetSummaryRead,
     Dataset,
     DecileImpact,
     DecileImpactRead,
+    Inequality,
+    InequalityRead,
+    IntraDecileImpact,
+    IntraDecileImpactRead,
+    Poverty,
+    PovertyRead,
     ProgramStatistics,
     ProgramStatisticsRead,
     Region,
@@ -134,6 +142,11 @@ class EconomicImpactResponse(BaseModel):
     error_message: str | None = None
     decile_impacts: list[DecileImpactRead] | None = None
     program_statistics: list[ProgramStatisticsRead] | None = None
+    poverty: list[PovertyRead] | None = None
+    inequality: list[InequalityRead] | None = None
+    budget_summary: list[BudgetSummaryRead] | None = None
+    intra_decile: list[IntraDecileImpactRead] | None = None
+    detailed_budget: dict[str, dict[str, float | None]] | None = None
 
 
 def _get_model_version(
@@ -273,6 +286,11 @@ def _build_response(
     """Build response from report and simulations."""
     decile_impacts = None
     program_statistics = None
+    poverty_records = None
+    inequality_records = None
+    budget_summary_records = None
+    intra_decile_records = None
+    detailed_budget = None
 
     if report.status == ReportStatus.COMPLETED:
         # Fetch decile impacts for this report
@@ -326,6 +344,100 @@ def _build_response(
             for s in stats
         ]
 
+        # Build detailed_budget: V1-compatible per-program breakdown
+        # keyed by program name with baseline/reform/difference values.
+        detailed_budget = {
+            s.program_name: {
+                "baseline": _safe_float(s.baseline_total),
+                "reform": _safe_float(s.reform_total),
+                "difference": _safe_float(s.change),
+            }
+            for s in stats
+        }
+
+        # Fetch poverty records for this report
+        pov_rows = session.exec(
+            select(Poverty).where(Poverty.report_id == report.id)
+        ).all()
+        poverty_records = [
+            PovertyRead(
+                id=p.id,
+                created_at=p.created_at,
+                simulation_id=p.simulation_id,
+                report_id=p.report_id,
+                poverty_type=p.poverty_type,
+                entity=p.entity,
+                filter_variable=p.filter_variable,
+                headcount=_safe_float(p.headcount),
+                total_population=_safe_float(p.total_population),
+                rate=_safe_float(p.rate),
+            )
+            for p in pov_rows
+        ]
+
+        # Fetch inequality records for this report
+        ineq_rows = session.exec(
+            select(Inequality).where(Inequality.report_id == report.id)
+        ).all()
+        inequality_records = [
+            InequalityRead(
+                id=i.id,
+                created_at=i.created_at,
+                simulation_id=i.simulation_id,
+                report_id=i.report_id,
+                income_variable=i.income_variable,
+                entity=i.entity,
+                gini=_safe_float(i.gini),
+                top_10_share=_safe_float(i.top_10_share),
+                top_1_share=_safe_float(i.top_1_share),
+                bottom_50_share=_safe_float(i.bottom_50_share),
+            )
+            for i in ineq_rows
+        ]
+
+        # Fetch budget summary records for this report
+        budget_rows = session.exec(
+            select(BudgetSummary).where(BudgetSummary.report_id == report.id)
+        ).all()
+        budget_summary_records = [
+            BudgetSummaryRead(
+                id=b.id,
+                created_at=b.created_at,
+                baseline_simulation_id=b.baseline_simulation_id,
+                reform_simulation_id=b.reform_simulation_id,
+                report_id=b.report_id,
+                variable_name=b.variable_name,
+                entity=b.entity,
+                baseline_total=_safe_float(b.baseline_total),
+                reform_total=_safe_float(b.reform_total),
+                change=_safe_float(b.change),
+            )
+            for b in budget_rows
+        ]
+
+        # Fetch intra-decile impact records for this report
+        intra_rows = session.exec(
+            select(IntraDecileImpact).where(
+                IntraDecileImpact.report_id == report.id
+            )
+        ).all()
+        intra_decile_records = [
+            IntraDecileImpactRead(
+                id=r.id,
+                created_at=r.created_at,
+                baseline_simulation_id=r.baseline_simulation_id,
+                reform_simulation_id=r.reform_simulation_id,
+                report_id=r.report_id,
+                decile=r.decile,
+                lose_more_than_5pct=_safe_float(r.lose_more_than_5pct),
+                lose_less_than_5pct=_safe_float(r.lose_less_than_5pct),
+                no_change=_safe_float(r.no_change),
+                gain_less_than_5pct=_safe_float(r.gain_less_than_5pct),
+                gain_more_than_5pct=_safe_float(r.gain_more_than_5pct),
+            )
+            for r in intra_rows
+        ]
+
     region_info = None
     if region:
         region_info = RegionInfo(
@@ -354,6 +466,11 @@ def _build_response(
         error_message=report.error_message,
         decile_impacts=decile_impacts,
         program_statistics=program_statistics,
+        poverty=poverty_records,
+        inequality=inequality_records,
+        budget_summary=budget_summary_records,
+        intra_decile=intra_decile_records,
+        detailed_budget=detailed_budget,
     )
 
 
@@ -391,6 +508,14 @@ def _run_local_economy_comparison_uk(job_id: str, session: Session) -> None:
     from policyengine.core.policy import ParameterValue as PEParameterValue
     from policyengine.core.policy import Policy as PEPolicy
     from policyengine.outputs import DecileImpact as PEDecileImpact
+    from policyengine.outputs.aggregate import Aggregate as PEAggregate
+    from policyengine.outputs.aggregate import AggregateType as PEAggregateType
+    from policyengine.outputs.inequality import calculate_uk_inequality
+    from policyengine.outputs.poverty import (
+        calculate_uk_poverty_by_age,
+        calculate_uk_poverty_by_gender,
+        calculate_uk_poverty_rates,
+    )
     from policyengine.tax_benefit_models.uk import uk_latest
     from policyengine.tax_benefit_models.uk.datasets import PolicyEngineUKDataset
     from policyengine.tax_benefit_models.uk.outputs import (
@@ -547,8 +672,14 @@ def _run_local_economy_comparison_uk(job_id: str, session: Session) -> None:
     programmes = {
         "income_tax": {"entity": "person", "is_tax": True},
         "national_insurance": {"entity": "person", "is_tax": True},
+        "vat": {"entity": "household", "is_tax": True},
+        "council_tax": {"entity": "household", "is_tax": True},
         "universal_credit": {"entity": "person", "is_tax": False},
         "child_benefit": {"entity": "person", "is_tax": False},
+        "pension_credit": {"entity": "person", "is_tax": False},
+        "income_support": {"entity": "person", "is_tax": False},
+        "working_tax_credit": {"entity": "person", "is_tax": False},
+        "child_tax_credit": {"entity": "person", "is_tax": False},
     }
     for prog_name, prog_info in programmes.items():
         try:
@@ -579,6 +710,175 @@ def _run_local_economy_comparison_uk(job_id: str, session: Session) -> None:
         except KeyError:
             pass  # Variable not found in model
 
+    # Calculate poverty rates for baseline and reform
+    for pe_sim, db_sim in [
+        (pe_baseline_sim, baseline_sim),
+        (pe_reform_sim, reform_sim),
+    ]:
+        poverty_results = calculate_uk_poverty_rates(pe_sim)
+        for pov in poverty_results.outputs:
+            poverty_record = Poverty(
+                simulation_id=db_sim.id,
+                report_id=report.id,
+                poverty_type=pov.poverty_type,
+                entity=pov.entity,
+                filter_variable=pov.filter_variable,
+                headcount=pov.headcount,
+                total_population=pov.total_population,
+                rate=pov.rate,
+            )
+            session.add(poverty_record)
+
+    # Calculate poverty rates by age group for baseline and reform
+    for pe_sim, db_sim in [
+        (pe_baseline_sim, baseline_sim),
+        (pe_reform_sim, reform_sim),
+    ]:
+        age_poverty_results = calculate_uk_poverty_by_age(pe_sim)
+        for pov in age_poverty_results.outputs:
+            poverty_record = Poverty(
+                simulation_id=db_sim.id,
+                report_id=report.id,
+                poverty_type=pov.poverty_type,
+                entity=pov.entity,
+                filter_variable=pov.filter_variable,
+                headcount=pov.headcount,
+                total_population=pov.total_population,
+                rate=pov.rate,
+            )
+            session.add(poverty_record)
+
+    # Calculate poverty rates by gender for baseline and reform
+    for pe_sim, db_sim in [
+        (pe_baseline_sim, baseline_sim),
+        (pe_reform_sim, reform_sim),
+    ]:
+        gender_poverty_results = calculate_uk_poverty_by_gender(pe_sim)
+        for pov in gender_poverty_results.outputs:
+            poverty_record = Poverty(
+                simulation_id=db_sim.id,
+                report_id=report.id,
+                poverty_type=pov.poverty_type,
+                entity=pov.entity,
+                filter_variable=pov.filter_variable,
+                headcount=pov.headcount,
+                total_population=pov.total_population,
+                rate=pov.rate,
+            )
+            session.add(poverty_record)
+
+    # Calculate inequality for baseline and reform
+    for pe_sim, db_sim in [
+        (pe_baseline_sim, baseline_sim),
+        (pe_reform_sim, reform_sim),
+    ]:
+        ineq = calculate_uk_inequality(pe_sim)
+        ineq.run()
+        inequality_record = Inequality(
+            simulation_id=db_sim.id,
+            report_id=report.id,
+            income_variable=ineq.income_variable,
+            entity=ineq.entity,
+            gini=ineq.gini,
+            top_10_share=ineq.top_10_share,
+            top_1_share=ineq.top_1_share,
+            bottom_50_share=ineq.bottom_50_share,
+        )
+        session.add(inequality_record)
+
+    # Calculate budget summary aggregates
+    # UK budget variables — household-level aggregates for fiscal totals
+    uk_budget_variables = {
+        "household_tax": "household",
+        "household_benefits": "household",
+        "household_net_income": "household",
+    }
+    PEAggregate.model_rebuild(_types_namespace={"Simulation": PESimulation})
+    for var_name, entity in uk_budget_variables.items():
+        baseline_agg = PEAggregate(
+            simulation=pe_baseline_sim,
+            variable=var_name,
+            aggregate_type=PEAggregateType.SUM,
+            entity=entity,
+        )
+        baseline_agg.run()
+        reform_agg = PEAggregate(
+            simulation=pe_reform_sim,
+            variable=var_name,
+            aggregate_type=PEAggregateType.SUM,
+            entity=entity,
+        )
+        reform_agg.run()
+        budget_record = BudgetSummary(
+            baseline_simulation_id=baseline_sim.id,
+            reform_simulation_id=reform_sim.id,
+            report_id=report.id,
+            variable_name=var_name,
+            entity=entity,
+            baseline_total=float(baseline_agg.result),
+            reform_total=float(reform_agg.result),
+            change=float(reform_agg.result - baseline_agg.result),
+        )
+        session.add(budget_record)
+
+    # Household count: bypass Aggregate and compute directly from raw numpy
+    # values. Using Aggregate(SUM) on household_weight would compute
+    # sum(weight * weight) because MicroSeries.sum() applies weights
+    # automatically — it's unclear whether Aggregate can be used correctly
+    # for summing the weight column itself.
+    baseline_hh_count = float(
+        pe_baseline_sim.output_dataset.data.household[
+            "household_weight"
+        ].values.sum()
+    )
+    reform_hh_count = float(
+        pe_reform_sim.output_dataset.data.household[
+            "household_weight"
+        ].values.sum()
+    )
+    budget_record = BudgetSummary(
+        baseline_simulation_id=baseline_sim.id,
+        reform_simulation_id=reform_sim.id,
+        report_id=report.id,
+        variable_name="household_count_total",
+        entity="household",
+        baseline_total=baseline_hh_count,
+        reform_total=reform_hh_count,
+        change=reform_hh_count - baseline_hh_count,
+    )
+    session.add(budget_record)
+
+    # Calculate intra-decile impact (5-category income change distribution)
+    from policyengine_api.api.intra_decile import compute_intra_decile
+
+    baseline_hh_data = {
+        k: pe_baseline_sim.output_dataset.data.household[k].values
+        for k in [
+            "household_net_income",
+            "household_weight",
+            "household_count_people",
+            "household_income_decile",
+        ]
+    }
+    reform_hh_data = {
+        k: pe_reform_sim.output_dataset.data.household[k].values
+        for k in [
+            "household_net_income",
+            "household_weight",
+            "household_count_people",
+            "household_income_decile",
+        ]
+    }
+    intra_decile_rows = compute_intra_decile(baseline_hh_data, reform_hh_data)
+    for row in intra_decile_rows:
+        record = IntraDecileImpact(
+            baseline_simulation_id=baseline_sim.id,
+            reform_simulation_id=reform_sim.id,
+            report_id=report.id,
+            **row,
+        )
+        session.add(record)
+
     # Mark completed
     baseline_sim.status = SimulationStatus.COMPLETED
     baseline_sim.completed_at = datetime.now(timezone.utc)
@@ -601,6 +901,15 @@ def _run_local_economy_comparison_us(job_id: str, session: Session) -> None:
     from policyengine.core.policy import ParameterValue as PEParameterValue
     from policyengine.core.policy import Policy as PEPolicy
     from policyengine.outputs import DecileImpact as PEDecileImpact
+    from policyengine.outputs.aggregate import Aggregate as PEAggregate
+    from policyengine.outputs.aggregate import AggregateType as PEAggregateType
+    from policyengine.outputs.inequality import calculate_us_inequality
+    from policyengine.outputs.poverty import (
+        calculate_us_poverty_by_age,
+        calculate_us_poverty_by_gender,
+        calculate_us_poverty_by_race,
+        calculate_us_poverty_rates,
+    )
     from policyengine.tax_benefit_models.us import us_latest
     from policyengine.tax_benefit_models.us.datasets import PolicyEngineUSDataset
     from policyengine.tax_benefit_models.us.outputs import (
@@ -790,6 +1099,195 @@ def _run_local_economy_comparison_us(job_id: str, session: Session) -> None:
             session.add(program_stat)
         except KeyError:
             pass  # Variable not found in model
+
+    # Calculate poverty rates for baseline and reform
+    for pe_sim, db_sim in [
+        (pe_baseline_sim, baseline_sim),
+        (pe_reform_sim, reform_sim),
+    ]:
+        poverty_results = calculate_us_poverty_rates(pe_sim)
+        for pov in poverty_results.outputs:
+            poverty_record = Poverty(
+                simulation_id=db_sim.id,
+                report_id=report.id,
+                poverty_type=pov.poverty_type,
+                entity=pov.entity,
+                filter_variable=pov.filter_variable,
+                headcount=pov.headcount,
+                total_population=pov.total_population,
+                rate=pov.rate,
+            )
+            session.add(poverty_record)
+
+    # Calculate poverty rates by age group for baseline and reform
+    for pe_sim, db_sim in [
+        (pe_baseline_sim, baseline_sim),
+        (pe_reform_sim, reform_sim),
+    ]:
+        age_poverty_results = calculate_us_poverty_by_age(pe_sim)
+        for pov in age_poverty_results.outputs:
+            poverty_record = Poverty(
+                simulation_id=db_sim.id,
+                report_id=report.id,
+                poverty_type=pov.poverty_type,
+                entity=pov.entity,
+                filter_variable=pov.filter_variable,
+                headcount=pov.headcount,
+                total_population=pov.total_population,
+                rate=pov.rate,
+            )
+            session.add(poverty_record)
+
+    # Calculate poverty rates by gender for baseline and reform
+    for pe_sim, db_sim in [
+        (pe_baseline_sim, baseline_sim),
+        (pe_reform_sim, reform_sim),
+    ]:
+        gender_poverty_results = calculate_us_poverty_by_gender(pe_sim)
+        for pov in gender_poverty_results.outputs:
+            poverty_record = Poverty(
+                simulation_id=db_sim.id,
+                report_id=report.id,
+                poverty_type=pov.poverty_type,
+                entity=pov.entity,
+                filter_variable=pov.filter_variable,
+                headcount=pov.headcount,
+                total_population=pov.total_population,
+                rate=pov.rate,
+            )
+            session.add(poverty_record)
+
+    # Calculate poverty rates by race for baseline and reform (US only)
+    for pe_sim, db_sim in [
+        (pe_baseline_sim, baseline_sim),
+        (pe_reform_sim, reform_sim),
+    ]:
+        race_poverty_results = calculate_us_poverty_by_race(pe_sim)
+        for pov in race_poverty_results.outputs:
+            poverty_record = Poverty(
+                simulation_id=db_sim.id,
+                report_id=report.id,
+                poverty_type=pov.poverty_type,
+                entity=pov.entity,
+                filter_variable=pov.filter_variable,
+                headcount=pov.headcount,
+                total_population=pov.total_population,
+                rate=pov.rate,
+            )
+            session.add(poverty_record)
+
+    # Calculate inequality for baseline and reform
+    for pe_sim, db_sim in [
+        (pe_baseline_sim, baseline_sim),
+        (pe_reform_sim, reform_sim),
+    ]:
+        ineq = calculate_us_inequality(pe_sim)
+        ineq.run()
+        inequality_record = Inequality(
+            simulation_id=db_sim.id,
+            report_id=report.id,
+            income_variable=ineq.income_variable,
+            entity=ineq.entity,
+            gini=ineq.gini,
+            top_10_share=ineq.top_10_share,
+            top_1_share=ineq.top_1_share,
+            bottom_50_share=ineq.bottom_50_share,
+        )
+        session.add(inequality_record)
+
+    # Calculate budget summary aggregates
+    # US budget variables — household-level plus state tax at tax_unit level
+    us_budget_variables = {
+        "household_tax": "household",
+        "household_benefits": "household",
+        "household_net_income": "household",
+        "household_state_income_tax": "tax_unit",
+    }
+    PEAggregate.model_rebuild(_types_namespace={"Simulation": PESimulation})
+    for var_name, entity in us_budget_variables.items():
+        baseline_agg = PEAggregate(
+            simulation=pe_baseline_sim,
+            variable=var_name,
+            aggregate_type=PEAggregateType.SUM,
+            entity=entity,
+        )
+        baseline_agg.run()
+        reform_agg = PEAggregate(
+            simulation=pe_reform_sim,
+            variable=var_name,
+            aggregate_type=PEAggregateType.SUM,
+            entity=entity,
+        )
+        reform_agg.run()
+        budget_record = BudgetSummary(
+            baseline_simulation_id=baseline_sim.id,
+            reform_simulation_id=reform_sim.id,
+            report_id=report.id,
+            variable_name=var_name,
+            entity=entity,
+            baseline_total=float(baseline_agg.result),
+            reform_total=float(reform_agg.result),
+            change=float(reform_agg.result - baseline_agg.result),
+        )
+        session.add(budget_record)
+
+    # Household count: bypass Aggregate and compute directly from raw numpy
+    # values. Using Aggregate(SUM) on household_weight would compute
+    # sum(weight * weight) because MicroSeries.sum() applies weights
+    # automatically — it's unclear whether Aggregate can be used correctly
+    # for summing the weight column itself.
+    baseline_hh_count = float(
+        pe_baseline_sim.output_dataset.data.household[
+            "household_weight"
+        ].values.sum()
+    )
+    reform_hh_count = float(
+        pe_reform_sim.output_dataset.data.household[
+            "household_weight"
+        ].values.sum()
+    )
+    budget_record = BudgetSummary(
+        baseline_simulation_id=baseline_sim.id,
+        reform_simulation_id=reform_sim.id,
+        report_id=report.id,
+        variable_name="household_count_total",
+        entity="household",
+        baseline_total=baseline_hh_count,
+        reform_total=reform_hh_count,
+        change=reform_hh_count - baseline_hh_count,
+    )
+    session.add(budget_record)
+
+    # Calculate intra-decile impact (5-category income change distribution)
+    from policyengine_api.api.intra_decile import compute_intra_decile
+
+    baseline_hh_data = {
+        k: pe_baseline_sim.output_dataset.data.household[k].values
+        for k in [
+            "household_net_income",
+            "household_weight",
+            "household_count_people",
+            "household_income_decile",
+        ]
+    }
+    reform_hh_data = {
+        k: pe_reform_sim.output_dataset.data.household[k].values
+        for k in [
+            "household_net_income",
+            "household_weight",
+            "household_count_people",
+            "household_income_decile",
+        ]
+    }
+    intra_decile_rows = compute_intra_decile(baseline_hh_data, reform_hh_data)
+    for row in intra_decile_rows:
+        record = IntraDecileImpact(
+            baseline_simulation_id=baseline_sim.id,
+            reform_simulation_id=reform_sim.id,
+            report_id=report.id,
+            **row,
+        )
+        session.add(record)
 
     # Mark completed
     baseline_sim.status = SimulationStatus.COMPLETED
