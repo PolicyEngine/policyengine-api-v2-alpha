@@ -32,6 +32,8 @@ from policyengine_api.models import (
     CongressionalDistrictImpactRead,
     ConstituencyImpact,
     ConstituencyImpactRead,
+    LocalAuthorityImpact,
+    LocalAuthorityImpactRead,
     Dataset,
     DecileImpact,
     DecileImpactRead,
@@ -153,6 +155,7 @@ class EconomicImpactResponse(BaseModel):
     detailed_budget: dict[str, dict[str, float | None]] | None = None
     congressional_district_impact: list[CongressionalDistrictImpactRead] | None = None
     constituency_impact: list[ConstituencyImpactRead] | None = None
+    local_authority_impact: list[LocalAuthorityImpactRead] | None = None
 
 
 def _get_model_version(
@@ -299,6 +302,7 @@ def _build_response(
     detailed_budget = None
     district_impact_records = None
     constituency_impact_records = None
+    local_authority_impact_records = None
 
     if report.status == ReportStatus.COMPLETED:
         # Fetch decile impacts for this report
@@ -503,6 +507,35 @@ def _build_response(
                 for c in constituency_rows
             ]
 
+        # Fetch local authority impact records for this report
+        la_rows = session.exec(
+            select(LocalAuthorityImpact).where(
+                LocalAuthorityImpact.report_id == report.id
+            )
+        ).all()
+        if la_rows:
+            local_authority_impact_records = [
+                LocalAuthorityImpactRead(
+                    id=la.id,
+                    created_at=la.created_at,
+                    baseline_simulation_id=la.baseline_simulation_id,
+                    reform_simulation_id=la.reform_simulation_id,
+                    report_id=la.report_id,
+                    local_authority_code=la.local_authority_code,
+                    local_authority_name=la.local_authority_name,
+                    x=la.x,
+                    y=la.y,
+                    average_household_income_change=_safe_float(
+                        la.average_household_income_change
+                    ),
+                    relative_household_income_change=_safe_float(
+                        la.relative_household_income_change
+                    ),
+                    population=_safe_float(la.population),
+                )
+                for la in la_rows
+            ]
+
     region_info = None
     if region:
         region_info = RegionInfo(
@@ -538,6 +571,7 @@ def _build_response(
         detailed_budget=detailed_budget,
         congressional_district_impact=district_impact_records,
         constituency_impact=constituency_impact_records,
+        local_authority_impact=local_authority_impact_records,
     )
 
 
@@ -989,6 +1023,50 @@ def _run_local_economy_comparison_uk(job_id: str, session: Session) -> None:
                 session.add(record)
     except Exception:
         pass  # Weight matrix not available, skip constituency impact
+
+    # Calculate local authority impact (UK only, requires weight matrix)
+    from policyengine.outputs.local_authority_impact import (
+        compute_uk_local_authority_impacts,
+    )
+
+    try:
+        from policyengine_core.tools.google_cloud import download as gcs_download
+
+        la_weight_matrix_path = gcs_download(
+            gcs_bucket="policyengine-uk-data-private",
+            gcs_key="local_authority_weights.h5",
+        )
+        la_csv_path = gcs_download(
+            gcs_bucket="policyengine-uk-data-private",
+            gcs_key="local_authorities_2021.csv",
+        )
+        la_impact = compute_uk_local_authority_impacts(
+            pe_baseline_sim,
+            pe_reform_sim,
+            weight_matrix_path=la_weight_matrix_path,
+            local_authority_csv_path=la_csv_path,
+        )
+        if la_impact.local_authority_results:
+            for lr in la_impact.local_authority_results:
+                record = LocalAuthorityImpact(
+                    baseline_simulation_id=baseline_sim.id,
+                    reform_simulation_id=reform_sim.id,
+                    report_id=report.id,
+                    local_authority_code=lr["local_authority_code"],
+                    local_authority_name=lr["local_authority_name"],
+                    x=lr["x"],
+                    y=lr["y"],
+                    average_household_income_change=lr[
+                        "average_household_income_change"
+                    ],
+                    relative_household_income_change=lr[
+                        "relative_household_income_change"
+                    ],
+                    population=lr["population"],
+                )
+                session.add(record)
+    except Exception:
+        pass  # Weight matrix not available, skip local authority impact
 
     # Mark completed
     baseline_sim.status = SimulationStatus.COMPLETED
