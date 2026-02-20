@@ -11,10 +11,13 @@ from sqlmodel import Session
 
 from policyengine_api.models import (
     BudgetSummary,
+    CongressionalDistrictImpact,
+    ConstituencyImpact,
     Dataset,
     DecileImpact,
     Inequality,
     IntraDecileImpact,
+    LocalAuthorityImpact,
     Poverty,
     ProgramStatistics,
     Report,
@@ -297,6 +300,168 @@ def add_program_statistics_records(
     return records
 
 
+def add_congressional_district_records(
+    session: Session,
+    report: Report,
+    baseline_sim: Simulation,
+    reform_sim: Simulation,
+) -> list[CongressionalDistrictImpact]:
+    """Add congressional district impact records."""
+    records = []
+    districts = [
+        {"district_geoid": 101, "state_fips": 1, "district_number": 1},
+        {"district_geoid": 602, "state_fips": 6, "district_number": 2},
+    ]
+    for d in districts:
+        rec = CongressionalDistrictImpact(
+            baseline_simulation_id=baseline_sim.id,
+            reform_simulation_id=reform_sim.id,
+            report_id=report.id,
+            district_geoid=d["district_geoid"],
+            state_fips=d["state_fips"],
+            district_number=d["district_number"],
+            average_household_income_change=500.0,
+            relative_household_income_change=0.01,
+            population=100000.0,
+        )
+        session.add(rec)
+        records.append(rec)
+    session.commit()
+    return records
+
+
+SAMPLE_DISTRICT_COUNT = 2
+
+
+def add_constituency_records(
+    session: Session,
+    report: Report,
+    baseline_sim: Simulation,
+    reform_sim: Simulation,
+) -> list[ConstituencyImpact]:
+    """Add UK constituency impact records."""
+    records = []
+    constituencies = [
+        {"code": "E14000530", "name": "Birmingham, Ladywood", "x": 410, "y": 290},
+        {"code": "E14000639", "name": "Cities of London and Westminster", "x": 530, "y": 180},
+    ]
+    for c in constituencies:
+        rec = ConstituencyImpact(
+            baseline_simulation_id=baseline_sim.id,
+            reform_simulation_id=reform_sim.id,
+            report_id=report.id,
+            constituency_code=c["code"],
+            constituency_name=c["name"],
+            x=c["x"],
+            y=c["y"],
+            average_household_income_change=300.0,
+            relative_household_income_change=0.008,
+            population=80000.0,
+        )
+        session.add(rec)
+        records.append(rec)
+    session.commit()
+    return records
+
+
+SAMPLE_CONSTITUENCY_COUNT = 2
+
+
+def add_local_authority_records(
+    session: Session,
+    report: Report,
+    baseline_sim: Simulation,
+    reform_sim: Simulation,
+) -> list[LocalAuthorityImpact]:
+    """Add UK local authority impact records."""
+    records = []
+    las = [
+        {"code": "E09000001", "name": "City of London", "x": 532, "y": 181},
+        {"code": "E09000002", "name": "Barking and Dagenham", "x": 549, "y": 186},
+    ]
+    for la in las:
+        rec = LocalAuthorityImpact(
+            baseline_simulation_id=baseline_sim.id,
+            reform_simulation_id=reform_sim.id,
+            report_id=report.id,
+            local_authority_code=la["code"],
+            local_authority_name=la["name"],
+            x=la["x"],
+            y=la["y"],
+            average_household_income_change=400.0,
+            relative_household_income_change=0.012,
+            population=50000.0,
+        )
+        session.add(rec)
+        records.append(rec)
+    session.commit()
+    return records
+
+
+SAMPLE_LA_COUNT = 2
+
+
+def add_wealth_decile_records(
+    session: Session,
+    report: Report,
+    baseline_sim: Simulation,
+    reform_sim: Simulation,
+) -> list[DecileImpact]:
+    """Add 10 wealth decile impact records (income_variable=household_wealth_decile)."""
+    records = []
+    for decile_num in range(1, 11):
+        rec = DecileImpact(
+            baseline_simulation_id=baseline_sim.id,
+            reform_simulation_id=reform_sim.id,
+            report_id=report.id,
+            income_variable="household_wealth_decile",
+            entity="household",
+            decile=decile_num,
+            quantiles=10,
+            baseline_mean=float(10000 * decile_num),
+            reform_mean=float(10000 * decile_num + 500),
+            absolute_change=500.0,
+            relative_change=500.0 / (10000 * decile_num),
+        )
+        session.add(rec)
+        records.append(rec)
+    session.commit()
+    return records
+
+
+SAMPLE_WEALTH_DECILE_COUNT = 10
+
+
+def add_intra_wealth_decile_records(
+    session: Session,
+    report: Report,
+    baseline_sim: Simulation,
+    reform_sim: Simulation,
+) -> list[IntraDecileImpact]:
+    """Add 11 intra-wealth-decile records (decile_type='wealth')."""
+    records = []
+    for decile_num in list(range(1, 11)) + [0]:
+        rec = IntraDecileImpact(
+            baseline_simulation_id=baseline_sim.id,
+            reform_simulation_id=reform_sim.id,
+            report_id=report.id,
+            decile_type="wealth",
+            decile=decile_num,
+            lose_more_than_5pct=0.0,
+            lose_less_than_5pct=0.1,
+            no_change=0.5,
+            gain_less_than_5pct=0.3,
+            gain_more_than_5pct=0.1,
+        )
+        session.add(rec)
+        records.append(rec)
+    session.commit()
+    return records
+
+
+SAMPLE_INTRA_WEALTH_DECILE_COUNT = 11
+
+
 # ---------------------------------------------------------------------------
 # Composite: fully populated report
 # ---------------------------------------------------------------------------
@@ -313,4 +478,9 @@ def create_fully_populated_report(
     add_budget_summary_records(session, report, baseline_sim, reform_sim)
     add_intra_decile_records(session, report, baseline_sim, reform_sim)
     add_program_statistics_records(session, report, baseline_sim, reform_sim)
+    add_congressional_district_records(session, report, baseline_sim, reform_sim)
+    add_constituency_records(session, report, baseline_sim, reform_sim)
+    add_local_authority_records(session, report, baseline_sim, reform_sim)
+    add_wealth_decile_records(session, report, baseline_sim, reform_sim)
+    add_intra_wealth_decile_records(session, report, baseline_sim, reform_sim)
     return report, baseline_sim, reform_sim

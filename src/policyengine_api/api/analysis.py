@@ -28,6 +28,12 @@ from sqlmodel import Session, select
 from policyengine_api.models import (
     BudgetSummary,
     BudgetSummaryRead,
+    CongressionalDistrictImpact,
+    CongressionalDistrictImpactRead,
+    ConstituencyImpact,
+    ConstituencyImpactRead,
+    LocalAuthorityImpact,
+    LocalAuthorityImpactRead,
     Dataset,
     DecileImpact,
     DecileImpactRead,
@@ -147,6 +153,11 @@ class EconomicImpactResponse(BaseModel):
     budget_summary: list[BudgetSummaryRead] | None = None
     intra_decile: list[IntraDecileImpactRead] | None = None
     detailed_budget: dict[str, dict[str, float | None]] | None = None
+    congressional_district_impact: list[CongressionalDistrictImpactRead] | None = None
+    constituency_impact: list[ConstituencyImpactRead] | None = None
+    local_authority_impact: list[LocalAuthorityImpactRead] | None = None
+    wealth_decile: list[DecileImpactRead] | None = None
+    intra_wealth_decile: list[IntraDecileImpactRead] | None = None
 
 
 def _get_model_version(
@@ -291,6 +302,11 @@ def _build_response(
     budget_summary_records = None
     intra_decile_records = None
     detailed_budget = None
+    district_impact_records = None
+    constituency_impact_records = None
+    local_authority_impact_records = None
+    wealth_decile_records = None
+    intra_wealth_decile_records = None
 
     if report.status == ReportStatus.COMPLETED:
         # Fetch decile impacts for this report
@@ -438,6 +454,148 @@ def _build_response(
             for r in intra_rows
         ]
 
+        # Fetch congressional district impact records for this report
+        district_rows = session.exec(
+            select(CongressionalDistrictImpact).where(
+                CongressionalDistrictImpact.report_id == report.id
+            )
+        ).all()
+        if district_rows:
+            district_impact_records = [
+                CongressionalDistrictImpactRead(
+                    id=d.id,
+                    created_at=d.created_at,
+                    baseline_simulation_id=d.baseline_simulation_id,
+                    reform_simulation_id=d.reform_simulation_id,
+                    report_id=d.report_id,
+                    district_geoid=d.district_geoid,
+                    state_fips=d.state_fips,
+                    district_number=d.district_number,
+                    average_household_income_change=_safe_float(
+                        d.average_household_income_change
+                    ),
+                    relative_household_income_change=_safe_float(
+                        d.relative_household_income_change
+                    ),
+                    population=_safe_float(d.population),
+                )
+                for d in district_rows
+            ]
+
+        # Fetch constituency impact records for this report
+        constituency_rows = session.exec(
+            select(ConstituencyImpact).where(
+                ConstituencyImpact.report_id == report.id
+            )
+        ).all()
+        if constituency_rows:
+            constituency_impact_records = [
+                ConstituencyImpactRead(
+                    id=c.id,
+                    created_at=c.created_at,
+                    baseline_simulation_id=c.baseline_simulation_id,
+                    reform_simulation_id=c.reform_simulation_id,
+                    report_id=c.report_id,
+                    constituency_code=c.constituency_code,
+                    constituency_name=c.constituency_name,
+                    x=c.x,
+                    y=c.y,
+                    average_household_income_change=_safe_float(
+                        c.average_household_income_change
+                    ),
+                    relative_household_income_change=_safe_float(
+                        c.relative_household_income_change
+                    ),
+                    population=_safe_float(c.population),
+                )
+                for c in constituency_rows
+            ]
+
+        # Fetch local authority impact records for this report
+        la_rows = session.exec(
+            select(LocalAuthorityImpact).where(
+                LocalAuthorityImpact.report_id == report.id
+            )
+        ).all()
+        if la_rows:
+            local_authority_impact_records = [
+                LocalAuthorityImpactRead(
+                    id=la.id,
+                    created_at=la.created_at,
+                    baseline_simulation_id=la.baseline_simulation_id,
+                    reform_simulation_id=la.reform_simulation_id,
+                    report_id=la.report_id,
+                    local_authority_code=la.local_authority_code,
+                    local_authority_name=la.local_authority_name,
+                    x=la.x,
+                    y=la.y,
+                    average_household_income_change=_safe_float(
+                        la.average_household_income_change
+                    ),
+                    relative_household_income_change=_safe_float(
+                        la.relative_household_income_change
+                    ),
+                    population=_safe_float(la.population),
+                )
+                for la in la_rows
+            ]
+
+        # Fetch wealth decile impact records (UK only)
+        wealth_decile_rows = session.exec(
+            select(DecileImpact).where(
+                DecileImpact.report_id == report.id,
+                DecileImpact.income_variable == "household_wealth_decile",
+            )
+        ).all()
+        if wealth_decile_rows:
+            wealth_decile_records = [
+                DecileImpactRead(
+                    id=d.id,
+                    created_at=d.created_at,
+                    baseline_simulation_id=d.baseline_simulation_id,
+                    reform_simulation_id=d.reform_simulation_id,
+                    report_id=d.report_id,
+                    income_variable=d.income_variable,
+                    entity=d.entity,
+                    decile=d.decile,
+                    quantiles=d.quantiles,
+                    baseline_mean=_safe_float(d.baseline_mean),
+                    reform_mean=_safe_float(d.reform_mean),
+                    absolute_change=_safe_float(d.absolute_change),
+                    relative_change=_safe_float(d.relative_change),
+                    count_better_off=_safe_float(d.count_better_off),
+                    count_worse_off=_safe_float(d.count_worse_off),
+                    count_no_change=_safe_float(d.count_no_change),
+                )
+                for d in wealth_decile_rows
+            ]
+
+        # Fetch intra-wealth-decile records (UK only)
+        intra_wealth_rows = session.exec(
+            select(IntraDecileImpact).where(
+                IntraDecileImpact.report_id == report.id,
+                IntraDecileImpact.decile_type == "wealth",
+            )
+        ).all()
+        if intra_wealth_rows:
+            intra_wealth_decile_records = [
+                IntraDecileImpactRead(
+                    id=r.id,
+                    created_at=r.created_at,
+                    baseline_simulation_id=r.baseline_simulation_id,
+                    reform_simulation_id=r.reform_simulation_id,
+                    report_id=r.report_id,
+                    decile_type=r.decile_type,
+                    decile=r.decile,
+                    lose_more_than_5pct=_safe_float(r.lose_more_than_5pct),
+                    lose_less_than_5pct=_safe_float(r.lose_less_than_5pct),
+                    no_change=_safe_float(r.no_change),
+                    gain_less_than_5pct=_safe_float(r.gain_less_than_5pct),
+                    gain_more_than_5pct=_safe_float(r.gain_more_than_5pct),
+                )
+                for r in intra_wealth_rows
+            ]
+
     region_info = None
     if region:
         region_info = RegionInfo(
@@ -471,6 +629,11 @@ def _build_response(
         budget_summary=budget_summary_records,
         intra_decile=intra_decile_records,
         detailed_budget=detailed_budget,
+        congressional_district_impact=district_impact_records,
+        constituency_impact=constituency_impact_records,
+        local_authority_impact=local_authority_impact_records,
+        wealth_decile=wealth_decile_records,
+        intra_wealth_decile=intra_wealth_decile_records,
     )
 
 
@@ -849,35 +1012,174 @@ def _run_local_economy_comparison_uk(job_id: str, session: Session) -> None:
     session.add(budget_record)
 
     # Calculate intra-decile impact (5-category income change distribution)
-    from policyengine_api.api.intra_decile import compute_intra_decile
+    from policyengine.outputs.intra_decile_impact import (
+        compute_intra_decile_impacts as pe_compute_intra_decile,
+    )
 
-    baseline_hh_data = {
-        k: pe_baseline_sim.output_dataset.data.household[k].values
-        for k in [
-            "household_net_income",
-            "household_weight",
-            "household_count_people",
-            "household_income_decile",
-        ]
-    }
-    reform_hh_data = {
-        k: pe_reform_sim.output_dataset.data.household[k].values
-        for k in [
-            "household_net_income",
-            "household_weight",
-            "household_count_people",
-            "household_income_decile",
-        ]
-    }
-    intra_decile_rows = compute_intra_decile(baseline_hh_data, reform_hh_data)
-    for row in intra_decile_rows:
+    intra_decile_results = pe_compute_intra_decile(
+        baseline_simulation=pe_baseline_sim,
+        reform_simulation=pe_reform_sim,
+        income_variable="household_net_income",
+        entity="household",
+    )
+    for r in intra_decile_results.outputs:
         record = IntraDecileImpact(
             baseline_simulation_id=baseline_sim.id,
             reform_simulation_id=reform_sim.id,
             report_id=report.id,
-            **row,
+            decile=r.decile,
+            lose_more_than_5pct=r.lose_more_than_5pct,
+            lose_less_than_5pct=r.lose_less_than_5pct,
+            no_change=r.no_change,
+            gain_less_than_5pct=r.gain_less_than_5pct,
+            gain_more_than_5pct=r.gain_more_than_5pct,
         )
         session.add(record)
+
+    # Calculate constituency impact (UK only, requires weight matrix)
+    from policyengine.outputs.constituency_impact import (
+        compute_uk_constituency_impacts,
+    )
+
+    try:
+        from policyengine_core.tools.google_cloud import download as gcs_download
+
+        weight_matrix_path = gcs_download(
+            gcs_bucket="policyengine-uk-data-private",
+            gcs_key="parliamentary_constituency_weights.h5",
+        )
+        constituency_csv_path = gcs_download(
+            gcs_bucket="policyengine-uk-data-private",
+            gcs_key="constituencies_2024.csv",
+        )
+        constituency_impact = compute_uk_constituency_impacts(
+            pe_baseline_sim,
+            pe_reform_sim,
+            weight_matrix_path=weight_matrix_path,
+            constituency_csv_path=constituency_csv_path,
+        )
+        if constituency_impact.constituency_results:
+            for cr in constituency_impact.constituency_results:
+                record = ConstituencyImpact(
+                    baseline_simulation_id=baseline_sim.id,
+                    reform_simulation_id=reform_sim.id,
+                    report_id=report.id,
+                    constituency_code=cr["constituency_code"],
+                    constituency_name=cr["constituency_name"],
+                    x=cr["x"],
+                    y=cr["y"],
+                    average_household_income_change=cr[
+                        "average_household_income_change"
+                    ],
+                    relative_household_income_change=cr[
+                        "relative_household_income_change"
+                    ],
+                    population=cr["population"],
+                )
+                session.add(record)
+    except Exception:
+        pass  # Weight matrix not available, skip constituency impact
+
+    # Calculate local authority impact (UK only, requires weight matrix)
+    from policyengine.outputs.local_authority_impact import (
+        compute_uk_local_authority_impacts,
+    )
+
+    try:
+        from policyengine_core.tools.google_cloud import download as gcs_download
+
+        la_weight_matrix_path = gcs_download(
+            gcs_bucket="policyengine-uk-data-private",
+            gcs_key="local_authority_weights.h5",
+        )
+        la_csv_path = gcs_download(
+            gcs_bucket="policyengine-uk-data-private",
+            gcs_key="local_authorities_2021.csv",
+        )
+        la_impact = compute_uk_local_authority_impacts(
+            pe_baseline_sim,
+            pe_reform_sim,
+            weight_matrix_path=la_weight_matrix_path,
+            local_authority_csv_path=la_csv_path,
+        )
+        if la_impact.local_authority_results:
+            for lr in la_impact.local_authority_results:
+                record = LocalAuthorityImpact(
+                    baseline_simulation_id=baseline_sim.id,
+                    reform_simulation_id=reform_sim.id,
+                    report_id=report.id,
+                    local_authority_code=lr["local_authority_code"],
+                    local_authority_name=lr["local_authority_name"],
+                    x=lr["x"],
+                    y=lr["y"],
+                    average_household_income_change=lr[
+                        "average_household_income_change"
+                    ],
+                    relative_household_income_change=lr[
+                        "relative_household_income_change"
+                    ],
+                    population=lr["population"],
+                )
+                session.add(record)
+    except Exception:
+        pass  # Weight matrix not available, skip local authority impact
+
+    # Calculate wealth decile impact (UK only)
+    try:
+        from policyengine.outputs.decile_impact import (
+            DecileImpact as PEDecileImpact,
+        )
+
+        PEDecileImpact.model_rebuild(_types_namespace={"Simulation": PESimulation})
+        for decile_num in range(1, 11):
+            wealth_di = PEDecileImpact(
+                baseline_simulation=pe_baseline_sim,
+                reform_simulation=pe_reform_sim,
+                income_variable="household_net_income",
+                decile_variable="household_wealth_decile",
+                entity="household",
+                decile=decile_num,
+            )
+            wealth_di.run()
+            record = DecileImpact(
+                baseline_simulation_id=baseline_sim.id,
+                reform_simulation_id=reform_sim.id,
+                report_id=report.id,
+                income_variable="household_wealth_decile",
+                entity="household",
+                decile=decile_num,
+                quantiles=10,
+                baseline_mean=wealth_di.baseline_mean,
+                reform_mean=wealth_di.reform_mean,
+                absolute_change=wealth_di.absolute_change,
+                relative_change=wealth_di.relative_change,
+            )
+            session.add(record)
+
+        # Calculate intra-wealth-decile impact
+        intra_wealth_results = pe_compute_intra_decile(
+            baseline_simulation=pe_baseline_sim,
+            reform_simulation=pe_reform_sim,
+            income_variable="household_net_income",
+            decile_variable="household_wealth_decile",
+            entity="household",
+        )
+        for r in intra_wealth_results.outputs:
+            record = IntraDecileImpact(
+                baseline_simulation_id=baseline_sim.id,
+                reform_simulation_id=reform_sim.id,
+                report_id=report.id,
+                decile_type="wealth",
+                decile=r.decile,
+                lose_more_than_5pct=r.lose_more_than_5pct,
+                lose_less_than_5pct=r.lose_less_than_5pct,
+                no_change=r.no_change,
+                gain_less_than_5pct=r.gain_less_than_5pct,
+                gain_more_than_5pct=r.gain_more_than_5pct,
+            )
+            session.add(record)
+    except (KeyError, Exception):
+        pass  # household_wealth_decile not available (US), skip
 
     # Mark completed
     baseline_sim.status = SimulationStatus.COMPLETED
@@ -1259,35 +1561,59 @@ def _run_local_economy_comparison_us(job_id: str, session: Session) -> None:
     session.add(budget_record)
 
     # Calculate intra-decile impact (5-category income change distribution)
-    from policyengine_api.api.intra_decile import compute_intra_decile
+    from policyengine.outputs.intra_decile_impact import (
+        compute_intra_decile_impacts as pe_compute_intra_decile_us,
+    )
 
-    baseline_hh_data = {
-        k: pe_baseline_sim.output_dataset.data.household[k].values
-        for k in [
-            "household_net_income",
-            "household_weight",
-            "household_count_people",
-            "household_income_decile",
-        ]
-    }
-    reform_hh_data = {
-        k: pe_reform_sim.output_dataset.data.household[k].values
-        for k in [
-            "household_net_income",
-            "household_weight",
-            "household_count_people",
-            "household_income_decile",
-        ]
-    }
-    intra_decile_rows = compute_intra_decile(baseline_hh_data, reform_hh_data)
-    for row in intra_decile_rows:
+    intra_decile_results_us = pe_compute_intra_decile_us(
+        baseline_simulation=pe_baseline_sim,
+        reform_simulation=pe_reform_sim,
+        income_variable="household_net_income",
+        entity="household",
+    )
+    for r in intra_decile_results_us.outputs:
         record = IntraDecileImpact(
             baseline_simulation_id=baseline_sim.id,
             reform_simulation_id=reform_sim.id,
             report_id=report.id,
-            **row,
+            decile=r.decile,
+            lose_more_than_5pct=r.lose_more_than_5pct,
+            lose_less_than_5pct=r.lose_less_than_5pct,
+            no_change=r.no_change,
+            gain_less_than_5pct=r.gain_less_than_5pct,
+            gain_more_than_5pct=r.gain_more_than_5pct,
         )
         session.add(record)
+
+    # Calculate congressional district impact
+    from policyengine.outputs.congressional_district_impact import (
+        compute_us_congressional_district_impacts,
+    )
+
+    try:
+        district_impact = compute_us_congressional_district_impacts(
+            pe_baseline_sim, pe_reform_sim
+        )
+        if district_impact.district_results:
+            for dr in district_impact.district_results:
+                record = CongressionalDistrictImpact(
+                    baseline_simulation_id=baseline_sim.id,
+                    reform_simulation_id=reform_sim.id,
+                    report_id=report.id,
+                    district_geoid=dr["district_geoid"],
+                    state_fips=dr["state_fips"],
+                    district_number=dr["district_number"],
+                    average_household_income_change=dr[
+                        "average_household_income_change"
+                    ],
+                    relative_household_income_change=dr[
+                        "relative_household_income_change"
+                    ],
+                    population=dr["population"],
+                )
+                session.add(record)
+    except KeyError:
+        pass  # congressional_district_geoid not in dataset
 
     # Mark completed
     baseline_sim.status = SimulationStatus.COMPLETED

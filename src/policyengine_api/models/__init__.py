@@ -5,6 +5,21 @@ from .budget_summary import (
     BudgetSummaryCreate,
     BudgetSummaryRead,
 )
+from .congressional_district_impact import (
+    CongressionalDistrictImpact,
+    CongressionalDistrictImpactCreate,
+    CongressionalDistrictImpactRead,
+)
+from .constituency_impact import (
+    ConstituencyImpact,
+    ConstituencyImpactCreate,
+    ConstituencyImpactRead,
+)
+from .local_authority_impact import (
+    LocalAuthorityImpact,
+    LocalAuthorityImpactCreate,
+    LocalAuthorityImpactRead,
+)
 from .change_aggregate import (
     ChangeAggregate,
     ChangeAggregateCreate,
@@ -100,6 +115,15 @@ __all__ = [
     "AggregateOutputRead",
     "AggregateStatus",
     "AggregateType",
+    "CongressionalDistrictImpact",
+    "CongressionalDistrictImpactCreate",
+    "CongressionalDistrictImpactRead",
+    "ConstituencyImpact",
+    "ConstituencyImpactCreate",
+    "ConstituencyImpactRead",
+    "LocalAuthorityImpact",
+    "LocalAuthorityImpactCreate",
+    "LocalAuthorityImpactRead",
     "ChangeAggregate",
     "ChangeAggregateCreate",
     "ChangeAggregateRead",
