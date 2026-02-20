@@ -15,6 +15,11 @@ from .constituency_impact import (
     ConstituencyImpactCreate,
     ConstituencyImpactRead,
 )
+from .local_authority_impact import (
+    LocalAuthorityImpact,
+    LocalAuthorityImpactCreate,
+    LocalAuthorityImpactRead,
+)
 from .change_aggregate import (
     ChangeAggregate,
     ChangeAggregateCreate,
@@ -116,6 +121,9 @@ __all__ = [
     "ConstituencyImpact",
     "ConstituencyImpactCreate",
     "ConstituencyImpactRead",
+    "LocalAuthorityImpact",
+    "LocalAuthorityImpactCreate",
+    "LocalAuthorityImpactRead",
     "ChangeAggregate",
     "ChangeAggregateCreate",
     "ChangeAggregateRead",
