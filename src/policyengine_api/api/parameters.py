@@ -9,6 +9,7 @@ from typing import List
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
 from sqlmodel import Session, select
 
 from policyengine_api.models import (
@@ -65,6 +66,42 @@ def list_parameters(
         query.order_by(Parameter.name).offset(skip).limit(limit)
     ).all()
     return parameters
+
+
+class ParameterByNameRequest(BaseModel):
+    """Request body for looking up parameters by name."""
+
+    names: list[str]
+    tax_benefit_model_name: str
+
+
+@router.post("/by-name", response_model=List[ParameterRead])
+def get_parameters_by_name(
+    request: ParameterByNameRequest,
+    session: Session = Depends(get_session),
+):
+    """Look up parameters by their exact names.
+
+    Given a list of parameter paths (e.g. "gov.hmrc.income_tax.rates.uk[0].rate"),
+    returns the full metadata for each matching parameter. Names that don't match
+    any parameter are silently omitted from the response.
+
+    Use this to fetch metadata for a known set of parameters (e.g. all parameters
+    referenced in a user's saved policy) without loading the entire parameter catalog.
+    """
+    if not request.names:
+        return []
+
+    query = (
+        select(Parameter)
+        .join(TaxBenefitModelVersion)
+        .join(TaxBenefitModel)
+        .where(TaxBenefitModel.name == request.tax_benefit_model_name)
+        .where(Parameter.name.in_(request.names))
+        .order_by(Parameter.name)
+    )
+
+    return session.exec(query).all()
 
 
 @router.get("/{parameter_id}", response_model=ParameterRead)
