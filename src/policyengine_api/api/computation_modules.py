@@ -26,7 +26,6 @@ from policyengine_api.models import (
     ProgramStatistics,
 )
 
-
 # ---------------------------------------------------------------------------
 # Shared modules (UK + US)
 # ---------------------------------------------------------------------------
@@ -285,14 +284,10 @@ def compute_budget_summary_module_uk(
 
     # Household count: raw sum of weights (bypasses Aggregate weighting)
     baseline_hh_count = float(
-        pe_baseline_sim.output_dataset.data.household[
-            "household_weight"
-        ].values.sum()
+        pe_baseline_sim.output_dataset.data.household["household_weight"].values.sum()
     )
     reform_hh_count = float(
-        pe_reform_sim.output_dataset.data.household[
-            "household_weight"
-        ].values.sum()
+        pe_reform_sim.output_dataset.data.household["household_weight"].values.sum()
     )
     record = BudgetSummary(
         baseline_simulation_id=baseline_sim_id,
@@ -662,14 +657,10 @@ def compute_budget_summary_module_us(
 
     # Household count: raw sum of weights
     baseline_hh_count = float(
-        pe_baseline_sim.output_dataset.data.household[
-            "household_weight"
-        ].values.sum()
+        pe_baseline_sim.output_dataset.data.household["household_weight"].values.sum()
     )
     reform_hh_count = float(
-        pe_reform_sim.output_dataset.data.household[
-            "household_weight"
-        ].values.sum()
+        pe_reform_sim.output_dataset.data.household["household_weight"].values.sum()
     )
     record = BudgetSummary(
         baseline_simulation_id=baseline_sim_id,

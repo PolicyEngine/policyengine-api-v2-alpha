@@ -120,9 +120,7 @@ def validate_modules(names: list[str], country: str) -> list[str]:
         if name not in MODULE_REGISTRY:
             errors.append(f"Unknown module: {name!r}")
         elif name not in available:
-            errors.append(
-                f"Module {name!r} is not available for country {country!r}"
-            )
+            errors.append(f"Module {name!r} is not available for country {country!r}")
     if errors:
         raise ValueError("; ".join(errors))
     return names

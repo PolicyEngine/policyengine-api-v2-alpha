@@ -25,6 +25,11 @@ from opentelemetry.trace.propagation.tracecontext import TraceContextTextMapProp
 from pydantic import BaseModel, Field
 from sqlmodel import Session, select
 
+from policyengine_api.api.module_registry import (
+    MODULE_REGISTRY,
+    get_modules_for_country,
+    validate_modules,
+)
 from policyengine_api.models import (
     BudgetSummary,
     BudgetSummaryRead,
@@ -32,8 +37,6 @@ from policyengine_api.models import (
     CongressionalDistrictImpactRead,
     ConstituencyImpact,
     ConstituencyImpactRead,
-    LocalAuthorityImpact,
-    LocalAuthorityImpactRead,
     Dataset,
     DecileImpact,
     DecileImpactRead,
@@ -41,6 +44,8 @@ from policyengine_api.models import (
     InequalityRead,
     IntraDecileImpact,
     IntraDecileImpactRead,
+    LocalAuthorityImpact,
+    LocalAuthorityImpactRead,
     Poverty,
     PovertyRead,
     ProgramStatistics,
@@ -53,11 +58,6 @@ from policyengine_api.models import (
     SimulationType,
     TaxBenefitModel,
     TaxBenefitModelVersion,
-)
-from policyengine_api.api.module_registry import (
-    MODULE_REGISTRY,
-    get_modules_for_country,
-    validate_modules,
 )
 from policyengine_api.services.database import get_session
 
@@ -477,9 +477,7 @@ def _build_response(
 
         # Fetch intra-decile impact records for this report
         intra_rows = session.exec(
-            select(IntraDecileImpact).where(
-                IntraDecileImpact.report_id == report.id
-            )
+            select(IntraDecileImpact).where(IntraDecileImpact.report_id == report.id)
         ).all()
         intra_decile_records = [
             IntraDecileImpactRead(
@@ -528,9 +526,7 @@ def _build_response(
 
         # Fetch constituency impact records for this report
         constituency_rows = session.exec(
-            select(ConstituencyImpact).where(
-                ConstituencyImpact.report_id == report.id
-            )
+            select(ConstituencyImpact).where(ConstituencyImpact.report_id == report.id)
         ).all()
         if constituency_rows:
             constituency_impact_records = [
