@@ -705,7 +705,9 @@ def _download_dataset_local(filepath: str) -> str:
     return str(cache_path)
 
 
-def _run_local_economy_comparison_uk(job_id: str, session: Session) -> None:
+def _run_local_economy_comparison_uk(
+    job_id: str, session: Session, modules: list[str] | None = None
+) -> None:
     """Run UK economy comparison analysis locally."""
     from datetime import datetime, timezone
     from uuid import UUID
@@ -714,20 +716,8 @@ def _run_local_economy_comparison_uk(job_id: str, session: Session) -> None:
     from policyengine.core.dynamic import Dynamic as PEDynamic
     from policyengine.core.policy import ParameterValue as PEParameterValue
     from policyengine.core.policy import Policy as PEPolicy
-    from policyengine.outputs import DecileImpact as PEDecileImpact
-    from policyengine.outputs.aggregate import Aggregate as PEAggregate
-    from policyengine.outputs.aggregate import AggregateType as PEAggregateType
-    from policyengine.outputs.inequality import calculate_uk_inequality
-    from policyengine.outputs.poverty import (
-        calculate_uk_poverty_by_age,
-        calculate_uk_poverty_by_gender,
-        calculate_uk_poverty_rates,
-    )
     from policyengine.tax_benefit_models.uk import uk_latest
     from policyengine.tax_benefit_models.uk.datasets import PolicyEngineUKDataset
-    from policyengine.tax_benefit_models.uk.outputs import (
-        ProgrammeStatistics as PEProgrammeStats,
-    )
 
     from policyengine_api.models import Policy as DBPolicy
 
@@ -848,382 +838,19 @@ def _run_local_economy_comparison_uk(job_id: str, session: Session) -> None:
     )
     pe_reform_sim.ensure()
 
-    # Calculate decile impacts
-    for decile_num in range(1, 11):
-        di = PEDecileImpact(
-            baseline_simulation=pe_baseline_sim,
-            reform_simulation=pe_reform_sim,
-            decile=decile_num,
-        )
-        di.run()
-        decile_impact = DecileImpact(
-            baseline_simulation_id=baseline_sim.id,
-            reform_simulation_id=reform_sim.id,
-            report_id=report.id,
-            income_variable=di.income_variable,
-            entity=di.entity,
-            decile=di.decile,
-            quantiles=di.quantiles,
-            baseline_mean=di.baseline_mean,
-            reform_mean=di.reform_mean,
-            absolute_change=di.absolute_change,
-            relative_change=di.relative_change,
-            count_better_off=di.count_better_off,
-            count_worse_off=di.count_worse_off,
-            count_no_change=di.count_no_change,
-        )
-        session.add(decile_impact)
+    # Run computation modules
+    from policyengine_api.api.computation_modules import UK_MODULE_DISPATCH, run_modules
 
-    # Calculate program statistics
-    PEProgrammeStats.model_rebuild(_types_namespace={"Simulation": PESimulation})
-    programmes = {
-        "income_tax": {"entity": "person", "is_tax": True},
-        "national_insurance": {"entity": "person", "is_tax": True},
-        "vat": {"entity": "household", "is_tax": True},
-        "council_tax": {"entity": "household", "is_tax": True},
-        "universal_credit": {"entity": "person", "is_tax": False},
-        "child_benefit": {"entity": "person", "is_tax": False},
-        "pension_credit": {"entity": "person", "is_tax": False},
-        "income_support": {"entity": "person", "is_tax": False},
-        "working_tax_credit": {"entity": "person", "is_tax": False},
-        "child_tax_credit": {"entity": "person", "is_tax": False},
-    }
-    for prog_name, prog_info in programmes.items():
-        try:
-            ps = PEProgrammeStats(
-                baseline_simulation=pe_baseline_sim,
-                reform_simulation=pe_reform_sim,
-                programme_name=prog_name,
-                entity=prog_info["entity"],
-                is_tax=prog_info["is_tax"],
-            )
-            ps.run()
-            program_stat = ProgramStatistics(
-                baseline_simulation_id=baseline_sim.id,
-                reform_simulation_id=reform_sim.id,
-                report_id=report.id,
-                program_name=prog_name,
-                entity=prog_info["entity"],
-                is_tax=prog_info["is_tax"],
-                baseline_total=ps.baseline_total,
-                reform_total=ps.reform_total,
-                change=ps.change,
-                baseline_count=ps.baseline_count,
-                reform_count=ps.reform_count,
-                winners=ps.winners,
-                losers=ps.losers,
-            )
-            session.add(program_stat)
-        except KeyError:
-            pass  # Variable not found in model
-
-    # Calculate poverty rates for baseline and reform
-    for pe_sim, db_sim in [
-        (pe_baseline_sim, baseline_sim),
-        (pe_reform_sim, reform_sim),
-    ]:
-        poverty_results = calculate_uk_poverty_rates(pe_sim)
-        for pov in poverty_results.outputs:
-            poverty_record = Poverty(
-                simulation_id=db_sim.id,
-                report_id=report.id,
-                poverty_type=pov.poverty_type,
-                entity=pov.entity,
-                filter_variable=pov.filter_variable,
-                headcount=pov.headcount,
-                total_population=pov.total_population,
-                rate=pov.rate,
-            )
-            session.add(poverty_record)
-
-    # Calculate poverty rates by age group for baseline and reform
-    for pe_sim, db_sim in [
-        (pe_baseline_sim, baseline_sim),
-        (pe_reform_sim, reform_sim),
-    ]:
-        age_poverty_results = calculate_uk_poverty_by_age(pe_sim)
-        for pov in age_poverty_results.outputs:
-            poverty_record = Poverty(
-                simulation_id=db_sim.id,
-                report_id=report.id,
-                poverty_type=pov.poverty_type,
-                entity=pov.entity,
-                filter_variable=pov.filter_variable,
-                headcount=pov.headcount,
-                total_population=pov.total_population,
-                rate=pov.rate,
-            )
-            session.add(poverty_record)
-
-    # Calculate poverty rates by gender for baseline and reform
-    for pe_sim, db_sim in [
-        (pe_baseline_sim, baseline_sim),
-        (pe_reform_sim, reform_sim),
-    ]:
-        gender_poverty_results = calculate_uk_poverty_by_gender(pe_sim)
-        for pov in gender_poverty_results.outputs:
-            poverty_record = Poverty(
-                simulation_id=db_sim.id,
-                report_id=report.id,
-                poverty_type=pov.poverty_type,
-                entity=pov.entity,
-                filter_variable=pov.filter_variable,
-                headcount=pov.headcount,
-                total_population=pov.total_population,
-                rate=pov.rate,
-            )
-            session.add(poverty_record)
-
-    # Calculate inequality for baseline and reform
-    for pe_sim, db_sim in [
-        (pe_baseline_sim, baseline_sim),
-        (pe_reform_sim, reform_sim),
-    ]:
-        ineq = calculate_uk_inequality(pe_sim)
-        ineq.run()
-        inequality_record = Inequality(
-            simulation_id=db_sim.id,
-            report_id=report.id,
-            income_variable=ineq.income_variable,
-            entity=ineq.entity,
-            gini=ineq.gini,
-            top_10_share=ineq.top_10_share,
-            top_1_share=ineq.top_1_share,
-            bottom_50_share=ineq.bottom_50_share,
-        )
-        session.add(inequality_record)
-
-    # Calculate budget summary aggregates
-    # UK budget variables — household-level aggregates for fiscal totals
-    uk_budget_variables = {
-        "household_tax": "household",
-        "household_benefits": "household",
-        "household_net_income": "household",
-    }
-    PEAggregate.model_rebuild(_types_namespace={"Simulation": PESimulation})
-    for var_name, entity in uk_budget_variables.items():
-        baseline_agg = PEAggregate(
-            simulation=pe_baseline_sim,
-            variable=var_name,
-            aggregate_type=PEAggregateType.SUM,
-            entity=entity,
-        )
-        baseline_agg.run()
-        reform_agg = PEAggregate(
-            simulation=pe_reform_sim,
-            variable=var_name,
-            aggregate_type=PEAggregateType.SUM,
-            entity=entity,
-        )
-        reform_agg.run()
-        budget_record = BudgetSummary(
-            baseline_simulation_id=baseline_sim.id,
-            reform_simulation_id=reform_sim.id,
-            report_id=report.id,
-            variable_name=var_name,
-            entity=entity,
-            baseline_total=float(baseline_agg.result),
-            reform_total=float(reform_agg.result),
-            change=float(reform_agg.result - baseline_agg.result),
-        )
-        session.add(budget_record)
-
-    # Household count: bypass Aggregate and compute directly from raw numpy
-    # values. Using Aggregate(SUM) on household_weight would compute
-    # sum(weight * weight) because MicroSeries.sum() applies weights
-    # automatically — it's unclear whether Aggregate can be used correctly
-    # for summing the weight column itself.
-    baseline_hh_count = float(
-        pe_baseline_sim.output_dataset.data.household[
-            "household_weight"
-        ].values.sum()
-    )
-    reform_hh_count = float(
-        pe_reform_sim.output_dataset.data.household[
-            "household_weight"
-        ].values.sum()
-    )
-    budget_record = BudgetSummary(
-        baseline_simulation_id=baseline_sim.id,
-        reform_simulation_id=reform_sim.id,
+    run_modules(
+        dispatch=UK_MODULE_DISPATCH,
+        modules=modules,
+        pe_baseline_sim=pe_baseline_sim,
+        pe_reform_sim=pe_reform_sim,
+        baseline_sim_id=baseline_sim.id,
+        reform_sim_id=reform_sim.id,
         report_id=report.id,
-        variable_name="household_count_total",
-        entity="household",
-        baseline_total=baseline_hh_count,
-        reform_total=reform_hh_count,
-        change=reform_hh_count - baseline_hh_count,
+        session=session,
     )
-    session.add(budget_record)
-
-    # Calculate intra-decile impact (5-category income change distribution)
-    from policyengine.outputs.intra_decile_impact import (
-        compute_intra_decile_impacts as pe_compute_intra_decile,
-    )
-
-    intra_decile_results = pe_compute_intra_decile(
-        baseline_simulation=pe_baseline_sim,
-        reform_simulation=pe_reform_sim,
-        income_variable="household_net_income",
-        entity="household",
-    )
-    for r in intra_decile_results.outputs:
-        record = IntraDecileImpact(
-            baseline_simulation_id=baseline_sim.id,
-            reform_simulation_id=reform_sim.id,
-            report_id=report.id,
-            decile=r.decile,
-            lose_more_than_5pct=r.lose_more_than_5pct,
-            lose_less_than_5pct=r.lose_less_than_5pct,
-            no_change=r.no_change,
-            gain_less_than_5pct=r.gain_less_than_5pct,
-            gain_more_than_5pct=r.gain_more_than_5pct,
-        )
-        session.add(record)
-
-    # Calculate constituency impact (UK only, requires weight matrix)
-    from policyengine.outputs.constituency_impact import (
-        compute_uk_constituency_impacts,
-    )
-
-    try:
-        from policyengine_core.tools.google_cloud import download as gcs_download
-
-        weight_matrix_path = gcs_download(
-            gcs_bucket="policyengine-uk-data-private",
-            gcs_key="parliamentary_constituency_weights.h5",
-        )
-        constituency_csv_path = gcs_download(
-            gcs_bucket="policyengine-uk-data-private",
-            gcs_key="constituencies_2024.csv",
-        )
-        constituency_impact = compute_uk_constituency_impacts(
-            pe_baseline_sim,
-            pe_reform_sim,
-            weight_matrix_path=weight_matrix_path,
-            constituency_csv_path=constituency_csv_path,
-        )
-        if constituency_impact.constituency_results:
-            for cr in constituency_impact.constituency_results:
-                record = ConstituencyImpact(
-                    baseline_simulation_id=baseline_sim.id,
-                    reform_simulation_id=reform_sim.id,
-                    report_id=report.id,
-                    constituency_code=cr["constituency_code"],
-                    constituency_name=cr["constituency_name"],
-                    x=cr["x"],
-                    y=cr["y"],
-                    average_household_income_change=cr[
-                        "average_household_income_change"
-                    ],
-                    relative_household_income_change=cr[
-                        "relative_household_income_change"
-                    ],
-                    population=cr["population"],
-                )
-                session.add(record)
-    except Exception:
-        pass  # Weight matrix not available, skip constituency impact
-
-    # Calculate local authority impact (UK only, requires weight matrix)
-    from policyengine.outputs.local_authority_impact import (
-        compute_uk_local_authority_impacts,
-    )
-
-    try:
-        from policyengine_core.tools.google_cloud import download as gcs_download
-
-        la_weight_matrix_path = gcs_download(
-            gcs_bucket="policyengine-uk-data-private",
-            gcs_key="local_authority_weights.h5",
-        )
-        la_csv_path = gcs_download(
-            gcs_bucket="policyengine-uk-data-private",
-            gcs_key="local_authorities_2021.csv",
-        )
-        la_impact = compute_uk_local_authority_impacts(
-            pe_baseline_sim,
-            pe_reform_sim,
-            weight_matrix_path=la_weight_matrix_path,
-            local_authority_csv_path=la_csv_path,
-        )
-        if la_impact.local_authority_results:
-            for lr in la_impact.local_authority_results:
-                record = LocalAuthorityImpact(
-                    baseline_simulation_id=baseline_sim.id,
-                    reform_simulation_id=reform_sim.id,
-                    report_id=report.id,
-                    local_authority_code=lr["local_authority_code"],
-                    local_authority_name=lr["local_authority_name"],
-                    x=lr["x"],
-                    y=lr["y"],
-                    average_household_income_change=lr[
-                        "average_household_income_change"
-                    ],
-                    relative_household_income_change=lr[
-                        "relative_household_income_change"
-                    ],
-                    population=lr["population"],
-                )
-                session.add(record)
-    except Exception:
-        pass  # Weight matrix not available, skip local authority impact
-
-    # Calculate wealth decile impact (UK only)
-    try:
-        from policyengine.outputs.decile_impact import (
-            DecileImpact as PEDecileImpact,
-        )
-
-        PEDecileImpact.model_rebuild(_types_namespace={"Simulation": PESimulation})
-        for decile_num in range(1, 11):
-            wealth_di = PEDecileImpact(
-                baseline_simulation=pe_baseline_sim,
-                reform_simulation=pe_reform_sim,
-                income_variable="household_net_income",
-                decile_variable="household_wealth_decile",
-                entity="household",
-                decile=decile_num,
-            )
-            wealth_di.run()
-            record = DecileImpact(
-                baseline_simulation_id=baseline_sim.id,
-                reform_simulation_id=reform_sim.id,
-                report_id=report.id,
-                income_variable="household_wealth_decile",
-                entity="household",
-                decile=decile_num,
-                quantiles=10,
-                baseline_mean=wealth_di.baseline_mean,
-                reform_mean=wealth_di.reform_mean,
-                absolute_change=wealth_di.absolute_change,
-                relative_change=wealth_di.relative_change,
-            )
-            session.add(record)
-
-        # Calculate intra-wealth-decile impact
-        intra_wealth_results = pe_compute_intra_decile(
-            baseline_simulation=pe_baseline_sim,
-            reform_simulation=pe_reform_sim,
-            income_variable="household_net_income",
-            decile_variable="household_wealth_decile",
-            entity="household",
-        )
-        for r in intra_wealth_results.outputs:
-            record = IntraDecileImpact(
-                baseline_simulation_id=baseline_sim.id,
-                reform_simulation_id=reform_sim.id,
-                report_id=report.id,
-                decile_type="wealth",
-                decile=r.decile,
-                lose_more_than_5pct=r.lose_more_than_5pct,
-                lose_less_than_5pct=r.lose_less_than_5pct,
-                no_change=r.no_change,
-                gain_less_than_5pct=r.gain_less_than_5pct,
-                gain_more_than_5pct=r.gain_more_than_5pct,
-            )
-            session.add(record)
-    except (KeyError, Exception):
-        pass  # household_wealth_decile not available (US), skip
 
     # Mark completed
     baseline_sim.status = SimulationStatus.COMPLETED
@@ -1237,7 +864,9 @@ def _run_local_economy_comparison_uk(job_id: str, session: Session) -> None:
     session.commit()
 
 
-def _run_local_economy_comparison_us(job_id: str, session: Session) -> None:
+def _run_local_economy_comparison_us(
+    job_id: str, session: Session, modules: list[str] | None = None
+) -> None:
     """Run US economy comparison analysis locally."""
     from datetime import datetime, timezone
     from uuid import UUID
@@ -1246,21 +875,8 @@ def _run_local_economy_comparison_us(job_id: str, session: Session) -> None:
     from policyengine.core.dynamic import Dynamic as PEDynamic
     from policyengine.core.policy import ParameterValue as PEParameterValue
     from policyengine.core.policy import Policy as PEPolicy
-    from policyengine.outputs import DecileImpact as PEDecileImpact
-    from policyengine.outputs.aggregate import Aggregate as PEAggregate
-    from policyengine.outputs.aggregate import AggregateType as PEAggregateType
-    from policyengine.outputs.inequality import calculate_us_inequality
-    from policyengine.outputs.poverty import (
-        calculate_us_poverty_by_age,
-        calculate_us_poverty_by_gender,
-        calculate_us_poverty_by_race,
-        calculate_us_poverty_rates,
-    )
     from policyengine.tax_benefit_models.us import us_latest
     from policyengine.tax_benefit_models.us.datasets import PolicyEngineUSDataset
-    from policyengine.tax_benefit_models.us.outputs import (
-        ProgramStatistics as PEProgramStats,
-    )
 
     from policyengine_api.models import Policy as DBPolicy
 
@@ -1381,283 +997,19 @@ def _run_local_economy_comparison_us(job_id: str, session: Session) -> None:
     )
     pe_reform_sim.ensure()
 
-    # Calculate decile impacts
-    for decile_num in range(1, 11):
-        di = PEDecileImpact(
-            baseline_simulation=pe_baseline_sim,
-            reform_simulation=pe_reform_sim,
-            decile=decile_num,
-        )
-        di.run()
-        decile_impact = DecileImpact(
-            baseline_simulation_id=baseline_sim.id,
-            reform_simulation_id=reform_sim.id,
-            report_id=report.id,
-            income_variable=di.income_variable,
-            entity=di.entity,
-            decile=di.decile,
-            quantiles=di.quantiles,
-            baseline_mean=di.baseline_mean,
-            reform_mean=di.reform_mean,
-            absolute_change=di.absolute_change,
-            relative_change=di.relative_change,
-            count_better_off=di.count_better_off,
-            count_worse_off=di.count_worse_off,
-            count_no_change=di.count_no_change,
-        )
-        session.add(decile_impact)
+    # Run computation modules
+    from policyengine_api.api.computation_modules import US_MODULE_DISPATCH, run_modules
 
-    # Calculate program statistics
-    PEProgramStats.model_rebuild(_types_namespace={"Simulation": PESimulation})
-    programs = {
-        "income_tax": {"entity": "tax_unit", "is_tax": True},
-        "employee_payroll_tax": {"entity": "person", "is_tax": True},
-        "snap": {"entity": "spm_unit", "is_tax": False},
-        "tanf": {"entity": "spm_unit", "is_tax": False},
-        "ssi": {"entity": "spm_unit", "is_tax": False},
-        "social_security": {"entity": "person", "is_tax": False},
-    }
-    for prog_name, prog_info in programs.items():
-        try:
-            ps = PEProgramStats(
-                baseline_simulation=pe_baseline_sim,
-                reform_simulation=pe_reform_sim,
-                program_name=prog_name,
-                entity=prog_info["entity"],
-                is_tax=prog_info["is_tax"],
-            )
-            ps.run()
-            program_stat = ProgramStatistics(
-                baseline_simulation_id=baseline_sim.id,
-                reform_simulation_id=reform_sim.id,
-                report_id=report.id,
-                program_name=prog_name,
-                entity=prog_info["entity"],
-                is_tax=prog_info["is_tax"],
-                baseline_total=ps.baseline_total,
-                reform_total=ps.reform_total,
-                change=ps.change,
-                baseline_count=ps.baseline_count,
-                reform_count=ps.reform_count,
-                winners=ps.winners,
-                losers=ps.losers,
-            )
-            session.add(program_stat)
-        except KeyError:
-            pass  # Variable not found in model
-
-    # Calculate poverty rates for baseline and reform
-    for pe_sim, db_sim in [
-        (pe_baseline_sim, baseline_sim),
-        (pe_reform_sim, reform_sim),
-    ]:
-        poverty_results = calculate_us_poverty_rates(pe_sim)
-        for pov in poverty_results.outputs:
-            poverty_record = Poverty(
-                simulation_id=db_sim.id,
-                report_id=report.id,
-                poverty_type=pov.poverty_type,
-                entity=pov.entity,
-                filter_variable=pov.filter_variable,
-                headcount=pov.headcount,
-                total_population=pov.total_population,
-                rate=pov.rate,
-            )
-            session.add(poverty_record)
-
-    # Calculate poverty rates by age group for baseline and reform
-    for pe_sim, db_sim in [
-        (pe_baseline_sim, baseline_sim),
-        (pe_reform_sim, reform_sim),
-    ]:
-        age_poverty_results = calculate_us_poverty_by_age(pe_sim)
-        for pov in age_poverty_results.outputs:
-            poverty_record = Poverty(
-                simulation_id=db_sim.id,
-                report_id=report.id,
-                poverty_type=pov.poverty_type,
-                entity=pov.entity,
-                filter_variable=pov.filter_variable,
-                headcount=pov.headcount,
-                total_population=pov.total_population,
-                rate=pov.rate,
-            )
-            session.add(poverty_record)
-
-    # Calculate poverty rates by gender for baseline and reform
-    for pe_sim, db_sim in [
-        (pe_baseline_sim, baseline_sim),
-        (pe_reform_sim, reform_sim),
-    ]:
-        gender_poverty_results = calculate_us_poverty_by_gender(pe_sim)
-        for pov in gender_poverty_results.outputs:
-            poverty_record = Poverty(
-                simulation_id=db_sim.id,
-                report_id=report.id,
-                poverty_type=pov.poverty_type,
-                entity=pov.entity,
-                filter_variable=pov.filter_variable,
-                headcount=pov.headcount,
-                total_population=pov.total_population,
-                rate=pov.rate,
-            )
-            session.add(poverty_record)
-
-    # Calculate poverty rates by race for baseline and reform (US only)
-    for pe_sim, db_sim in [
-        (pe_baseline_sim, baseline_sim),
-        (pe_reform_sim, reform_sim),
-    ]:
-        race_poverty_results = calculate_us_poverty_by_race(pe_sim)
-        for pov in race_poverty_results.outputs:
-            poverty_record = Poverty(
-                simulation_id=db_sim.id,
-                report_id=report.id,
-                poverty_type=pov.poverty_type,
-                entity=pov.entity,
-                filter_variable=pov.filter_variable,
-                headcount=pov.headcount,
-                total_population=pov.total_population,
-                rate=pov.rate,
-            )
-            session.add(poverty_record)
-
-    # Calculate inequality for baseline and reform
-    for pe_sim, db_sim in [
-        (pe_baseline_sim, baseline_sim),
-        (pe_reform_sim, reform_sim),
-    ]:
-        ineq = calculate_us_inequality(pe_sim)
-        ineq.run()
-        inequality_record = Inequality(
-            simulation_id=db_sim.id,
-            report_id=report.id,
-            income_variable=ineq.income_variable,
-            entity=ineq.entity,
-            gini=ineq.gini,
-            top_10_share=ineq.top_10_share,
-            top_1_share=ineq.top_1_share,
-            bottom_50_share=ineq.bottom_50_share,
-        )
-        session.add(inequality_record)
-
-    # Calculate budget summary aggregates
-    # US budget variables — household-level plus state tax at tax_unit level
-    us_budget_variables = {
-        "household_tax": "household",
-        "household_benefits": "household",
-        "household_net_income": "household",
-        "household_state_income_tax": "tax_unit",
-    }
-    PEAggregate.model_rebuild(_types_namespace={"Simulation": PESimulation})
-    for var_name, entity in us_budget_variables.items():
-        baseline_agg = PEAggregate(
-            simulation=pe_baseline_sim,
-            variable=var_name,
-            aggregate_type=PEAggregateType.SUM,
-            entity=entity,
-        )
-        baseline_agg.run()
-        reform_agg = PEAggregate(
-            simulation=pe_reform_sim,
-            variable=var_name,
-            aggregate_type=PEAggregateType.SUM,
-            entity=entity,
-        )
-        reform_agg.run()
-        budget_record = BudgetSummary(
-            baseline_simulation_id=baseline_sim.id,
-            reform_simulation_id=reform_sim.id,
-            report_id=report.id,
-            variable_name=var_name,
-            entity=entity,
-            baseline_total=float(baseline_agg.result),
-            reform_total=float(reform_agg.result),
-            change=float(reform_agg.result - baseline_agg.result),
-        )
-        session.add(budget_record)
-
-    # Household count: bypass Aggregate and compute directly from raw numpy
-    # values. Using Aggregate(SUM) on household_weight would compute
-    # sum(weight * weight) because MicroSeries.sum() applies weights
-    # automatically — it's unclear whether Aggregate can be used correctly
-    # for summing the weight column itself.
-    baseline_hh_count = float(
-        pe_baseline_sim.output_dataset.data.household[
-            "household_weight"
-        ].values.sum()
-    )
-    reform_hh_count = float(
-        pe_reform_sim.output_dataset.data.household[
-            "household_weight"
-        ].values.sum()
-    )
-    budget_record = BudgetSummary(
-        baseline_simulation_id=baseline_sim.id,
-        reform_simulation_id=reform_sim.id,
+    run_modules(
+        dispatch=US_MODULE_DISPATCH,
+        modules=modules,
+        pe_baseline_sim=pe_baseline_sim,
+        pe_reform_sim=pe_reform_sim,
+        baseline_sim_id=baseline_sim.id,
+        reform_sim_id=reform_sim.id,
         report_id=report.id,
-        variable_name="household_count_total",
-        entity="household",
-        baseline_total=baseline_hh_count,
-        reform_total=reform_hh_count,
-        change=reform_hh_count - baseline_hh_count,
+        session=session,
     )
-    session.add(budget_record)
-
-    # Calculate intra-decile impact (5-category income change distribution)
-    from policyengine.outputs.intra_decile_impact import (
-        compute_intra_decile_impacts as pe_compute_intra_decile_us,
-    )
-
-    intra_decile_results_us = pe_compute_intra_decile_us(
-        baseline_simulation=pe_baseline_sim,
-        reform_simulation=pe_reform_sim,
-        income_variable="household_net_income",
-        entity="household",
-    )
-    for r in intra_decile_results_us.outputs:
-        record = IntraDecileImpact(
-            baseline_simulation_id=baseline_sim.id,
-            reform_simulation_id=reform_sim.id,
-            report_id=report.id,
-            decile=r.decile,
-            lose_more_than_5pct=r.lose_more_than_5pct,
-            lose_less_than_5pct=r.lose_less_than_5pct,
-            no_change=r.no_change,
-            gain_less_than_5pct=r.gain_less_than_5pct,
-            gain_more_than_5pct=r.gain_more_than_5pct,
-        )
-        session.add(record)
-
-    # Calculate congressional district impact
-    from policyengine.outputs.congressional_district_impact import (
-        compute_us_congressional_district_impacts,
-    )
-
-    try:
-        district_impact = compute_us_congressional_district_impacts(
-            pe_baseline_sim, pe_reform_sim
-        )
-        if district_impact.district_results:
-            for dr in district_impact.district_results:
-                record = CongressionalDistrictImpact(
-                    baseline_simulation_id=baseline_sim.id,
-                    reform_simulation_id=reform_sim.id,
-                    report_id=report.id,
-                    district_geoid=dr["district_geoid"],
-                    state_fips=dr["state_fips"],
-                    district_number=dr["district_number"],
-                    average_household_income_change=dr[
-                        "average_household_income_change"
-                    ],
-                    relative_household_income_change=dr[
-                        "relative_household_income_change"
-                    ],
-                    population=dr["population"],
-                )
-                session.add(record)
-    except KeyError:
-        pass  # congressional_district_geoid not in dataset
 
     # Mark completed
     baseline_sim.status = SimulationStatus.COMPLETED
@@ -1672,9 +1024,16 @@ def _run_local_economy_comparison_us(job_id: str, session: Session) -> None:
 
 
 def _trigger_economy_comparison(
-    job_id: str, tax_benefit_model_name: str, session: Session | None = None
+    job_id: str,
+    tax_benefit_model_name: str,
+    session: Session | None = None,
+    modules: list[str] | None = None,
 ) -> None:
-    """Trigger economy comparison analysis (local or Modal)."""
+    """Trigger economy comparison analysis (local or Modal).
+
+    Args:
+        modules: Optional list of module names to run. If None, runs all.
+    """
     from policyengine_api.config import settings
 
     traceparent = get_traceparent()
@@ -1682,11 +1041,11 @@ def _trigger_economy_comparison(
     if not settings.agent_use_modal and session is not None:
         # Run locally
         if tax_benefit_model_name == "policyengine_uk":
-            _run_local_economy_comparison_uk(job_id, session)
+            _run_local_economy_comparison_uk(job_id, session, modules=modules)
         else:
-            _run_local_economy_comparison_us(job_id, session)
+            _run_local_economy_comparison_us(job_id, session, modules=modules)
     else:
-        # Use Modal
+        # Use Modal (modules param passed for future selective computation)
         import modal
 
         if tax_benefit_model_name == "policyengine_uk":
@@ -1980,7 +1339,10 @@ def economy_custom(
     if report.status == ReportStatus.PENDING:
         with logfire.span("trigger_economy_comparison", job_id=str(report.id)):
             _trigger_economy_comparison(
-                str(report.id), request.tax_benefit_model_name, session
+                str(report.id),
+                request.tax_benefit_model_name,
+                session,
+                modules=request.modules,
             )
 
     full_response = _build_response(
