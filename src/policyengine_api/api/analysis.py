@@ -54,6 +54,7 @@ from policyengine_api.models import (
     TaxBenefitModel,
     TaxBenefitModelVersion,
 )
+from policyengine_api.api.module_registry import MODULE_REGISTRY, get_modules_for_country
 from policyengine_api.services.database import get_session
 
 
@@ -78,6 +79,45 @@ SIMULATION_NAMESPACE = UUID("a1b2c3d4-e5f6-7890-abcd-ef1234567890")
 REPORT_NAMESPACE = UUID("b2c3d4e5-f6a7-8901-bcde-f12345678901")
 
 router = APIRouter(prefix="/analysis", tags=["analysis"])
+
+
+# ---------------------------------------------------------------------------
+# GET /analysis/options — list available computation modules
+# ---------------------------------------------------------------------------
+
+
+class ModuleOption(BaseModel):
+    """A single computation module available for economy analysis."""
+
+    name: str
+    label: str
+    description: str
+    response_fields: list[str]
+
+
+@router.get("/options", response_model=list[ModuleOption])
+def list_analysis_options(
+    country: str | None = None,
+) -> list[ModuleOption]:
+    """List available economy analysis modules.
+
+    Args:
+        country: Optional country code ('uk' or 'us') to filter modules.
+    """
+    if country:
+        modules = get_modules_for_country(country)
+    else:
+        modules = list(MODULE_REGISTRY.values())
+
+    return [
+        ModuleOption(
+            name=m.name,
+            label=m.label,
+            description=m.description,
+            response_fields=list(m.response_fields),
+        )
+        for m in modules
+    ]
 
 
 class EconomicImpactRequest(BaseModel):
