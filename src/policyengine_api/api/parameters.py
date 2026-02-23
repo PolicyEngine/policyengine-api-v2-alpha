@@ -75,7 +75,7 @@ class ParameterByNameRequest(BaseModel):
     """Request body for looking up parameters by name."""
 
     names: list[str]
-    tax_benefit_model_name: str
+    country_id: CountryId
 
 
 @router.post("/by-name", response_model=List[ParameterRead])
@@ -95,11 +95,13 @@ def get_parameters_by_name(
     if not request.names:
         return []
 
+    model_name = COUNTRY_MODEL_NAMES[request.country_id]
+
     query = (
         select(Parameter)
         .join(TaxBenefitModelVersion)
         .join(TaxBenefitModel)
-        .where(TaxBenefitModel.name == request.tax_benefit_model_name)
+        .where(TaxBenefitModel.name == model_name)
         .where(Parameter.name.in_(request.names))
         .order_by(Parameter.name)
     )
