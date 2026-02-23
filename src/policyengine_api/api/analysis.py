@@ -54,7 +54,11 @@ from policyengine_api.models import (
     TaxBenefitModel,
     TaxBenefitModelVersion,
 )
-from policyengine_api.api.module_registry import MODULE_REGISTRY, get_modules_for_country
+from policyengine_api.api.module_registry import (
+    MODULE_REGISTRY,
+    get_modules_for_country,
+    validate_modules,
+)
 from policyengine_api.services.database import get_session
 
 
@@ -1831,3 +1835,190 @@ def get_economic_impact_status(
         raise HTTPException(status_code=500, detail="Simulation data missing")
 
     return _build_response(report, baseline_sim, reform_sim, session)
+
+
+# ---------------------------------------------------------------------------
+# POST /analysis/economy-custom — run selected economy modules
+# ---------------------------------------------------------------------------
+
+_MODEL_TO_COUNTRY = {
+    "policyengine_uk": "uk",
+    "policyengine_us": "us",
+}
+
+
+class EconomyCustomRequest(BaseModel):
+    """Request body for custom economy analysis with selected modules."""
+
+    tax_benefit_model_name: Literal["policyengine_uk", "policyengine_us"] = Field(
+        description="Which country model to use"
+    )
+    dataset_id: UUID | None = Field(
+        default=None,
+        description="Dataset ID. Either dataset_id or region must be provided.",
+    )
+    region: str | None = Field(
+        default=None,
+        description="Region code (e.g., 'state/ca', 'us').",
+    )
+    policy_id: UUID | None = Field(
+        default=None,
+        description="Reform policy ID to compare against baseline (current law)",
+    )
+    dynamic_id: UUID | None = Field(
+        default=None, description="Optional behavioural response specification ID"
+    )
+    modules: list[str] = Field(
+        description="List of module names to compute (see GET /analysis/options)"
+    )
+
+
+def _build_filtered_response(
+    full_response: EconomicImpactResponse,
+    modules: list[str],
+) -> EconomicImpactResponse:
+    """Return a copy of the response with only the fields for requested modules."""
+    allowed_fields: set[str] = set()
+    for name in modules:
+        module = MODULE_REGISTRY.get(name)
+        if module:
+            allowed_fields.update(module.response_fields)
+
+    # Fields that are always included regardless of modules
+    always_included = {
+        "report_id",
+        "status",
+        "baseline_simulation",
+        "reform_simulation",
+        "region",
+        "error_message",
+    }
+
+    filtered = {}
+    for field_name in EconomicImpactResponse.model_fields:
+        value = getattr(full_response, field_name)
+        if field_name in always_included:
+            filtered[field_name] = value
+        elif field_name in allowed_fields:
+            filtered[field_name] = value
+        else:
+            filtered[field_name] = None
+
+    return EconomicImpactResponse.model_construct(**filtered)
+
+
+@router.post("/economy-custom", response_model=EconomicImpactResponse)
+def economy_custom(
+    request: EconomyCustomRequest,
+    session: Session = Depends(get_session),
+) -> EconomicImpactResponse:
+    """Run economy-wide analysis with only the selected modules.
+
+    Same async pattern as /analysis/economic-impact but accepts a list of
+    module names. Only the requested modules' response fields are populated;
+    the rest are null.
+
+    See GET /analysis/options for available module names.
+    """
+    country = _MODEL_TO_COUNTRY[request.tax_benefit_model_name]
+
+    try:
+        validate_modules(request.modules, country)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+
+    # Reuse the same request model for dataset/region resolution
+    impact_request = EconomicImpactRequest(
+        tax_benefit_model_name=request.tax_benefit_model_name,
+        dataset_id=request.dataset_id,
+        region=request.region,
+        policy_id=request.policy_id,
+        dynamic_id=request.dynamic_id,
+    )
+
+    dataset, region_obj = _resolve_dataset_and_region(impact_request, session)
+
+    filter_field = (
+        region_obj.filter_field if region_obj and region_obj.requires_filter else None
+    )
+    filter_value = (
+        region_obj.filter_value if region_obj and region_obj.requires_filter else None
+    )
+
+    model_version = _get_model_version(request.tax_benefit_model_name, session)
+
+    baseline_sim = _get_or_create_simulation(
+        simulation_type=SimulationType.ECONOMY,
+        model_version_id=model_version.id,
+        policy_id=None,
+        dynamic_id=request.dynamic_id,
+        session=session,
+        dataset_id=dataset.id,
+        filter_field=filter_field,
+        filter_value=filter_value,
+    )
+
+    reform_sim = _get_or_create_simulation(
+        simulation_type=SimulationType.ECONOMY,
+        model_version_id=model_version.id,
+        policy_id=request.policy_id,
+        dynamic_id=request.dynamic_id,
+        session=session,
+        dataset_id=dataset.id,
+        filter_field=filter_field,
+        filter_value=filter_value,
+    )
+
+    label = f"Custom analysis: {request.tax_benefit_model_name}"
+    if request.policy_id:
+        label += f" (policy {request.policy_id})"
+
+    report = _get_or_create_report(
+        baseline_sim.id, reform_sim.id, label, "economy_comparison", session
+    )
+
+    if report.status == ReportStatus.PENDING:
+        with logfire.span("trigger_economy_comparison", job_id=str(report.id)):
+            _trigger_economy_comparison(
+                str(report.id), request.tax_benefit_model_name, session
+            )
+
+    full_response = _build_response(
+        report, baseline_sim, reform_sim, session, region_obj
+    )
+    return _build_filtered_response(full_response, request.modules)
+
+
+@router.get("/economy-custom/{report_id}", response_model=EconomicImpactResponse)
+def get_economy_custom_status(
+    report_id: UUID,
+    modules: str | None = None,
+    session: Session = Depends(get_session),
+) -> EconomicImpactResponse:
+    """Poll for results of custom economy analysis.
+
+    Args:
+        report_id: The report ID returned by POST /analysis/economy-custom.
+        modules: Optional comma-separated module names to filter the response.
+            If omitted, all computed fields are returned.
+    """
+    report = session.get(Report, report_id)
+    if not report:
+        raise HTTPException(status_code=404, detail=f"Report {report_id} not found")
+
+    if not report.baseline_simulation_id or not report.reform_simulation_id:
+        raise HTTPException(status_code=500, detail="Report missing simulation IDs")
+
+    baseline_sim = session.get(Simulation, report.baseline_simulation_id)
+    reform_sim = session.get(Simulation, report.reform_simulation_id)
+
+    if not baseline_sim or not reform_sim:
+        raise HTTPException(status_code=500, detail="Simulation data missing")
+
+    full_response = _build_response(report, baseline_sim, reform_sim, session)
+
+    if modules:
+        module_list = [m.strip() for m in modules.split(",")]
+        return _build_filtered_response(full_response, module_list)
+
+    return full_response
