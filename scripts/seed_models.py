@@ -35,6 +35,8 @@ def seed_model(
     model_version,
     session: Session,
     skip_state_params: bool = False,
+    variable_whitelist: set[str] | None = None,
+    parameter_prefixes: set[str] | None = None,
 ) -> TaxBenefitModelVersion:
     """Seed a tax-benefit model with its variables and parameters.
 
@@ -42,6 +44,9 @@ def seed_model(
         model_version: The policyengine.py model version object
         session: Database session
         skip_state_params: Skip US state-level parameters (gov.states.*)
+        variable_whitelist: If provided, only seed variables whose name is in this set
+        parameter_prefixes: If provided, only seed parameters whose name starts with
+            one of these prefixes
 
     Returns:
         The created or existing TaxBenefitModelVersion
@@ -97,8 +102,17 @@ def seed_model(
         session.refresh(db_version)
         console.print(f"  Created version: {db_version.version}")
 
+        # Filter variables by whitelist if provided
+        variables = model_version.variables
+        if variable_whitelist is not None:
+            variables = [v for v in variables if v.name in variable_whitelist]
+            console.print(
+                f"  Filtered to {len(variables)} variables "
+                f"(from {len(model_version.variables)} total, whitelist applied)"
+            )
+
         # Add variables
-        with logfire.span("add_variables", count=len(model_version.variables)):
+        with logfire.span("add_variables", count=len(variables)):
             var_rows = []
             with Progress(
                 SpinnerColumn(),
@@ -106,10 +120,10 @@ def seed_model(
                 console=console,
             ) as progress:
                 task = progress.add_task(
-                    f"Preparing {len(model_version.variables)} variables",
-                    total=len(model_version.variables),
+                    f"Preparing {len(variables)} variables",
+                    total=len(variables),
                 )
-                for var in model_version.variables:
+                for var in variables:
                     var_rows.append(
                         {
                             "id": uuid4(),
@@ -144,7 +158,7 @@ def seed_model(
             )
 
             console.print(
-                f"  [green]✓[/green] Added {len(model_version.variables)} variables"
+                f"  [green]✓[/green] Added {len(variables)} variables"
             )
 
         # Add parameters (only user-facing ones: those with labels)
@@ -152,12 +166,19 @@ def seed_model(
         seen_names = set()
         parameters_to_add = []
         skipped_state_params_count = 0
+        skipped_prefix_count = 0
         for p in model_version.parameters:
             if p.label is None or p.name in seen_names:
                 continue
             # Skip state-level parameters if requested
             if skip_state_params and p.name.startswith("gov.states."):
                 skipped_state_params_count += 1
+                continue
+            # Skip parameters not matching prefix whitelist
+            if parameter_prefixes is not None and not any(
+                p.name.startswith(prefix) for prefix in parameter_prefixes
+            ):
+                skipped_prefix_count += 1
                 continue
             parameters_to_add.append(p)
             seen_names.add(p.name)
@@ -168,6 +189,8 @@ def seed_model(
         )
         if skip_state_params and skipped_state_params_count > 0:
             filter_msg += f", skipped {skipped_state_params_count} state params"
+        if parameter_prefixes is not None and skipped_prefix_count > 0:
+            filter_msg += f", skipped {skipped_prefix_count} by prefix filter"
         console.print(filter_msg)
 
         with logfire.span("add_parameters", count=len(parameters_to_add)):
@@ -302,20 +325,42 @@ def seed_model(
         return db_version
 
 
-def seed_uk_model(session: Session, skip_state_params: bool = False):
+def seed_uk_model(
+    session: Session,
+    skip_state_params: bool = False,
+    variable_whitelist: set[str] | None = None,
+    parameter_prefixes: set[str] | None = None,
+):
     """Seed UK model."""
     from policyengine.tax_benefit_models.uk import uk_latest
 
-    version = seed_model(uk_latest, session, skip_state_params=skip_state_params)
+    version = seed_model(
+        uk_latest,
+        session,
+        skip_state_params=skip_state_params,
+        variable_whitelist=variable_whitelist,
+        parameter_prefixes=parameter_prefixes,
+    )
     console.print(f"[green]✓[/green] UK model seeded: {version.id}\n")
     return version
 
 
-def seed_us_model(session: Session, skip_state_params: bool = False):
+def seed_us_model(
+    session: Session,
+    skip_state_params: bool = False,
+    variable_whitelist: set[str] | None = None,
+    parameter_prefixes: set[str] | None = None,
+):
     """Seed US model."""
     from policyengine.tax_benefit_models.us import us_latest
 
-    version = seed_model(us_latest, session, skip_state_params=skip_state_params)
+    version = seed_model(
+        us_latest,
+        session,
+        skip_state_params=skip_state_params,
+        variable_whitelist=variable_whitelist,
+        parameter_prefixes=parameter_prefixes,
+    )
     console.print(f"[green]✓[/green] US model seeded: {version.id}\n")
     return version
 
