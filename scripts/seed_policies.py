@@ -74,6 +74,7 @@ def seed_uk_policy(session: Session) -> bool:
     uk_policy = Policy(
         name=policy_name,
         description="Raise the UK income tax basic rate from 20p to 22p",
+        tax_benefit_model_id=uk_model.id,
     )
     session.add(uk_policy)
     session.commit()
@@ -143,6 +144,7 @@ def seed_us_policy(session: Session) -> bool:
     us_policy = Policy(
         name=policy_name,
         description="Raise US federal income tax lowest bracket to 12%",
+        tax_benefit_model_id=us_model.id,
     )
     session.add(us_policy)
     session.commit()
