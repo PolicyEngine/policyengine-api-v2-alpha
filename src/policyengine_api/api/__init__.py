@@ -49,5 +49,6 @@ api_router.include_router(user_household_associations.router)
 api_router.include_router(user_policies.router)
 api_router.include_router(user_simulation_associations.router)
 api_router.include_router(user_report_associations.router)
+api_router.include_router(user_report_associations.reports_router)
 
 __all__ = ["api_router"]

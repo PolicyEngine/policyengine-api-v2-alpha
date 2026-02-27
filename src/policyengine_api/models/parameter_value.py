@@ -48,3 +48,9 @@ class ParameterValueRead(ParameterValueBase):
 
     id: UUID
     created_at: datetime
+
+
+class ParameterValueWithName(ParameterValueRead):
+    """Parameter value with the parameter's dotted name included."""
+
+    parameter_name: str

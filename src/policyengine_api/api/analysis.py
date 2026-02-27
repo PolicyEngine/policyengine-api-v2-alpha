@@ -268,6 +268,7 @@ def _get_or_create_simulation(
     household_id: UUID | None = None,
     filter_field: str | None = None,
     filter_value: str | None = None,
+    region_id: UUID | None = None,
 ) -> Simulation:
     """Get existing simulation or create a new one."""
     sim_id = _get_deterministic_simulation_id(
@@ -296,6 +297,7 @@ def _get_or_create_simulation(
         status=SimulationStatus.PENDING,
         filter_field=filter_field,
         filter_value=filter_value,
+        region_id=region_id,
     )
     session.add(simulation)
     session.commit()
@@ -1138,6 +1140,7 @@ def economic_impact(
         dataset_id=dataset.id,
         filter_field=filter_field,
         filter_value=filter_value,
+        region_id=region.id if region else None,
     )
 
     reform_sim = _get_or_create_simulation(
@@ -1149,6 +1152,7 @@ def economic_impact(
         dataset_id=dataset.id,
         filter_field=filter_field,
         filter_value=filter_value,
+        region_id=region.id if region else None,
     )
 
     # Get or create report
@@ -1189,7 +1193,8 @@ def get_economic_impact_status(
     if not baseline_sim or not reform_sim:
         raise HTTPException(status_code=500, detail="Simulation data missing")
 
-    return _build_response(report, baseline_sim, reform_sim, session)
+    region = session.get(Region, baseline_sim.region_id) if baseline_sim.region_id else None
+    return _build_response(report, baseline_sim, reform_sim, session, region)
 
 
 # ---------------------------------------------------------------------------
@@ -1311,6 +1316,7 @@ def economy_custom(
         dataset_id=dataset.id,
         filter_field=filter_field,
         filter_value=filter_value,
+        region_id=region_obj.id if region_obj else None,
     )
 
     reform_sim = _get_or_create_simulation(
@@ -1322,6 +1328,7 @@ def economy_custom(
         dataset_id=dataset.id,
         filter_field=filter_field,
         filter_value=filter_value,
+        region_id=region_obj.id if region_obj else None,
     )
 
     label = f"Custom analysis: {request.tax_benefit_model_name}"
@@ -1373,7 +1380,8 @@ def get_economy_custom_status(
     if not baseline_sim or not reform_sim:
         raise HTTPException(status_code=500, detail="Simulation data missing")
 
-    full_response = _build_response(report, baseline_sim, reform_sim, session)
+    region = session.get(Region, baseline_sim.region_id) if baseline_sim.region_id else None
+    full_response = _build_response(report, baseline_sim, reform_sim, session, region)
 
     if modules:
         module_list = [m.strip() for m in modules.split(",")]

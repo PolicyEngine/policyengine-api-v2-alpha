@@ -4,6 +4,8 @@ from uuid import UUID, uuid4
 
 from sqlmodel import Field, Relationship, SQLModel
 
+from .parameter_value import ParameterValueWithName
+
 if TYPE_CHECKING:
     from .parameter_value import ParameterValue
     from .tax_benefit_model import TaxBenefitModel
@@ -63,3 +65,4 @@ class PolicyRead(PolicyBase):
     id: UUID
     created_at: datetime
     updated_at: datetime
+    parameter_values: list[ParameterValueWithName] = []

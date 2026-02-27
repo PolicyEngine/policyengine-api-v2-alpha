@@ -326,6 +326,7 @@ def create_economy_simulation(
         dataset_id=dataset.id,
         filter_field=filter_field,
         filter_value=filter_value,
+        region_id=region.id if region else None,
     )
 
     return _build_economy_response(simulation, region)

@@ -12,6 +12,7 @@ if TYPE_CHECKING:
     from .dynamic import Dynamic
     from .household import Household
     from .policy import Policy
+    from .region import Region
     from .tax_benefit_model_version import TaxBenefitModelVersion
 
 
@@ -45,6 +46,9 @@ class SimulationBase(SQLModel):
     output_dataset_id: UUID | None = Field(default=None, foreign_key="datasets.id")
     status: SimulationStatus = SimulationStatus.PENDING
     error_message: str | None = None
+
+    # Region provenance (which region this simulation targets)
+    region_id: UUID | None = Field(default=None, foreign_key="regions.id")
 
     # Regional filtering parameters (passed to policyengine.py)
     filter_field: str | None = Field(
@@ -85,6 +89,7 @@ class Simulation(SimulationBase, table=True):
         }
     )
     policy: "Policy" = Relationship()
+    region: "Region" = Relationship()
     dynamic: "Dynamic" = Relationship()
     tax_benefit_model_version: "TaxBenefitModelVersion" = Relationship()
     output_dataset: "Dataset" = Relationship(
