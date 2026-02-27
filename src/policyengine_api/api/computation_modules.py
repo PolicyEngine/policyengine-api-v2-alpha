@@ -3,7 +3,10 @@
 Each function computes a single module's results and writes DB records.
 They share a common signature pattern:
     (pe_baseline_sim, pe_reform_sim, baseline_sim_id, reform_sim_id,
-     report_id, session) -> None
+     report_id, session, **kwargs) -> None
+
+run_modules() passes country_id as a kwarg. Modules that need it (e.g.
+compute_decile_module) accept it explicitly; others accept **_kwargs.
 
 Used by _run_local_economy_comparison_uk/us to run modules selectively.
 """
@@ -31,6 +34,12 @@ from policyengine_api.models import (
 # ---------------------------------------------------------------------------
 
 
+DECILE_INCOME_VARIABLE: dict[str, str] = {
+    "us": "household_net_income",
+    "uk": "equiv_household_net_income",
+}
+
+
 def compute_decile_module(
     pe_baseline_sim,
     pe_reform_sim,
@@ -38,15 +47,22 @@ def compute_decile_module(
     reform_sim_id: UUID,
     report_id: UUID,
     session: Session,
+    country_id: str = "",
 ) -> None:
     """Compute income decile impacts (1-10)."""
     from policyengine.outputs import DecileImpact as PEDecileImpact
+
+    if country_id not in DECILE_INCOME_VARIABLE:
+        raise ValueError(f"No decile income variable configured for country '{country_id}'")
+
+    income_variable = DECILE_INCOME_VARIABLE[country_id]
 
     for decile_num in range(1, 11):
         di = PEDecileImpact(
             baseline_simulation=pe_baseline_sim,
             reform_simulation=pe_reform_sim,
             decile=decile_num,
+            income_variable=income_variable,
         )
         di.run()
         record = DecileImpact(
@@ -75,6 +91,7 @@ def compute_intra_decile_module(
     reform_sim_id: UUID,
     report_id: UUID,
     session: Session,
+    **_kwargs,
 ) -> None:
     """Compute intra-decile income change distribution (5 bands)."""
     from policyengine.outputs.intra_decile_impact import (
@@ -114,6 +131,7 @@ def compute_program_statistics_module_uk(
     reform_sim_id: UUID,
     report_id: UUID,
     session: Session,
+    **_kwargs,
 ) -> None:
     """Compute UK programme statistics."""
     from policyengine.core import Simulation as PESimulation
@@ -171,6 +189,7 @@ def compute_poverty_module_uk(
     reform_sim_id: UUID,
     report_id: UUID,
     session: Session,
+    **_kwargs,
 ) -> None:
     """Compute UK poverty rates (overall, by age, by gender)."""
     from policyengine.outputs.poverty import (
@@ -212,6 +231,7 @@ def compute_inequality_module_uk(
     reform_sim_id: UUID,
     report_id: UUID,
     session: Session,
+    **_kwargs,
 ) -> None:
     """Compute UK inequality metrics."""
     from policyengine.outputs.inequality import calculate_uk_inequality
@@ -242,6 +262,7 @@ def compute_budget_summary_module_uk(
     reform_sim_id: UUID,
     report_id: UUID,
     session: Session,
+    **_kwargs,
 ) -> None:
     """Compute UK budget summary aggregates."""
     from policyengine.core import Simulation as PESimulation
@@ -309,6 +330,7 @@ def compute_constituency_module(
     reform_sim_id: UUID,
     report_id: UUID,
     session: Session,
+    **_kwargs,
 ) -> None:
     """Compute UK parliamentary constituency impact."""
     from policyengine.outputs.constituency_impact import (
@@ -362,6 +384,7 @@ def compute_local_authority_module(
     reform_sim_id: UUID,
     report_id: UUID,
     session: Session,
+    **_kwargs,
 ) -> None:
     """Compute UK local authority impact."""
     from policyengine.outputs.local_authority_impact import (
@@ -415,6 +438,7 @@ def compute_wealth_decile_module(
     reform_sim_id: UUID,
     report_id: UUID,
     session: Session,
+    **_kwargs,
 ) -> None:
     """Compute UK wealth decile impact and intra-wealth-decile breakdown."""
     from policyengine.core import Simulation as PESimulation
@@ -488,6 +512,7 @@ def compute_program_statistics_module_us(
     reform_sim_id: UUID,
     report_id: UUID,
     session: Session,
+    **_kwargs,
 ) -> None:
     """Compute US program statistics."""
     from policyengine.core import Simulation as PESimulation
@@ -541,6 +566,7 @@ def compute_poverty_module_us(
     reform_sim_id: UUID,
     report_id: UUID,
     session: Session,
+    **_kwargs,
 ) -> None:
     """Compute US poverty rates (overall, by age, gender, race)."""
     from policyengine.outputs.poverty import (
@@ -584,6 +610,7 @@ def compute_inequality_module_us(
     reform_sim_id: UUID,
     report_id: UUID,
     session: Session,
+    **_kwargs,
 ) -> None:
     """Compute US inequality metrics."""
     from policyengine.outputs.inequality import calculate_us_inequality
@@ -614,6 +641,7 @@ def compute_budget_summary_module_us(
     reform_sim_id: UUID,
     report_id: UUID,
     session: Session,
+    **_kwargs,
 ) -> None:
     """Compute US budget summary aggregates."""
     from policyengine.core import Simulation as PESimulation
@@ -682,6 +710,7 @@ def compute_congressional_district_module(
     reform_sim_id: UUID,
     report_id: UUID,
     session: Session,
+    **_kwargs,
 ) -> None:
     """Compute US congressional district impact."""
     from policyengine.outputs.congressional_district_impact import (
@@ -753,6 +782,7 @@ def run_modules(
     reform_sim_id: UUID,
     report_id: UUID,
     session: Session,
+    country_id: str = "",
 ) -> None:
     """Run the requested modules (or all if modules is None)."""
     to_run = modules if modules is not None else list(dispatch.keys())
@@ -766,4 +796,5 @@ def run_modules(
                 reform_sim_id,
                 report_id,
                 session,
+                country_id=country_id,
             )

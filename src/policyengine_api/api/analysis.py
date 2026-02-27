@@ -848,6 +848,7 @@ def _run_local_economy_comparison_uk(
         reform_sim_id=reform_sim.id,
         report_id=report.id,
         session=session,
+        country_id="uk",
     )
 
     # Mark completed
@@ -1007,6 +1008,7 @@ def _run_local_economy_comparison_us(
         reform_sim_id=reform_sim.id,
         report_id=report.id,
         session=session,
+        country_id="us",
     )
 
     # Mark completed
@@ -1388,3 +1390,116 @@ def get_economy_custom_status(
         return _build_filtered_response(full_response, module_list)
 
     return full_response
+
+
+# ---------------------------------------------------------------------------
+# POST /analysis/rerun/{report_id} — force-rerun a report
+# ---------------------------------------------------------------------------
+
+
+class RerunResponse(BaseModel):
+    """Response from the rerun endpoint."""
+
+    report_id: str
+    status: str
+
+
+@router.post("/rerun/{report_id}", response_model=RerunResponse)
+def rerun_report(
+    report_id: UUID,
+    session: Session = Depends(get_session),
+) -> RerunResponse:
+    """Force-rerun a report from scratch.
+
+    Resets the report and its simulations to PENDING, deletes all
+    previously computed result records, and re-triggers computation.
+    Works for both economy and household reports.
+    """
+    from sqlmodel import delete
+
+    from policyengine_api.api.household_analysis import _trigger_household_impact
+
+    # 1. Load report
+    report = session.get(Report, report_id)
+    if not report:
+        raise HTTPException(status_code=404, detail=f"Report {report_id} not found")
+
+    # 2. Load simulations
+    baseline_sim = (
+        session.get(Simulation, report.baseline_simulation_id)
+        if report.baseline_simulation_id
+        else None
+    )
+    reform_sim = (
+        session.get(Simulation, report.reform_simulation_id)
+        if report.reform_simulation_id
+        else None
+    )
+
+    if not baseline_sim:
+        raise HTTPException(status_code=400, detail="Report has no baseline simulation")
+
+    # 3. Derive tax_benefit_model_name from simulation → model version → model
+    model_version = session.get(
+        TaxBenefitModelVersion, baseline_sim.tax_benefit_model_version_id
+    )
+    if not model_version:
+        raise HTTPException(status_code=500, detail="Model version not found")
+
+    model = session.get(TaxBenefitModel, model_version.model_id)
+    if not model:
+        raise HTTPException(status_code=500, detail="Tax-benefit model not found")
+
+    tax_benefit_model_name = model.name.replace("-", "_")
+
+    # 4. Delete all result records for this report
+    result_tables = [
+        DecileImpact,
+        ProgramStatistics,
+        Poverty,
+        Inequality,
+        BudgetSummary,
+        IntraDecileImpact,
+        CongressionalDistrictImpact,
+        ConstituencyImpact,
+        LocalAuthorityImpact,
+    ]
+    for table in result_tables:
+        session.exec(delete(table).where(table.report_id == report_id))
+
+    # 5. Reset report status
+    report.status = ReportStatus.PENDING
+    report.error_message = None
+    session.add(report)
+
+    # 6. Reset simulation statuses
+    for sim in [baseline_sim, reform_sim]:
+        if sim:
+            sim.status = SimulationStatus.PENDING
+            sim.error_message = None
+            sim.completed_at = None
+            session.add(sim)
+
+    session.commit()
+
+    # 7. Trigger computation based on report type
+    is_economy = report.report_type and "economy" in report.report_type
+    is_household = report.report_type and "household" in report.report_type
+
+    if is_economy:
+        with logfire.span("rerun_economy_comparison", job_id=str(report.id)):
+            _trigger_economy_comparison(
+                str(report.id), tax_benefit_model_name, session
+            )
+    elif is_household:
+        with logfire.span("rerun_household_impact", job_id=str(report.id)):
+            _trigger_household_impact(
+                str(report.id), tax_benefit_model_name, session
+            )
+    else:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unknown report type: {report.report_type}",
+        )
+
+    return RerunResponse(report_id=str(report_id), status="pending")
