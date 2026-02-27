@@ -454,9 +454,9 @@ def _trigger_household_impact(
         import modal
 
         if tax_benefit_model_name == "policyengine_uk":
-            fn = modal.Function.from_name("policyengine", "household_impact_uk")
+            fn = modal.Function.from_name("policyengine", "household_impact_uk", environment_name=settings.modal_environment)
         else:
-            fn = modal.Function.from_name("policyengine", "household_impact_us")
+            fn = modal.Function.from_name("policyengine", "household_impact_us", environment_name=settings.modal_environment)
 
         fn.spawn(report_id=report_id, traceparent=traceparent)
 

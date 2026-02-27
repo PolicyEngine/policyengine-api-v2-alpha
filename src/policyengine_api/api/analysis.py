@@ -1045,9 +1045,9 @@ def _trigger_economy_comparison(
         import modal
 
         if tax_benefit_model_name == "policyengine_uk":
-            fn = modal.Function.from_name("policyengine", "economy_comparison_uk")
+            fn = modal.Function.from_name("policyengine", "economy_comparison_uk", environment_name=settings.modal_environment)
         else:
-            fn = modal.Function.from_name("policyengine", "economy_comparison_us")
+            fn = modal.Function.from_name("policyengine", "economy_comparison_us", environment_name=settings.modal_environment)
 
         fn.spawn(job_id=job_id, traceparent=traceparent)
 
