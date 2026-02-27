@@ -32,17 +32,47 @@ from typing import List
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy.orm import selectinload
 from sqlmodel import Session, select
 
 from policyengine_api.models import (
     Parameter,
     ParameterValue,
+    ParameterValueWithName,
     Policy,
     PolicyCreate,
     PolicyRead,
     TaxBenefitModel,
 )
 from policyengine_api.services.database import get_session
+
+
+def _policy_to_read(policy: Policy) -> PolicyRead:
+    """Convert a Policy ORM object to PolicyRead with parameter names."""
+    pv_with_names = []
+    for pv in policy.parameter_values:
+        pv_with_names.append(
+            ParameterValueWithName(
+                id=pv.id,
+                parameter_id=pv.parameter_id,
+                value_json=pv.value_json,
+                start_date=pv.start_date,
+                end_date=pv.end_date,
+                policy_id=pv.policy_id,
+                dynamic_id=pv.dynamic_id,
+                created_at=pv.created_at,
+                parameter_name=pv.parameter.name,
+            )
+        )
+    return PolicyRead(
+        id=policy.id,
+        name=policy.name,
+        description=policy.description,
+        tax_benefit_model_id=policy.tax_benefit_model_id,
+        created_at=policy.created_at,
+        updated_at=policy.updated_at,
+        parameter_values=pv_with_names,
+    )
 
 router = APIRouter(prefix="/policies", tags=["policies"])
 
@@ -117,8 +147,17 @@ def create_policy(policy: PolicyCreate, session: Session = Depends(get_session))
         session.add(db_pv)
 
     session.commit()
-    session.refresh(db_policy)
-    return db_policy
+
+    # Re-fetch with eager loading for the response
+    query = (
+        select(Policy)
+        .where(Policy.id == db_policy.id)
+        .options(
+            selectinload(Policy.parameter_values).selectinload(ParameterValue.parameter)
+        )
+    )
+    db_policy = session.exec(query).one()
+    return _policy_to_read(db_policy)
 
 
 @router.get("/", response_model=List[PolicyRead])
@@ -129,16 +168,29 @@ def list_policies(
     session: Session = Depends(get_session),
 ):
     """List all policies, optionally filtered by tax benefit model."""
-    query = select(Policy)
+    query = (
+        select(Policy)
+        .options(
+            selectinload(Policy.parameter_values).selectinload(ParameterValue.parameter)
+        )
+    )
     if tax_benefit_model_id:
         query = query.where(Policy.tax_benefit_model_id == tax_benefit_model_id)
-    return session.exec(query).all()
+    policies = session.exec(query).all()
+    return [_policy_to_read(p) for p in policies]
 
 
 @router.get("/{policy_id}", response_model=PolicyRead)
 def get_policy(policy_id: UUID, session: Session = Depends(get_session)):
     """Get a specific policy."""
-    policy = session.get(Policy, policy_id)
+    query = (
+        select(Policy)
+        .where(Policy.id == policy_id)
+        .options(
+            selectinload(Policy.parameter_values).selectinload(ParameterValue.parameter)
+        )
+    )
+    policy = session.exec(query).first()
     if not policy:
         raise HTTPException(status_code=404, detail="Policy not found")
-    return policy
+    return _policy_to_read(policy)

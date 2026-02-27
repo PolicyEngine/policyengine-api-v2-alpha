@@ -52,7 +52,12 @@ from .output import (
     AggregateType,
 )
 from .parameter import Parameter, ParameterCreate, ParameterRead
-from .parameter_value import ParameterValue, ParameterValueCreate, ParameterValueRead
+from .parameter_value import (
+    ParameterValue,
+    ParameterValueCreate,
+    ParameterValueRead,
+    ParameterValueWithName,
+)
 from .policy import Policy, PolicyCreate, PolicyRead
 from .poverty import Poverty, PovertyCreate, PovertyRead
 from .region import Region, RegionCreate, RegionRead
@@ -160,6 +165,7 @@ __all__ = [
     "ParameterValue",
     "ParameterValueCreate",
     "ParameterValueRead",
+    "ParameterValueWithName",
     "Policy",
     "PolicyCreate",
     "PolicyRead",
