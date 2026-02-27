@@ -38,6 +38,9 @@ class Settings(BaseSettings):
     agent_use_modal: bool = False
     policyengine_api_url: str = "https://v2.api.policyengine.org"
 
+    # Modal
+    modal_environment: str = "testing"
+
     @property
     def database_url(self) -> str:
         """Get database URL from Supabase.

@@ -18,16 +18,17 @@ import modal
 # Cache bust: 2026-01-12-v7-service-role-key-fix
 base_image = (
     modal.Image.debian_slim(python_version="3.13")
-    .apt_install("libhdf5-dev")
+    .apt_install("libhdf5-dev", "git")
     .pip_install("uv")
     .run_commands(
         "uv pip install --system --upgrade "
-        "policyengine>=3.1.15 "
+        "git+https://github.com/PolicyEngine/policyengine.py.git@app-v2-migration "
         "sqlmodel>=0.0.22 "
         "psycopg2-binary>=2.9.10 "
         "supabase>=2.10.0 "
         "rich>=13.9.4 "
         "logfire[httpx]>=3.0.0 "
+        "pydantic-settings>=2.0.0 "
         "tables>=3.10.0"  # pytables - required for HDF5 dataset operations
     )
     # Include the policyengine_api models package (copy=True allows subsequent build steps)
@@ -771,7 +772,7 @@ def simulate_economy_uk(simulation_id: str, traceparent: str | None = None) -> N
         with logfire.span("simulate_economy_uk", simulation_id=simulation_id):
             database_url = get_database_url()
             supabase_url = os.environ["SUPABASE_URL"]
-            supabase_key = os.environ["SUPABASE_KEY"]
+            supabase_key = os.environ.get("SUPABASE_SERVICE_KEY", os.environ["SUPABASE_KEY"])
             storage_bucket = os.environ.get("STORAGE_BUCKET", "datasets")
 
             engine = create_engine(database_url)
@@ -939,7 +940,7 @@ def simulate_economy_us(simulation_id: str, traceparent: str | None = None) -> N
         with logfire.span("simulate_economy_us", simulation_id=simulation_id):
             database_url = get_database_url()
             supabase_url = os.environ["SUPABASE_URL"]
-            supabase_key = os.environ["SUPABASE_KEY"]
+            supabase_key = os.environ.get("SUPABASE_SERVICE_KEY", os.environ["SUPABASE_KEY"])
             storage_bucket = os.environ.get("STORAGE_BUCKET", "datasets")
 
             engine = create_engine(database_url)
@@ -1110,7 +1111,7 @@ def economy_comparison_uk(job_id: str, traceparent: str | None = None) -> None:
 
             database_url = get_database_url()
             supabase_url = os.environ["SUPABASE_URL"]
-            supabase_key = os.environ["SUPABASE_KEY"]
+            supabase_key = os.environ.get("SUPABASE_SERVICE_KEY", os.environ["SUPABASE_KEY"])
             storage_bucket = os.environ.get("STORAGE_BUCKET", "datasets")
 
             # Debug: log the key role
@@ -1797,7 +1798,7 @@ def economy_comparison_uk(job_id: str, traceparent: str | None = None) -> None:
 @app.function(
     image=us_image,
     secrets=[db_secrets, logfire_secrets],
-    memory=8192,
+    memory=24576,
     cpu=8,
     timeout=1800,
 )
@@ -1816,7 +1817,7 @@ def economy_comparison_us(job_id: str, traceparent: str | None = None) -> None:
         with logfire.span("economy_comparison_us", job_id=job_id):
             database_url = get_database_url()
             supabase_url = os.environ["SUPABASE_URL"]
-            supabase_key = os.environ["SUPABASE_KEY"]
+            supabase_key = os.environ.get("SUPABASE_SERVICE_KEY", os.environ["SUPABASE_KEY"])
             storage_bucket = os.environ.get("STORAGE_BUCKET", "datasets")
 
             engine = create_engine(database_url)
@@ -1930,6 +1931,30 @@ def economy_comparison_us(job_id: str, traceparent: str | None = None) -> None:
                         )
                         pe_reform_sim.ensure()
 
+                    # Pre-calculate key US variables to include in output
+                    # (PolicyEngine is lazy - variables only calculated when accessed)
+                    us_key_variables = [
+                        "household_net_income",
+                        "income_tax",
+                        "employee_payroll_tax",
+                        "snap",
+                        "tanf",
+                        "ssi",
+                        "social_security",
+                        "household_benefits",
+                        "household_tax",
+                        "household_weight",
+                        "household_count_people",
+                        "household_income_decile",
+                    ]
+                    with logfire.span("precalculate_variables"):
+                        for var in us_key_variables:
+                            try:
+                                pe_baseline_sim[var]
+                                pe_reform_sim[var]
+                            except Exception:
+                                pass  # Variable may not exist in model
+
                     # Save output datasets for both simulations
                     from supabase import create_client
 
@@ -2002,6 +2027,7 @@ def economy_comparison_us(job_id: str, traceparent: str | None = None) -> None:
                                 baseline_simulation=pe_baseline_sim,
                                 reform_simulation=pe_reform_sim,
                                 decile=decile_num,
+                                income_variable="household_net_income",
                             )
                             di.run()
 
@@ -2746,7 +2772,7 @@ def compute_aggregate_uk(aggregate_id: str, traceparent: str | None = None) -> N
         with logfire.span("compute_aggregate_uk", aggregate_id=aggregate_id):
             database_url = get_database_url()
             supabase_url = os.environ["SUPABASE_URL"]
-            supabase_key = os.environ["SUPABASE_KEY"]
+            supabase_key = os.environ.get("SUPABASE_SERVICE_KEY", os.environ["SUPABASE_KEY"])
             storage_bucket = os.environ.get("STORAGE_BUCKET", "datasets")
 
             engine = create_engine(database_url)
@@ -2900,7 +2926,7 @@ def compute_aggregate_us(aggregate_id: str, traceparent: str | None = None) -> N
         with logfire.span("compute_aggregate_us", aggregate_id=aggregate_id):
             database_url = get_database_url()
             supabase_url = os.environ["SUPABASE_URL"]
-            supabase_key = os.environ["SUPABASE_KEY"]
+            supabase_key = os.environ.get("SUPABASE_SERVICE_KEY", os.environ["SUPABASE_KEY"])
             storage_bucket = os.environ.get("STORAGE_BUCKET", "datasets")
 
             engine = create_engine(database_url)
@@ -3049,7 +3075,7 @@ def compute_change_aggregate_uk(
         ):
             database_url = get_database_url()
             supabase_url = os.environ["SUPABASE_URL"]
-            supabase_key = os.environ["SUPABASE_KEY"]
+            supabase_key = os.environ.get("SUPABASE_SERVICE_KEY", os.environ["SUPABASE_KEY"])
             storage_bucket = os.environ.get("STORAGE_BUCKET", "datasets")
 
             engine = create_engine(database_url)
@@ -3252,7 +3278,7 @@ def compute_change_aggregate_us(
         ):
             database_url = get_database_url()
             supabase_url = os.environ["SUPABASE_URL"]
-            supabase_key = os.environ["SUPABASE_KEY"]
+            supabase_key = os.environ.get("SUPABASE_SERVICE_KEY", os.environ["SUPABASE_KEY"])
             storage_bucket = os.environ.get("STORAGE_BUCKET", "datasets")
 
             engine = create_engine(database_url)

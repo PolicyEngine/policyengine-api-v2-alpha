@@ -11,6 +11,8 @@ from uuid import UUID
 import logfire
 import modal
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
+
+from policyengine_api.config import settings
 from sqlmodel import Session, select
 
 from policyengine_api.models import (
@@ -71,9 +73,9 @@ def _trigger_change_aggregate_computation(
     traceparent = _get_traceparent()
 
     if "uk" in model.name.lower():
-        fn = modal.Function.from_name("policyengine", "compute_change_aggregate_uk")
+        fn = modal.Function.from_name("policyengine", "compute_change_aggregate_uk", environment_name=settings.modal_environment)
     else:
-        fn = modal.Function.from_name("policyengine", "compute_change_aggregate_us")
+        fn = modal.Function.from_name("policyengine", "compute_change_aggregate_us", environment_name=settings.modal_environment)
 
     fn.spawn(change_aggregate_id=change_aggregate_id, traceparent=traceparent)
     logfire.info(

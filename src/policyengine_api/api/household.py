@@ -756,7 +756,7 @@ def _trigger_modal_household(
         traceparent = get_traceparent()
 
         if request.tax_benefit_model_name == "policyengine_uk":
-            fn = modal.Function.from_name("policyengine", "simulate_household_uk")
+            fn = modal.Function.from_name("policyengine", "simulate_household_uk", environment_name=settings.modal_environment)
             fn.spawn(
                 job_id=job_id,
                 people=request.people,
@@ -768,7 +768,7 @@ def _trigger_modal_household(
                 traceparent=traceparent,
             )
         else:
-            fn = modal.Function.from_name("policyengine", "simulate_household_us")
+            fn = modal.Function.from_name("policyengine", "simulate_household_us", environment_name=settings.modal_environment)
             fn.spawn(
                 job_id=job_id,
                 people=request.people,
