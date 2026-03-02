@@ -15,7 +15,7 @@ class VariableBase(SQLModel):
     entity: str
     description: str | None = None
     data_type: str | None = None  # Store as string representation
-    possible_values: str | None = Field(
+    possible_values: list[str] | None = Field(
         default=None, sa_column=Column(JSON)
     )  # Store as JSON list
     tax_benefit_model_version_id: UUID = Field(

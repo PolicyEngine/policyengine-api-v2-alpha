@@ -178,7 +178,9 @@ def seed_model(model_version, session, lite: bool = False) -> TaxBenefitModelVer
                             "data_type": var.data_type.__name__
                             if hasattr(var.data_type, "__name__")
                             else str(var.data_type),
-                            "possible_values": None,
+                            "possible_values": json.dumps(var.possible_values)
+                            if var.possible_values
+                            else None,
                             "tax_benefit_model_version_id": db_version.id,
                             "created_at": datetime.now(timezone.utc),
                         }
