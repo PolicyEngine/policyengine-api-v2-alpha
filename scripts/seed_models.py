@@ -28,6 +28,26 @@ from policyengine_api.models import (  # noqa: E402
 )
 
 
+def _get_variable_type_info(var) -> tuple[str, str | None]:
+    """Extract data_type and possible_values from a policyengine variable.
+
+    For enum variables (those with possible_values), returns ("Enum", json_values).
+    For other variables, returns (python_type_name, None).
+
+    Returns:
+        Tuple of (data_type, possible_values_json)
+    """
+    if var.possible_values:
+        return "Enum", json.dumps(var.possible_values)
+
+    data_type = (
+        var.data_type.__name__
+        if hasattr(var.data_type, "__name__")
+        else str(var.data_type)
+    )
+    return data_type, None
+
+
 def seed_model(
     model_version,
     session: Session,
@@ -121,16 +141,15 @@ def seed_model(
                     total=len(variables),
                 )
                 for var in variables:
+                    data_type, possible_values = _get_variable_type_info(var)
                     var_rows.append(
                         {
                             "id": uuid4(),
                             "name": var.name,
                             "entity": var.entity,
                             "description": var.description or "",
-                            "data_type": var.data_type.__name__
-                            if hasattr(var.data_type, "__name__")
-                            else str(var.data_type),
-                            "possible_values": None,
+                            "data_type": data_type,
+                            "possible_values": possible_values,
                             "tax_benefit_model_version_id": db_version.id,
                             "created_at": datetime.now(timezone.utc),
                         }
