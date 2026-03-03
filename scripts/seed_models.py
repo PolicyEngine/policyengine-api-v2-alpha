@@ -17,18 +17,54 @@ from datetime import datetime, timezone
 from uuid import uuid4
 
 import logfire
+import yaml
+from policyengine_uk import CountryTaxBenefitSystem as UKTaxBenefitSystem
+from policyengine_us import CountryTaxBenefitSystem as USTaxBenefitSystem
 from rich.progress import Progress, SpinnerColumn, TextColumn
-from sqlmodel import Session, select
-
 from seed_utils import bulk_insert, console, get_session
+from sqlmodel import Session, select
 
 # Import after seed_utils sets up path
 from policyengine_api.models import (  # noqa: E402
-    Parameter,
-    ParameterValue,
     TaxBenefitModel,
     TaxBenefitModelVersion,
 )
+
+
+def get_modelled_policies(model_name: str) -> dict | None:
+    """Extract modelled_policies from country package.
+
+    Args:
+        model_name: The model name (e.g., "policyengine-us", "policyengine-uk")
+
+    Returns:
+        The modelled_policies dict, or None if not available.
+    """
+    try:
+        if model_name == "policyengine-us":
+            system = USTaxBenefitSystem()
+            # US system loads modelled_policies as dict during init
+            if isinstance(system.modelled_policies, dict):
+                return system.modelled_policies
+            return None
+        elif model_name == "policyengine-uk":
+            system = UKTaxBenefitSystem()
+            # UK system keeps modelled_policies as a Path, need to load YAML
+            if system.modelled_policies and hasattr(
+                system.modelled_policies, "read_text"
+            ):
+                with open(system.modelled_policies, "r") as f:
+                    return yaml.safe_load(f)
+            elif isinstance(system.modelled_policies, dict):
+                return system.modelled_policies
+            return None
+        else:
+            return None
+    except Exception as e:
+        console.print(
+            f"  [yellow]Warning: Could not load modelled_policies: {e}[/yellow]"
+        )
+        return None
 
 
 def seed_model(
@@ -65,13 +101,28 @@ def seed_model(
             )
         ).first()
 
+        # Get modelled_policies from country package
+        modelled_policies = get_modelled_policies(model_version.model.id)
+        if modelled_policies:
+            console.print(f"  Loaded modelled_policies for {model_version.model.id}")
+
         if existing_model:
             db_model = existing_model
-            console.print(f"  Using existing model: {db_model.id}")
+            # Update modelled_policies if not already set
+            if modelled_policies and not db_model.modelled_policies:
+                db_model.modelled_policies = modelled_policies
+                session.add(db_model)
+                session.commit()
+                console.print(
+                    f"  Updated modelled_policies for existing model: {db_model.id}"
+                )
+            else:
+                console.print(f"  Using existing model: {db_model.id}")
         else:
             db_model = TaxBenefitModel(
                 name=model_version.model.id,
                 description=model_version.model.description,
+                modelled_policies=modelled_policies,
             )
             session.add(db_model)
             session.commit()
