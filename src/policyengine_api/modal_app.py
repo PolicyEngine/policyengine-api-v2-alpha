@@ -851,18 +851,22 @@ def simulate_economy_uk(simulation_id: str, traceparent: str | None = None) -> N
                     with logfire.span("save_output_dataset"):
                         from supabase import create_client
 
-                        output_filename = f"output_{simulation_id}.h5"
-                        output_path = f"/tmp/{output_filename}"
+                        from policyengine_api.services.storage import (
+                            output_filepath,
+                        )
+
+                        output_storage_path = output_filepath(simulation_id)
+                        output_local_path = f"/tmp/output_{simulation_id}.h5"
 
                         # Set filepath and save
-                        pe_sim.output_dataset.filepath = output_path
+                        pe_sim.output_dataset.filepath = output_local_path
                         pe_sim.output_dataset.save()
 
                         # Upload to Supabase storage
                         supabase = create_client(supabase_url, supabase_key)
-                        with open(output_path, "rb") as f:
+                        with open(output_local_path, "rb") as f:
                             supabase.storage.from_(storage_bucket).upload(
-                                output_filename,
+                                output_storage_path,
                                 f,
                                 {
                                     "content-type": "application/octet-stream",
@@ -874,7 +878,7 @@ def simulate_economy_uk(simulation_id: str, traceparent: str | None = None) -> N
                         output_dataset = Dataset(
                             name=f"Output: {dataset.name}",
                             description=f"Output from simulation {simulation_id}",
-                            filepath=output_filename,
+                            filepath=output_storage_path,
                             year=dataset.year,
                             is_output_dataset=True,
                             tax_benefit_model_id=dataset.tax_benefit_model_id,
@@ -1019,18 +1023,22 @@ def simulate_economy_us(simulation_id: str, traceparent: str | None = None) -> N
                     with logfire.span("save_output_dataset"):
                         from supabase import create_client
 
-                        output_filename = f"output_{simulation_id}.h5"
-                        output_path = f"/tmp/{output_filename}"
+                        from policyengine_api.services.storage import (
+                            output_filepath,
+                        )
+
+                        output_storage_path = output_filepath(simulation_id)
+                        output_local_path = f"/tmp/output_{simulation_id}.h5"
 
                         # Set filepath and save
-                        pe_sim.output_dataset.filepath = output_path
+                        pe_sim.output_dataset.filepath = output_local_path
                         pe_sim.output_dataset.save()
 
                         # Upload to Supabase storage
                         supabase = create_client(supabase_url, supabase_key)
-                        with open(output_path, "rb") as f:
+                        with open(output_local_path, "rb") as f:
                             supabase.storage.from_(storage_bucket).upload(
-                                output_filename,
+                                output_storage_path,
                                 f,
                                 {
                                     "content-type": "application/octet-stream",
@@ -1042,7 +1050,7 @@ def simulate_economy_us(simulation_id: str, traceparent: str | None = None) -> N
                         output_dataset = Dataset(
                             name=f"Output: {dataset.name}",
                             description=f"Output from simulation {simulation_id}",
-                            filepath=output_filename,
+                            filepath=output_storage_path,
                             year=dataset.year,
                             is_output_dataset=True,
                             tax_benefit_model_id=dataset.tax_benefit_model_id,
@@ -1274,18 +1282,20 @@ def economy_comparison_uk(job_id: str, traceparent: str | None = None) -> None:
                     # Save output datasets for both simulations
                     from supabase import create_client
 
+                    from policyengine_api.services.storage import output_filepath
+
                     supabase = create_client(supabase_url, supabase_key)
 
                     # Save baseline output
                     with logfire.span("save_baseline_output"):
-                        baseline_output_filename = f"output_{baseline_sim.id}.h5"
-                        baseline_output_path = f"/tmp/{baseline_output_filename}"
-                        pe_baseline_sim.output_dataset.filepath = baseline_output_path
+                        baseline_storage_path = output_filepath(str(baseline_sim.id))
+                        baseline_local_path = f"/tmp/output_{baseline_sim.id}.h5"
+                        pe_baseline_sim.output_dataset.filepath = baseline_local_path
                         pe_baseline_sim.output_dataset.save()
 
-                        with open(baseline_output_path, "rb") as f:
+                        with open(baseline_local_path, "rb") as f:
                             supabase.storage.from_(storage_bucket).upload(
-                                baseline_output_filename,
+                                baseline_storage_path,
                                 f,
                                 {
                                     "content-type": "application/octet-stream",
@@ -1296,7 +1306,7 @@ def economy_comparison_uk(job_id: str, traceparent: str | None = None) -> None:
                         baseline_output_dataset = Dataset(
                             name=f"Output: {dataset.name} (baseline)",
                             description=f"Output from baseline simulation {baseline_sim.id}",
-                            filepath=baseline_output_filename,
+                            filepath=baseline_storage_path,
                             year=dataset.year,
                             is_output_dataset=True,
                             tax_benefit_model_id=dataset.tax_benefit_model_id,
@@ -1308,14 +1318,14 @@ def economy_comparison_uk(job_id: str, traceparent: str | None = None) -> None:
 
                     # Save reform output
                     with logfire.span("save_reform_output"):
-                        reform_output_filename = f"output_{reform_sim.id}.h5"
-                        reform_output_path = f"/tmp/{reform_output_filename}"
-                        pe_reform_sim.output_dataset.filepath = reform_output_path
+                        reform_storage_path = output_filepath(str(reform_sim.id))
+                        reform_local_path = f"/tmp/output_{reform_sim.id}.h5"
+                        pe_reform_sim.output_dataset.filepath = reform_local_path
                         pe_reform_sim.output_dataset.save()
 
-                        with open(reform_output_path, "rb") as f:
+                        with open(reform_local_path, "rb") as f:
                             supabase.storage.from_(storage_bucket).upload(
-                                reform_output_filename,
+                                reform_storage_path,
                                 f,
                                 {
                                     "content-type": "application/octet-stream",
@@ -1326,7 +1336,7 @@ def economy_comparison_uk(job_id: str, traceparent: str | None = None) -> None:
                         reform_output_dataset = Dataset(
                             name=f"Output: {dataset.name} (reform)",
                             description=f"Output from reform simulation {reform_sim.id}",
-                            filepath=reform_output_filename,
+                            filepath=reform_storage_path,
                             year=dataset.year,
                             is_output_dataset=True,
                             tax_benefit_model_id=dataset.tax_benefit_model_id,
@@ -1958,18 +1968,20 @@ def economy_comparison_us(job_id: str, traceparent: str | None = None) -> None:
                     # Save output datasets for both simulations
                     from supabase import create_client
 
+                    from policyengine_api.services.storage import output_filepath
+
                     supabase = create_client(supabase_url, supabase_key)
 
                     # Save baseline output
                     with logfire.span("save_baseline_output"):
-                        baseline_output_filename = f"output_{baseline_sim.id}.h5"
-                        baseline_output_path = f"/tmp/{baseline_output_filename}"
-                        pe_baseline_sim.output_dataset.filepath = baseline_output_path
+                        baseline_storage_path = output_filepath(str(baseline_sim.id))
+                        baseline_local_path = f"/tmp/output_{baseline_sim.id}.h5"
+                        pe_baseline_sim.output_dataset.filepath = baseline_local_path
                         pe_baseline_sim.output_dataset.save()
 
-                        with open(baseline_output_path, "rb") as f:
+                        with open(baseline_local_path, "rb") as f:
                             supabase.storage.from_(storage_bucket).upload(
-                                baseline_output_filename,
+                                baseline_storage_path,
                                 f,
                                 {
                                     "content-type": "application/octet-stream",
@@ -1980,7 +1992,7 @@ def economy_comparison_us(job_id: str, traceparent: str | None = None) -> None:
                         baseline_output_dataset = Dataset(
                             name=f"Output: {dataset.name} (baseline)",
                             description=f"Output from baseline simulation {baseline_sim.id}",
-                            filepath=baseline_output_filename,
+                            filepath=baseline_storage_path,
                             year=dataset.year,
                             is_output_dataset=True,
                             tax_benefit_model_id=dataset.tax_benefit_model_id,
@@ -1992,14 +2004,14 @@ def economy_comparison_us(job_id: str, traceparent: str | None = None) -> None:
 
                     # Save reform output
                     with logfire.span("save_reform_output"):
-                        reform_output_filename = f"output_{reform_sim.id}.h5"
-                        reform_output_path = f"/tmp/{reform_output_filename}"
-                        pe_reform_sim.output_dataset.filepath = reform_output_path
+                        reform_storage_path = output_filepath(str(reform_sim.id))
+                        reform_local_path = f"/tmp/output_{reform_sim.id}.h5"
+                        pe_reform_sim.output_dataset.filepath = reform_local_path
                         pe_reform_sim.output_dataset.save()
 
-                        with open(reform_output_path, "rb") as f:
+                        with open(reform_local_path, "rb") as f:
                             supabase.storage.from_(storage_bucket).upload(
-                                reform_output_filename,
+                                reform_storage_path,
                                 f,
                                 {
                                     "content-type": "application/octet-stream",
@@ -2010,7 +2022,7 @@ def economy_comparison_us(job_id: str, traceparent: str | None = None) -> None:
                         reform_output_dataset = Dataset(
                             name=f"Output: {dataset.name} (reform)",
                             description=f"Output from reform simulation {reform_sim.id}",
-                            filepath=reform_output_filename,
+                            filepath=reform_storage_path,
                             year=dataset.year,
                             is_output_dataset=True,
                             tax_benefit_model_id=dataset.tax_benefit_model_id,

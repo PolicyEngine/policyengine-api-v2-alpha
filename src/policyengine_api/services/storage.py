@@ -9,6 +9,11 @@ from supabase import Client, create_client
 CACHE_DIR = Path("/tmp/policyengine_dataset_cache")
 
 
+def output_filepath(simulation_id: str) -> str:
+    """Build the storage path for a simulation output dataset."""
+    return f"outputs/output_{simulation_id}.h5"
+
+
 def get_supabase_client() -> Client:
     """Get Supabase client."""
     return create_client(settings.supabase_url, settings.supabase_key)
