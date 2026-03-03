@@ -1,11 +1,12 @@
 from datetime import datetime, timezone
 from enum import Enum
 from typing import TYPE_CHECKING, Any
+from uuid import UUID, uuid4
 
+from pydantic import model_validator
 from sqlalchemy import Column
 from sqlalchemy.dialects.postgresql import JSON
 from sqlmodel import Field, Relationship, SQLModel
-from uuid import UUID, uuid4
 
 if TYPE_CHECKING:
     from .dataset import Dataset
@@ -102,10 +103,40 @@ class Simulation(SimulationBase, table=True):
     )
 
 
-class SimulationCreate(SimulationBase):
-    """Schema for creating simulations."""
+class SimulationCreate(SQLModel):
+    """Schema for creating simulations — client-settable fields only.
 
-    pass
+    Excludes server-controlled fields: status, error_message, output_dataset_id.
+    """
+
+    simulation_type: SimulationType = SimulationType.ECONOMY
+    dataset_id: UUID | None = None
+    household_id: UUID | None = None
+    policy_id: UUID | None = None
+    dynamic_id: UUID | None = None
+    tax_benefit_model_version_id: UUID
+    region_id: UUID | None = None
+    filter_field: str | None = None
+    filter_value: str | None = None
+    year: int | None = None
+
+    @model_validator(mode="after")
+    def check_type_consistency(self) -> "SimulationCreate":
+        if self.simulation_type == SimulationType.HOUSEHOLD:
+            if not self.household_id:
+                raise ValueError("HOUSEHOLD simulation requires household_id")
+            if self.dataset_id:
+                raise ValueError("HOUSEHOLD simulation cannot have dataset_id")
+        elif self.simulation_type == SimulationType.ECONOMY:
+            if not self.dataset_id:
+                raise ValueError("ECONOMY simulation requires dataset_id")
+            if self.household_id:
+                raise ValueError("ECONOMY simulation cannot have household_id")
+        if (self.filter_field is None) != (self.filter_value is None):
+            raise ValueError(
+                "filter_field and filter_value must both be set or both None"
+            )
+        return self
 
 
 class SimulationRead(SimulationBase):

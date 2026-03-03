@@ -27,7 +27,6 @@ WORKFLOW: To analyze a policy reform (e.g. lowering UK basic income tax rate to 
 6. Poll GET /analysis/economic-impact/{report_id} until status="completed"
 """
 
-from datetime import datetime
 from typing import List
 from uuid import UUID
 
@@ -74,6 +73,7 @@ def _policy_to_read(policy: Policy) -> PolicyRead:
         parameter_values=pv_with_names,
     )
 
+
 router = APIRouter(prefix="/policies", tags=["policies"])
 
 
@@ -115,33 +115,19 @@ def create_policy(policy: PolicyCreate, session: Session = Depends(get_session))
     # Create associated parameter values
     for pv_data in policy.parameter_values:
         # Validate parameter exists
-        param = session.get(Parameter, pv_data["parameter_id"])
+        param = session.get(Parameter, pv_data.parameter_id)
         if not param:
             raise HTTPException(
                 status_code=404,
-                detail=f"Parameter {pv_data['parameter_id']} not found",
+                detail=f"Parameter {pv_data.parameter_id} not found",
             )
 
-        # Parse dates
-        start_date = (
-            datetime.fromisoformat(pv_data["start_date"].replace("Z", "+00:00"))
-            if isinstance(pv_data["start_date"], str)
-            else pv_data["start_date"]
-        )
-        end_date = None
-        if pv_data.get("end_date"):
-            end_date = (
-                datetime.fromisoformat(pv_data["end_date"].replace("Z", "+00:00"))
-                if isinstance(pv_data["end_date"], str)
-                else pv_data["end_date"]
-            )
-
-        # Create parameter value
+        # Create parameter value (dates already parsed by Pydantic)
         db_pv = ParameterValue(
-            parameter_id=pv_data["parameter_id"],
-            value_json=pv_data["value_json"],
-            start_date=start_date,
-            end_date=end_date,
+            parameter_id=pv_data.parameter_id,
+            value_json=pv_data.value_json,
+            start_date=pv_data.start_date,
+            end_date=pv_data.end_date,
             policy_id=db_policy.id,
         )
         session.add(db_pv)
@@ -168,11 +154,8 @@ def list_policies(
     session: Session = Depends(get_session),
 ):
     """List all policies, optionally filtered by tax benefit model."""
-    query = (
-        select(Policy)
-        .options(
-            selectinload(Policy.parameter_values).selectinload(ParameterValue.parameter)
-        )
+    query = select(Policy).options(
+        selectinload(Policy.parameter_values).selectinload(ParameterValue.parameter)
     )
     if tax_benefit_model_id:
         query = query.where(Policy.tax_benefit_model_id == tax_benefit_model_id)

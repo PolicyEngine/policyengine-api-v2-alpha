@@ -1,6 +1,9 @@
 """Tests for GET /analysis/options endpoint."""
 
-from policyengine_api.api.module_registry import MODULE_REGISTRY, get_modules_for_country
+from policyengine_api.api.module_registry import (
+    MODULE_REGISTRY,
+    get_modules_for_country,
+)
 
 
 class TestAnalysisOptions:

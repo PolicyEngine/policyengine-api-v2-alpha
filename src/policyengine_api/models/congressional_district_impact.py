@@ -3,21 +3,17 @@
 from datetime import datetime, timezone
 from uuid import UUID, uuid4
 
-from sqlmodel import Field, SQLModel
+from sqlmodel import Field
+
+from .geographic_impact_base import GeographicImpactBase
 
 
-class CongressionalDistrictImpactBase(SQLModel):
+class CongressionalDistrictImpactBase(GeographicImpactBase):
     """Base congressional district impact fields."""
 
-    baseline_simulation_id: UUID = Field(foreign_key="simulations.id")
-    reform_simulation_id: UUID = Field(foreign_key="simulations.id")
-    report_id: UUID | None = Field(default=None, foreign_key="reports.id")
     district_geoid: int
     state_fips: int
     district_number: int
-    average_household_income_change: float
-    relative_household_income_change: float
-    population: float
 
 
 class CongressionalDistrictImpact(CongressionalDistrictImpactBase, table=True):

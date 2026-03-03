@@ -49,9 +49,7 @@ def _income_change_corrected(
 
 
 # Strategy selector — change this to switch formulas
-def get_income_change_formula() -> (
-    Callable[[np.ndarray, np.ndarray], np.ndarray]
-):
+def get_income_change_formula() -> Callable[[np.ndarray, np.ndarray], np.ndarray]:
     return _income_change_corrected
 
 
@@ -95,9 +93,7 @@ def compute_intra_decile(
         people_in_decile = people[in_decile].sum()
 
         proportions = {}
-        for col, lower, upper in zip(
-            CATEGORY_COLUMNS, BOUNDS[:-1], BOUNDS[1:]
-        ):
+        for col, lower, upper in zip(CATEGORY_COLUMNS, BOUNDS[:-1], BOUNDS[1:]):
             in_category = (income_change > lower) & (income_change <= upper)
             in_both = in_decile & in_category
 

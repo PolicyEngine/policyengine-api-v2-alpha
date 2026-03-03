@@ -1,11 +1,8 @@
 """Tests for GET /tax-benefit-models/by-country/{country_id} endpoint."""
 
-from datetime import datetime, timezone, timedelta
-
-import pytest
+from datetime import datetime, timezone
 
 from policyengine_api.models import TaxBenefitModel, TaxBenefitModelVersion
-
 
 # ---------------------------------------------------------------------------
 # Fixtures

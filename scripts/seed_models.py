@@ -18,14 +18,11 @@ from uuid import uuid4
 
 import logfire
 from rich.progress import Progress, SpinnerColumn, TextColumn
-from sqlmodel import Session, select
-
 from seed_utils import bulk_insert, console, get_session
+from sqlmodel import Session, select
 
 # Import after seed_utils sets up path
 from policyengine_api.models import (  # noqa: E402
-    Parameter,
-    ParameterValue,
     TaxBenefitModel,
     TaxBenefitModelVersion,
 )
@@ -157,9 +154,7 @@ def seed_model(
                 var_rows,
             )
 
-            console.print(
-                f"  [green]✓[/green] Added {len(variables)} variables"
-            )
+            console.print(f"  [green]✓[/green] Added {len(variables)} variables")
 
         # Add parameters (only user-facing ones: those with labels)
         # Deduplicate by name - keep first occurrence

@@ -3,18 +3,6 @@
 from datetime import date
 from uuid import UUID, uuid4
 
-import pytest
-
-from test_fixtures.fixtures_household_analysis import (
-    SAMPLE_UK_BASELINE_RESULT,
-    SAMPLE_UK_REFORM_RESULT,
-    SAMPLE_US_BASELINE_RESULT,
-    SAMPLE_US_REFORM_RESULT,
-    create_household_for_analysis,
-    create_policy,
-    setup_uk_model_and_version,
-    setup_us_model_and_version,
-)
 from policyengine_api.api.household_analysis import (
     UK_CONFIG,
     US_CONFIG,
@@ -28,8 +16,17 @@ from policyengine_api.api.household_analysis import (
     get_calculator,
     get_country_config,
 )
-from policyengine_api.models import Report, ReportStatus, Simulation, SimulationType
-
+from policyengine_api.models import Report, Simulation, SimulationType
+from test_fixtures.fixtures_household_analysis import (
+    SAMPLE_UK_BASELINE_RESULT,
+    SAMPLE_UK_REFORM_RESULT,
+    SAMPLE_US_BASELINE_RESULT,
+    SAMPLE_US_REFORM_RESULT,
+    create_household_for_analysis,
+    create_policy,
+    setup_uk_model_and_version,
+    setup_us_model_and_version,
+)
 
 # ---------------------------------------------------------------------------
 # Unit tests for helper functions
@@ -463,13 +460,9 @@ class TestHouseholdImpactDeduplication:
         # Reports should be different
         assert data1["report_id"] != data2["report_id"]
         # Reform simulations should be different
-        assert (
-            data1["reform_simulation"]["id"] != data2["reform_simulation"]["id"]
-        )
+        assert data1["reform_simulation"]["id"] != data2["reform_simulation"]["id"]
         # Baseline simulations should be the same (same household, no policy)
-        assert (
-            data1["baseline_simulation"]["id"] == data2["baseline_simulation"]["id"]
-        )
+        assert data1["baseline_simulation"]["id"] == data2["baseline_simulation"]["id"]
 
 
 # ---------------------------------------------------------------------------

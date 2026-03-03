@@ -182,12 +182,14 @@ def _extract_policy_data(policy: Policy | None) -> dict | None:
         if not pv.parameter:
             continue
 
-        parameter_values.append({
-            "parameter_name": pv.parameter.name,
-            "value": _extract_value(pv.value_json),
-            "start_date": _format_date(pv.start_date),
-            "end_date": _format_date(pv.end_date),
-        })
+        parameter_values.append(
+            {
+                "parameter_name": pv.parameter.name,
+                "value": _extract_value(pv.value_json),
+                "start_date": _format_date(pv.start_date),
+                "end_date": _format_date(pv.end_date),
+            }
+        )
 
     if not parameter_values:
         return None
@@ -333,6 +335,11 @@ def run_household_simulation(simulation_id: UUID, session: Session) -> None:
         result = calculator(household.household_data, household.year, policy_data)
         mark_simulation_completed(simulation, result, session)
     except Exception as e:
+        logfire.error(
+            "Household simulation failed",
+            simulation_id=str(simulation_id),
+            error=str(e),
+        )
         mark_simulation_failed(simulation, e, session)
 
 
@@ -378,7 +385,7 @@ def _run_local_household_impact(report_id: str, session: Session) -> None:
     """
     report = session.get(Report, UUID(report_id))
     if not report:
-        return
+        raise ValueError(f"Report {report_id} not found for household impact")
 
     report.status = ReportStatus.RUNNING
     session.add(report)
@@ -454,11 +461,33 @@ def _trigger_household_impact(
         import modal
 
         if tax_benefit_model_name == "policyengine_uk":
-            fn = modal.Function.from_name("policyengine", "household_impact_uk", environment_name=settings.modal_environment)
+            fn = modal.Function.from_name(
+                "policyengine",
+                "household_impact_uk",
+                environment_name=settings.modal_environment,
+            )
         else:
-            fn = modal.Function.from_name("policyengine", "household_impact_us", environment_name=settings.modal_environment)
+            fn = modal.Function.from_name(
+                "policyengine",
+                "household_impact_us",
+                environment_name=settings.modal_environment,
+            )
 
-        fn.spawn(report_id=report_id, traceparent=traceparent)
+        try:
+            fn.spawn(report_id=report_id, traceparent=traceparent)
+        except Exception as e:
+            # Mark report as FAILED so it doesn't stay PENDING forever
+            if session is not None:
+                report = session.get(Report, UUID(report_id))
+                if report:
+                    report.status = ReportStatus.FAILED
+                    report.error_message = f"Failed to trigger computation: {e}"
+                    session.add(report)
+                    session.commit()
+            raise HTTPException(
+                status_code=502,
+                detail=f"Failed to trigger computation: {e}",
+            )
 
 
 # Legacy functions kept for compatibility

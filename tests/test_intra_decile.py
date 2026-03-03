@@ -3,7 +3,6 @@
 import numpy as np
 
 from policyengine_api.api.intra_decile import (
-    CATEGORY_COLUMNS,
     _income_change_corrected,
     _income_change_v1_original,
     compute_intra_decile,
@@ -17,7 +16,6 @@ from test_fixtures.fixtures_intra_decile import (
     make_household_data,
     make_single_household_arrays,
 )
-
 
 # ---------------------------------------------------------------------------
 # Income change formula variants
@@ -145,16 +143,16 @@ class TestComputeIntraDecileStructure:
         # Then
         for row in rows:
             for col in CATEGORY_NAMES:
-                assert col in row, f"Missing column {col} in row for decile {row['decile']}"
+                assert col in row, (
+                    f"Missing column {col} in row for decile {row['decile']}"
+                )
 
     def test__given_any_input__then_proportions_sum_to_approximately_one_per_decile(
         self,
     ):
         # Given — a mix of changes so multiple categories are populated
         income = make_baseline_income()
-        reform_income = income * np.where(
-            np.arange(len(income)) % 3 == 0, 1.03, 0.97
-        )
+        reform_income = income * np.where(np.arange(len(income)) % 3 == 0, 1.03, 0.97)
         baseline, reform = make_household_data(income, reform_income)
 
         # When

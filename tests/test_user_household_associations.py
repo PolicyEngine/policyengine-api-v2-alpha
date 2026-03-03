@@ -147,6 +147,7 @@ def test_update_association_label(client, session):
 
     response = client.put(
         f"/user-household-associations/{assoc.id}",
+        params={"user_id": str(user.id)},
         json={"label": "New label"},
     )
     assert response.status_code == 200
@@ -154,10 +155,25 @@ def test_update_association_label(client, session):
     assert data["label"] == "New label"
 
 
+def test_update_association_wrong_user(client, session):
+    """Update with wrong user_id returns 404 (ownership check)."""
+    user = create_user(session)
+    household = create_household(session)
+    assoc = create_association(session, user.id, household.id, label="Old")
+
+    response = client.put(
+        f"/user-household-associations/{assoc.id}",
+        params={"user_id": str(uuid4())},
+        json={"label": "Hacked"},
+    )
+    assert response.status_code == 404
+
+
 def test_update_association_not_found(client):
     """Update a non-existent association returns 404."""
     response = client.put(
         f"/user-household-associations/{uuid4()}",
+        params={"user_id": str(uuid4())},
         json={"label": "Something"},
     )
     assert response.status_code == 404
@@ -175,7 +191,10 @@ def test_delete_association(client, session):
     household = create_household(session)
     assoc = create_association(session, user.id, household.id)
 
-    response = client.delete(f"/user-household-associations/{assoc.id}")
+    response = client.delete(
+        f"/user-household-associations/{assoc.id}",
+        params={"user_id": str(user.id)},
+    )
     assert response.status_code == 204
 
     # Confirm it's gone
@@ -183,7 +202,27 @@ def test_delete_association(client, session):
     assert response.json() == []
 
 
+def test_delete_association_wrong_user(client, session):
+    """Delete with wrong user_id returns 404 (ownership check)."""
+    user = create_user(session)
+    household = create_household(session)
+    assoc = create_association(session, user.id, household.id)
+
+    response = client.delete(
+        f"/user-household-associations/{assoc.id}",
+        params={"user_id": str(uuid4())},
+    )
+    assert response.status_code == 404
+
+    # Confirm it's still there
+    response = client.get(f"/user-household-associations/{user.id}/{household.id}")
+    assert len(response.json()) == 1
+
+
 def test_delete_association_not_found(client):
     """Delete a non-existent association returns 404."""
-    response = client.delete(f"/user-household-associations/{uuid4()}")
+    response = client.delete(
+        f"/user-household-associations/{uuid4()}",
+        params={"user_id": str(uuid4())},
+    )
     assert response.status_code == 404

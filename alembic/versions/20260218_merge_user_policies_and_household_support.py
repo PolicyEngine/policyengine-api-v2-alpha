@@ -13,8 +13,6 @@ No schema changes — both branches modify independent tables.
 
 from typing import Sequence, Union
 
-from alembic import op
-
 # revision identifiers, used by Alembic.
 revision: str = "merge_001"
 down_revision: tuple[str, str] = ("0002_user_policies", "a1b2c3d4e5f6")

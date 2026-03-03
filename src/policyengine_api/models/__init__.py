@@ -5,6 +5,13 @@ from .budget_summary import (
     BudgetSummaryCreate,
     BudgetSummaryRead,
 )
+from .change_aggregate import (
+    ChangeAggregate,
+    ChangeAggregateCreate,
+    ChangeAggregateRead,
+    ChangeAggregateStatus,
+    ChangeAggregateType,
+)
 from .congressional_district_impact import (
     CongressionalDistrictImpact,
     CongressionalDistrictImpactCreate,
@@ -15,22 +22,11 @@ from .constituency_impact import (
     ConstituencyImpactCreate,
     ConstituencyImpactRead,
 )
-from .local_authority_impact import (
-    LocalAuthorityImpact,
-    LocalAuthorityImpactCreate,
-    LocalAuthorityImpactRead,
-)
-from .change_aggregate import (
-    ChangeAggregate,
-    ChangeAggregateCreate,
-    ChangeAggregateRead,
-    ChangeAggregateStatus,
-    ChangeAggregateType,
-)
 from .dataset import Dataset, DatasetCreate, DatasetRead
 from .dataset_version import DatasetVersion, DatasetVersionCreate, DatasetVersionRead
 from .decile_impact import DecileImpact, DecileImpactCreate, DecileImpactRead
 from .dynamic import Dynamic, DynamicCreate, DynamicRead
+from .geographic_impact_base import GeographicImpactBase
 from .household import Household, HouseholdCreate, HouseholdRead
 from .household_job import (
     HouseholdJob,
@@ -40,9 +36,15 @@ from .household_job import (
 )
 from .inequality import Inequality, InequalityCreate, InequalityRead
 from .intra_decile_impact import (
+    DecileType,
     IntraDecileImpact,
     IntraDecileImpactCreate,
     IntraDecileImpactRead,
+)
+from .local_authority_impact import (
+    LocalAuthorityImpact,
+    LocalAuthorityImpactCreate,
+    LocalAuthorityImpactRead,
 )
 from .output import (
     AggregateOutput,
@@ -58,16 +60,16 @@ from .parameter_value import (
     ParameterValueRead,
     ParameterValueWithName,
 )
-from .policy import Policy, PolicyCreate, PolicyRead
+from .policy import Policy, PolicyCreate, PolicyParameterValueInput, PolicyRead
 from .poverty import Poverty, PovertyCreate, PovertyRead
-from .region import Region, RegionCreate, RegionRead
-from .region_dataset_link import RegionDatasetLink
 from .program_statistics import (
     ProgramStatistics,
     ProgramStatisticsCreate,
     ProgramStatisticsRead,
 )
-from .report import Report, ReportCreate, ReportRead, ReportStatus
+from .region import Region, RegionCreate, RegionRead, RegionType
+from .region_dataset_link import RegionDatasetLink
+from .report import Report, ReportCreate, ReportRead, ReportStatus, ReportType
 from .simulation import (
     Simulation,
     SimulationCreate,
@@ -92,11 +94,11 @@ from .user_household_association import (
     UserHouseholdAssociationRead,
     UserHouseholdAssociationUpdate,
 )
-from .user_simulation_association import (
-    UserSimulationAssociation,
-    UserSimulationAssociationCreate,
-    UserSimulationAssociationRead,
-    UserSimulationAssociationUpdate,
+from .user_policy import (
+    UserPolicy,
+    UserPolicyCreate,
+    UserPolicyRead,
+    UserPolicyUpdate,
 )
 from .user_report_association import (
     UserReportAssociation,
@@ -104,11 +106,11 @@ from .user_report_association import (
     UserReportAssociationRead,
     UserReportAssociationUpdate,
 )
-from .user_policy import (
-    UserPolicy,
-    UserPolicyCreate,
-    UserPolicyRead,
-    UserPolicyUpdate,
+from .user_simulation_association import (
+    UserSimulationAssociation,
+    UserSimulationAssociationCreate,
+    UserSimulationAssociationRead,
+    UserSimulationAssociationUpdate,
 )
 from .variable import Variable, VariableCreate, VariableRead
 
@@ -157,6 +159,8 @@ __all__ = [
     "Inequality",
     "InequalityCreate",
     "InequalityRead",
+    "DecileType",
+    "GeographicImpactBase",
     "IntraDecileImpact",
     "IntraDecileImpactCreate",
     "IntraDecileImpactRead",
@@ -169,6 +173,7 @@ __all__ = [
     "ParameterValueWithName",
     "Policy",
     "PolicyCreate",
+    "PolicyParameterValueInput",
     "PolicyRead",
     "Poverty",
     "PovertyCreate",
@@ -177,6 +182,7 @@ __all__ = [
     "RegionCreate",
     "RegionDatasetLink",
     "RegionRead",
+    "RegionType",
     "ProgramStatistics",
     "ProgramStatisticsCreate",
     "ProgramStatisticsRead",
@@ -184,6 +190,7 @@ __all__ = [
     "ReportCreate",
     "ReportRead",
     "ReportStatus",
+    "ReportType",
     "Simulation",
     "SimulationCreate",
     "SimulationRead",

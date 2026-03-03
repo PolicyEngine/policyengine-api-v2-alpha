@@ -111,7 +111,7 @@ def run_alembic_migrations():
     )
 
     if result.returncode != 0:
-        console.print(f"[red]✗ Alembic migration failed:[/red]")
+        console.print("[red]✗ Alembic migration failed:[/red]")
         console.print(result.stderr)
         raise RuntimeError("Alembic migration failed")
 

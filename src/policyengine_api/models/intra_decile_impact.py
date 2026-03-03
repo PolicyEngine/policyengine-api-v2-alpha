@@ -16,9 +16,17 @@ household_weight) so they reflect the share of people, not households.
 """
 
 from datetime import datetime, timezone
+from enum import Enum
 from uuid import UUID, uuid4
 
 from sqlmodel import Field, SQLModel
+
+
+class DecileType(str, Enum):
+    """Type of decile grouping."""
+
+    INCOME = "income"
+    WEALTH = "wealth"
 
 
 class IntraDecileImpactBase(SQLModel):
@@ -27,13 +35,13 @@ class IntraDecileImpactBase(SQLModel):
     baseline_simulation_id: UUID = Field(foreign_key="simulations.id")
     reform_simulation_id: UUID = Field(foreign_key="simulations.id")
     report_id: UUID | None = Field(default=None, foreign_key="reports.id")
-    decile_type: str = Field(default="income")  # "income" or "wealth"
-    decile: int  # 1-10 for individual deciles, 0 for overall average
-    lose_more_than_5pct: float | None = None
-    lose_less_than_5pct: float | None = None
-    no_change: float | None = None
-    gain_less_than_5pct: float | None = None
-    gain_more_than_5pct: float | None = None
+    decile_type: DecileType = Field(default=DecileType.INCOME)
+    decile: int = Field(ge=0, le=10)
+    lose_more_than_5pct: float | None = Field(default=None, ge=0.0, le=1.0)
+    lose_less_than_5pct: float | None = Field(default=None, ge=0.0, le=1.0)
+    no_change: float | None = Field(default=None, ge=0.0, le=1.0)
+    gain_less_than_5pct: float | None = Field(default=None, ge=0.0, le=1.0)
+    gain_more_than_5pct: float | None = Field(default=None, ge=0.0, le=1.0)
 
 
 class IntraDecileImpact(IntraDecileImpactBase, table=True):

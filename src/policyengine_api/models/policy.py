@@ -1,5 +1,5 @@
 from datetime import datetime, timezone
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 from uuid import UUID, uuid4
 
 from sqlmodel import Field, Relationship, SQLModel
@@ -33,6 +33,15 @@ class Policy(PolicyBase, table=True):
     tax_benefit_model: "TaxBenefitModel" = Relationship()
 
 
+class PolicyParameterValueInput(SQLModel):
+    """Input schema for a parameter value when creating a policy."""
+
+    parameter_id: UUID
+    value_json: Any
+    start_date: datetime
+    end_date: datetime | None = None
+
+
 class PolicyCreate(PolicyBase):
     """Schema for creating policies.
 
@@ -56,7 +65,7 @@ class PolicyCreate(PolicyBase):
     }
     """
 
-    parameter_values: list[dict] = []
+    parameter_values: list[PolicyParameterValueInput] = []
 
 
 class PolicyRead(PolicyBase):

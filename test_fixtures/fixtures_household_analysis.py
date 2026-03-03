@@ -16,7 +16,6 @@ from policyengine_api.models import (
     TaxBenefitModelVersion,
 )
 
-
 # =============================================================================
 # Sample Calculation Results
 # =============================================================================

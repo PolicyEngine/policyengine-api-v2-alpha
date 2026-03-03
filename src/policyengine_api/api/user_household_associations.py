@@ -90,10 +90,19 @@ def list_by_user_and_household(
 def update_association(
     association_id: UUID,
     body: UserHouseholdAssociationUpdate,
+    user_id: UUID = Query(..., description="User ID for ownership verification"),
     session: Session = Depends(get_session),
 ):
-    """Update a user-household association (label)."""
-    record = session.get(UserHouseholdAssociation, association_id)
+    """Update a user-household association (label).
+
+    Requires user_id to verify ownership - only the owner can update.
+    """
+    record = session.exec(
+        select(UserHouseholdAssociation).where(
+            UserHouseholdAssociation.id == association_id,
+            UserHouseholdAssociation.user_id == user_id,
+        )
+    ).first()
     if not record:
         raise HTTPException(
             status_code=404,
@@ -112,10 +121,19 @@ def update_association(
 @router.delete("/{association_id}", status_code=204)
 def delete_association(
     association_id: UUID,
+    user_id: UUID = Query(..., description="User ID for ownership verification"),
     session: Session = Depends(get_session),
 ):
-    """Delete a user-household association."""
-    record = session.get(UserHouseholdAssociation, association_id)
+    """Delete a user-household association.
+
+    Requires user_id to verify ownership - only the owner can delete.
+    """
+    record = session.exec(
+        select(UserHouseholdAssociation).where(
+            UserHouseholdAssociation.id == association_id,
+            UserHouseholdAssociation.user_id == user_id,
+        )
+    ).first()
     if not record:
         raise HTTPException(
             status_code=404,

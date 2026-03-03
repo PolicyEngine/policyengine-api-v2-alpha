@@ -15,9 +15,8 @@ from pathlib import Path
 
 import logfire
 from rich.progress import Progress, SpinnerColumn, TextColumn
-from sqlmodel import Session, select
-
 from seed_utils import console, get_session
+from sqlmodel import Session, select
 
 # Import after seed_utils sets up path
 from policyengine_api.models import Dataset, TaxBenefitModel  # noqa: E402

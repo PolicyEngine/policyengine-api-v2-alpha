@@ -11,10 +11,10 @@ to the database. This brings the schema in line with the model.
 
 from typing import Sequence, Union
 
+import sqlalchemy as sa
 import sqlmodel.sql.sqltypes
 
 from alembic import op
-import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision: str = "add_sim_filters"

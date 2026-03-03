@@ -22,7 +22,7 @@ from uuid import UUID, uuid5
 import logfire
 from fastapi import APIRouter, Depends, HTTPException
 from opentelemetry.trace.propagation.tracecontext import TraceContextTextMapPropagator
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 from sqlmodel import Session, select
 
 from policyengine_api.api.module_registry import (
@@ -166,6 +166,12 @@ class EconomicImpactRequest(BaseModel):
         description="Year for the analysis (e.g., 2026). Selects the dataset for that year. Uses latest available if omitted.",
     )
 
+    @model_validator(mode="after")
+    def check_dataset_or_region(self) -> "EconomicImpactRequest":
+        if not self.dataset_id and not self.region:
+            raise ValueError("Either dataset_id or region must be provided")
+        return self
+
 
 class SimulationInfo(BaseModel):
     """Simulation status info."""
@@ -306,8 +312,17 @@ def _get_or_create_simulation(
         region_id=region_id,
         year=year,
     )
+    from sqlalchemy.exc import IntegrityError
+
     session.add(simulation)
-    session.commit()
+    try:
+        session.commit()
+    except IntegrityError:
+        session.rollback()
+        existing = session.get(Simulation, sim_id)
+        if existing:
+            return existing
+        raise
     session.refresh(simulation)
     return simulation
 
@@ -334,8 +349,17 @@ def _get_or_create_report(
         reform_simulation_id=reform_sim_id,
         status=ReportStatus.PENDING,
     )
+    from sqlalchemy.exc import IntegrityError
+
     session.add(report)
-    session.commit()
+    try:
+        session.commit()
+    except IntegrityError:
+        session.rollback()
+        existing = session.get(Report, report_id)
+        if existing:
+            return existing
+        raise
     session.refresh(report)
     return report
 
@@ -755,7 +779,7 @@ def _run_local_economy_comparison_uk(
             return None
         db_policy = session.get(DBPolicy, policy_id)
         if not db_policy:
-            return None
+            raise ValueError(f"Policy {policy_id} not found in database")
         pe_param_values = []
         for pv in db_policy.parameter_values:
             if not pv.parameter:
@@ -915,7 +939,7 @@ def _run_local_economy_comparison_us(
             return None
         db_policy = session.get(DBPolicy, policy_id)
         if not db_policy:
-            return None
+            raise ValueError(f"Policy {policy_id} not found in database")
         pe_param_values = []
         for pv in db_policy.parameter_values:
             if not pv.parameter:
@@ -1056,11 +1080,35 @@ def _trigger_economy_comparison(
         import modal
 
         if tax_benefit_model_name == "policyengine_uk":
-            fn = modal.Function.from_name("policyengine", "economy_comparison_uk", environment_name=settings.modal_environment)
+            fn = modal.Function.from_name(
+                "policyengine",
+                "economy_comparison_uk",
+                environment_name=settings.modal_environment,
+            )
         else:
-            fn = modal.Function.from_name("policyengine", "economy_comparison_us", environment_name=settings.modal_environment)
+            fn = modal.Function.from_name(
+                "policyengine",
+                "economy_comparison_us",
+                environment_name=settings.modal_environment,
+            )
 
-        fn.spawn(job_id=job_id, traceparent=traceparent)
+        try:
+            fn.spawn(job_id=job_id, traceparent=traceparent)
+        except Exception as e:
+            # Mark report as FAILED so it doesn't stay PENDING forever
+            if session is not None:
+                from uuid import UUID
+
+                report = session.get(Report, UUID(job_id))
+                if report:
+                    report.status = ReportStatus.FAILED
+                    report.error_message = f"Failed to trigger computation: {e}"
+                    session.add(report)
+                    session.commit()
+            raise HTTPException(
+                status_code=502,
+                detail=f"Failed to trigger computation: {e}",
+            )
 
 
 def _resolve_dataset_and_region(
@@ -1220,7 +1268,9 @@ def get_economic_impact_status(
     if not baseline_sim or not reform_sim:
         raise HTTPException(status_code=500, detail="Simulation data missing")
 
-    region = session.get(Region, baseline_sim.region_id) if baseline_sim.region_id else None
+    region = (
+        session.get(Region, baseline_sim.region_id) if baseline_sim.region_id else None
+    )
     return _build_response(report, baseline_sim, reform_sim, session, region)
 
 
@@ -1262,6 +1312,12 @@ class EconomyCustomRequest(BaseModel):
     modules: list[str] = Field(
         description="List of module names to compute (see GET /analysis/options)"
     )
+
+    @model_validator(mode="after")
+    def check_dataset_or_region(self) -> "EconomyCustomRequest":
+        if not self.dataset_id and not self.region:
+            raise ValueError("Either dataset_id or region must be provided")
+        return self
 
 
 def _build_filtered_response(
@@ -1414,7 +1470,9 @@ def get_economy_custom_status(
     if not baseline_sim or not reform_sim:
         raise HTTPException(status_code=500, detail="Simulation data missing")
 
-    region = session.get(Region, baseline_sim.region_id) if baseline_sim.region_id else None
+    region = (
+        session.get(Region, baseline_sim.region_id) if baseline_sim.region_id else None
+    )
     full_response = _build_response(report, baseline_sim, reform_sim, session, region)
 
     if modules:
@@ -1520,14 +1578,10 @@ def rerun_report(
 
     if is_economy:
         with logfire.span("rerun_economy_comparison", job_id=str(report.id)):
-            _trigger_economy_comparison(
-                str(report.id), tax_benefit_model_name, session
-            )
+            _trigger_economy_comparison(str(report.id), tax_benefit_model_name, session)
     elif is_household:
         with logfire.span("rerun_household_impact", job_id=str(report.id)):
-            _trigger_household_impact(
-                str(report.id), tax_benefit_model_name, session
-            )
+            _trigger_household_impact(str(report.id), tax_benefit_model_name, session)
     else:
         raise HTTPException(
             status_code=400,

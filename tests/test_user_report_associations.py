@@ -126,9 +126,7 @@ def test_get_by_id(client, session):
     """Get a specific association by ID."""
     user_id = uuid4()
     report = create_report(session)
-    assoc = create_user_report_association(
-        session, user_id, report, label="Test"
-    )
+    assoc = create_user_report_association(session, user_id, report, label="Test")
 
     response = client.get(f"/user-reports/{assoc.id}")
     assert response.status_code == 200
@@ -151,9 +149,7 @@ def test_update_label(client, session):
     """Update label via PATCH."""
     user_id = uuid4()
     report = create_report(session)
-    assoc = create_user_report_association(
-        session, user_id, report, label="Old"
-    )
+    assoc = create_user_report_association(session, user_id, report, label="Old")
 
     response = client.patch(
         f"/user-reports/{assoc.id}",
@@ -184,9 +180,7 @@ def test_update_wrong_user(client, session):
     """Update with wrong user_id returns 404."""
     user_id = uuid4()
     report = create_report(session)
-    assoc = create_user_report_association(
-        session, user_id, report, label="Mine"
-    )
+    assoc = create_user_report_association(session, user_id, report, label="Mine")
 
     response = client.patch(
         f"/user-reports/{assoc.id}",

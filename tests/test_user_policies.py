@@ -110,10 +110,18 @@ def test_list_user_policies_with_data(
 ):
     """List user policies returns all associations for a user."""
     user_id = uuid4()
-    policy1 = create_policy(session, tax_benefit_model, name="Policy 1", description="First policy")
-    policy2 = create_policy(session, uk_tax_benefit_model, name="Policy 2", description="Second policy")
-    create_user_policy(session, user_id, policy1, country_id=US_COUNTRY_ID, label="US policy")
-    create_user_policy(session, user_id, policy2, country_id=UK_COUNTRY_ID, label="UK policy")
+    policy1 = create_policy(
+        session, tax_benefit_model, name="Policy 1", description="First policy"
+    )
+    policy2 = create_policy(
+        session, uk_tax_benefit_model, name="Policy 2", description="Second policy"
+    )
+    create_user_policy(
+        session, user_id, policy1, country_id=US_COUNTRY_ID, label="US policy"
+    )
+    create_user_policy(
+        session, user_id, policy2, country_id=UK_COUNTRY_ID, label="UK policy"
+    )
 
     response = client.get(f"/user-policies?user_id={user_id}")
     assert response.status_code == 200
@@ -126,8 +134,12 @@ def test_list_user_policies_filter_by_country(
 ):
     """List user policies filtered by country_id."""
     user_id = uuid4()
-    policy1 = create_policy(session, tax_benefit_model, name="Policy 1", description="First policy")
-    policy2 = create_policy(session, uk_tax_benefit_model, name="Policy 2", description="Second policy")
+    policy1 = create_policy(
+        session, tax_benefit_model, name="Policy 1", description="First policy"
+    )
+    policy2 = create_policy(
+        session, uk_tax_benefit_model, name="Policy 2", description="Second policy"
+    )
     create_user_policy(session, user_id, policy1, country_id=US_COUNTRY_ID)
     create_user_policy(session, user_id, policy2, country_id=UK_COUNTRY_ID)
 
@@ -145,7 +157,9 @@ def test_get_user_policy(client, session, tax_benefit_model):
     """Get a specific user-policy association by ID."""
     user_id = uuid4()
     policy = create_policy(session, tax_benefit_model)
-    user_policy = create_user_policy(session, user_id, policy, country_id=US_COUNTRY_ID, label="My policy")
+    user_policy = create_user_policy(
+        session, user_id, policy, country_id=US_COUNTRY_ID, label="My policy"
+    )
 
     response = client.get(f"/user-policies/{user_policy.id}")
     assert response.status_code == 200
@@ -167,7 +181,9 @@ def test_update_user_policy(client, session, tax_benefit_model):
     """Update a user-policy association label."""
     user_id = uuid4()
     policy = create_policy(session, tax_benefit_model)
-    user_policy = create_user_policy(session, user_id, policy, country_id=US_COUNTRY_ID, label="Old label")
+    user_policy = create_user_policy(
+        session, user_id, policy, country_id=US_COUNTRY_ID, label="Old label"
+    )
 
     response = client.patch(
         f"/user-policies/{user_policy.id}?user_id={user_id}",
@@ -196,7 +212,9 @@ def test_update_user_policy_wrong_user(client, session, tax_benefit_model):
     user_id = uuid4()
     wrong_user_id = uuid4()
     policy = create_policy(session, tax_benefit_model)
-    user_policy = create_user_policy(session, user_id, policy, country_id=US_COUNTRY_ID, label="Original label")
+    user_policy = create_user_policy(
+        session, user_id, policy, country_id=US_COUNTRY_ID, label="Original label"
+    )
 
     # Try to update with wrong user_id
     response = client.patch(
@@ -214,7 +232,9 @@ def test_update_user_policy_rejects_extra_fields(client, session, tax_benefit_mo
     """Update with extra fields returns 422 (extra='forbid')."""
     user_id = uuid4()
     policy = create_policy(session, tax_benefit_model)
-    user_policy = create_user_policy(session, user_id, policy, country_id=US_COUNTRY_ID, label="Original")
+    user_policy = create_user_policy(
+        session, user_id, policy, country_id=US_COUNTRY_ID, label="Original"
+    )
 
     response = client.patch(
         f"/user-policies/{user_policy.id}?user_id={user_id}",

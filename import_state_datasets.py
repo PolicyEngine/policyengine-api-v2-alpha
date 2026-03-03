@@ -35,13 +35,13 @@ warnings.filterwarnings("ignore")
 # Add src to path for policyengine_api imports
 sys.path.insert(0, str(Path(__file__).parent / "src"))
 
+from policyengine.countries.us.data import DISTRICT_COUNTS
 from rich.console import Console
 from sqlmodel import Session, create_engine, select
 
 from policyengine_api.config.settings import settings
 from policyengine_api.models import Dataset, TaxBenefitModel
 from policyengine_api.services.storage import upload_dataset_for_seeding
-from policyengine.countries.us.data import DISTRICT_COUNTS
 
 console = Console()
 
@@ -86,9 +86,7 @@ def download_from_gcs(gcs_path: str, local_path: Path) -> bool:
     return True
 
 
-def convert_dataset(
-    raw_h5_path: str, output_folder: str, years: list[int]
-) -> dict:
+def convert_dataset(raw_h5_path: str, output_folder: str, years: list[int]) -> dict:
     """Convert a raw h5 file to yearly entity-level h5 files.
 
     Skips conversion if all yearly output files already exist.
@@ -101,8 +99,7 @@ def convert_dataset(
 
     stem = Path(raw_h5_path).stem
     all_exist = all(
-        Path(f"{output_folder}/{stem}_year_{year}.h5").exists()
-        for year in years
+        Path(f"{output_folder}/{stem}_year_{year}.h5").exists() for year in years
     )
     if all_exist:
         return load_datasets(
@@ -158,9 +155,7 @@ def process_file(
     console.print(f"{prefix}: converting to {len(years)} yearly datasets...")
     output_folder = str(data_folder / file_info["output_subfolder"])
     try:
-        converted = convert_dataset(
-            str(file_info["local_path"]), output_folder, years
-        )
+        converted = convert_dataset(str(file_info["local_path"]), output_folder, years)
     except Exception as e:
         console.print(f"{prefix}: [red]conversion failed: {e}[/red]")
         timing["status"] = "conversion_failed"
@@ -169,7 +164,9 @@ def process_file(
     conv_time = time.time() - t0
     timing["conversion_seconds"] = round(conv_time, 2)
     timing["datasets_converted"] = len(converted)
-    console.print(f"{prefix}: converted {len(converted)} datasets ({fmt_duration(conv_time)})")
+    console.print(
+        f"{prefix}: converted {len(converted)} datasets ({fmt_duration(conv_time)})"
+    )
 
     # Step 3: Upload + create DB records
     if skip_upload:
@@ -194,7 +191,9 @@ def process_file(
             try:
                 upload_dataset_for_seeding(pe_dataset.filepath, object_name=object_name)
             except Exception as e:
-                console.print(f"{prefix}: [red]upload failed for {pe_dataset.name}: {e}[/red]")
+                console.print(
+                    f"{prefix}: [red]upload failed for {pe_dataset.name}: {e}[/red]"
+                )
                 errors += 1
                 continue
 
@@ -244,27 +243,31 @@ def process_state(
     files_to_process = []
 
     # State file
-    files_to_process.append({
-        "type": "state",
-        "code": state_code,
-        "gcs_path": f"{GCS_BUCKET}/states/{state_code}.h5",
-        "local_path": TMP_DIR / "states" / f"{state_code}.h5",
-        "output_subfolder": "states",
-        "supabase_prefix": f"states/{state_code}",
-    })
+    files_to_process.append(
+        {
+            "type": "state",
+            "code": state_code,
+            "gcs_path": f"{GCS_BUCKET}/states/{state_code}.h5",
+            "local_path": TMP_DIR / "states" / f"{state_code}.h5",
+            "output_subfolder": "states",
+            "supabase_prefix": f"states/{state_code}",
+        }
+    )
 
     # District files
     if not state_only:
         for i in range(1, district_count + 1):
             district_code = f"{state_code}-{i:02d}"
-            files_to_process.append({
-                "type": "district",
-                "code": district_code,
-                "gcs_path": f"{GCS_BUCKET}/districts/{district_code}.h5",
-                "local_path": TMP_DIR / "districts" / f"{district_code}.h5",
-                "output_subfolder": "districts",
-                "supabase_prefix": f"districts/{district_code}",
-            })
+            files_to_process.append(
+                {
+                    "type": "district",
+                    "code": district_code,
+                    "gcs_path": f"{GCS_BUCKET}/districts/{district_code}.h5",
+                    "local_path": TMP_DIR / "districts" / f"{district_code}.h5",
+                    "output_subfolder": "districts",
+                    "supabase_prefix": f"districts/{district_code}",
+                }
+            )
 
     total_files = len(files_to_process)
     total_created = 0
@@ -349,9 +352,13 @@ def main():
     if args.years:
         years = [int(y.strip()) for y in args.years.split(",")]
 
-    data_folder = Path(args.data_folder) if args.data_folder else Path(__file__).parent / "data"
+    data_folder = (
+        Path(args.data_folder) if args.data_folder else Path(__file__).parent / "data"
+    )
 
-    total_districts = sum(DISTRICT_COUNTS[s] for s in states) if not args.state_only else 0
+    total_districts = (
+        sum(DISTRICT_COUNTS[s] for s in states) if not args.state_only else 0
+    )
     total_files = len(states) + total_districts
     total_yearly = total_files * len(years)
 
@@ -380,7 +387,9 @@ def main():
             select(TaxBenefitModel).where(TaxBenefitModel.name == "policyengine-us")
         ).first()
         if not us_model:
-            console.print("[red]Error: US model not found. Run seed_models.py first.[/red]")
+            console.print(
+                "[red]Error: US model not found. Run seed_models.py first.[/red]"
+            )
             sys.exit(1)
 
     script_start = time.time()
@@ -425,14 +434,16 @@ def main():
         )
         console.print()
 
-        timing_report["states"].append({
-            "state": state_code,
-            "total_seconds": round(state_time, 2),
-            "datasets_created": created,
-            "datasets_skipped": skipped,
-            "errors": errs,
-            "files": file_timings,
-        })
+        timing_report["states"].append(
+            {
+                "state": state_code,
+                "total_seconds": round(state_time, 2),
+                "datasets_created": created,
+                "datasets_skipped": skipped,
+                "errors": errs,
+                "files": file_timings,
+            }
+        )
 
         # Write timing file after each state so partial results are preserved
         timing_path = data_folder / "import_timing.json"
@@ -459,7 +470,9 @@ def main():
     timing_path = data_folder / "import_timing.json"
     timing_path.write_text(json.dumps(timing_report, indent=2))
 
-    console.print(f"[bold green]Import complete ({fmt_duration(total_time)})[/bold green]")
+    console.print(
+        f"[bold green]Import complete ({fmt_duration(total_time)})[/bold green]"
+    )
     console.print(f"  Datasets created: {grand_created}")
     console.print(f"  Datasets skipped (already exist): {grand_skipped}")
     if grand_errors:

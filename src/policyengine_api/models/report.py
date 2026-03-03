@@ -14,12 +14,20 @@ class ReportStatus(str, Enum):
     FAILED = "failed"
 
 
+class ReportType(str, Enum):
+    """Type of analysis report."""
+
+    ECONOMY_COMPARISON = "economy_comparison"
+    HOUSEHOLD_COMPARISON = "household_comparison"
+    HOUSEHOLD_SINGLE = "household_single"
+
+
 class ReportBase(SQLModel):
     """Base report fields."""
 
     label: str
     description: str | None = None
-    report_type: str | None = None
+    report_type: ReportType | None = None
     user_id: UUID | None = Field(default=None, foreign_key="users.id")
     markdown: str | None = Field(default=None, sa_column=Column(Text))
     status: ReportStatus = ReportStatus.PENDING
@@ -41,10 +49,18 @@ class Report(ReportBase, table=True):
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
-class ReportCreate(ReportBase):
-    """Schema for creating reports."""
+class ReportCreate(SQLModel):
+    """Schema for creating reports — client-settable fields only.
 
-    pass
+    Excludes server-controlled fields: status, error_message, markdown.
+    """
+
+    label: str
+    description: str | None = None
+    report_type: ReportType | None = None
+    user_id: UUID | None = None
+    baseline_simulation_id: UUID | None = None
+    reform_simulation_id: UUID | None = None
 
 
 class ReportRead(ReportBase):

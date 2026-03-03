@@ -8,7 +8,6 @@ from policyengine_api.models import (
     TaxBenefitModelVersion,
 )
 
-
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
@@ -154,9 +153,7 @@ class TestParametersByName:
         assert len(data) == 1
         assert data[0]["label"] == "UK version"
 
-    def test_response_shape_matches_parameter_read(
-        self, client, session, us_version
-    ):
+    def test_response_shape_matches_parameter_read(self, client, session, us_version):
         """Returned objects have the same shape as ParameterRead."""
         create_parameter(session, us_version, "gov.shape_test", "Shape test")
 

@@ -5,6 +5,8 @@ from uuid import UUID, uuid4
 
 from sqlmodel import Field, SQLModel
 
+from policyengine_api.config.constants import CountryId
+
 
 class UserHouseholdAssociationBase(SQLModel):
     """Base association fields."""
@@ -12,7 +14,7 @@ class UserHouseholdAssociationBase(SQLModel):
     # user_id is a client-generated UUID stored in localStorage, not a foreign key
     user_id: UUID = Field(index=True)
     household_id: UUID = Field(foreign_key="households.id", index=True)
-    country_id: str
+    country_id: str  # Stored as string in DB, validated via Pydantic in Create schema
     label: str | None = None
 
 
@@ -31,12 +33,14 @@ class UserHouseholdAssociationCreate(SQLModel):
 
     user_id: UUID
     household_id: UUID
-    country_id: str
+    country_id: CountryId
     label: str | None = None
 
 
 class UserHouseholdAssociationUpdate(SQLModel):
     """Schema for updating a user-household association."""
+
+    model_config = {"extra": "forbid"}
 
     label: str | None = None
 

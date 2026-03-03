@@ -772,7 +772,9 @@ def simulate_economy_uk(simulation_id: str, traceparent: str | None = None) -> N
         with logfire.span("simulate_economy_uk", simulation_id=simulation_id):
             database_url = get_database_url()
             supabase_url = os.environ["SUPABASE_URL"]
-            supabase_key = os.environ.get("SUPABASE_SERVICE_KEY", os.environ["SUPABASE_KEY"])
+            supabase_key = os.environ.get(
+                "SUPABASE_SERVICE_KEY", os.environ["SUPABASE_KEY"]
+            )
             storage_bucket = os.environ.get("STORAGE_BUCKET", "datasets")
 
             engine = create_engine(database_url)
@@ -849,11 +851,10 @@ def simulate_economy_uk(simulation_id: str, traceparent: str | None = None) -> N
 
                     # Save output dataset
                     with logfire.span("save_output_dataset"):
-                        from supabase import create_client
-
                         from policyengine_api.services.storage import (
                             output_filepath,
                         )
+                        from supabase import create_client
 
                         output_storage_path = output_filepath(simulation_id)
                         output_local_path = f"/tmp/output_{simulation_id}.h5"
@@ -944,7 +945,9 @@ def simulate_economy_us(simulation_id: str, traceparent: str | None = None) -> N
         with logfire.span("simulate_economy_us", simulation_id=simulation_id):
             database_url = get_database_url()
             supabase_url = os.environ["SUPABASE_URL"]
-            supabase_key = os.environ.get("SUPABASE_SERVICE_KEY", os.environ["SUPABASE_KEY"])
+            supabase_key = os.environ.get(
+                "SUPABASE_SERVICE_KEY", os.environ["SUPABASE_KEY"]
+            )
             storage_bucket = os.environ.get("STORAGE_BUCKET", "datasets")
 
             engine = create_engine(database_url)
@@ -1021,11 +1024,10 @@ def simulate_economy_us(simulation_id: str, traceparent: str | None = None) -> N
 
                     # Save output dataset
                     with logfire.span("save_output_dataset"):
-                        from supabase import create_client
-
                         from policyengine_api.services.storage import (
                             output_filepath,
                         )
+                        from supabase import create_client
 
                         output_storage_path = output_filepath(simulation_id)
                         output_local_path = f"/tmp/output_{simulation_id}.h5"
@@ -1086,7 +1088,7 @@ def simulate_economy_us(simulation_id: str, traceparent: str | None = None) -> N
                             ),
                             {"sim_id": simulation_id, "error": str(e)[:1000]},
                         )
-                    session.commit()
+                        session.commit()
                 except Exception as db_error:
                     logfire.error("Failed to update DB", error=str(db_error))
                 raise
@@ -1119,20 +1121,10 @@ def economy_comparison_uk(job_id: str, traceparent: str | None = None) -> None:
 
             database_url = get_database_url()
             supabase_url = os.environ["SUPABASE_URL"]
-            supabase_key = os.environ.get("SUPABASE_SERVICE_KEY", os.environ["SUPABASE_KEY"])
+            supabase_key = os.environ.get(
+                "SUPABASE_SERVICE_KEY", os.environ["SUPABASE_KEY"]
+            )
             storage_bucket = os.environ.get("STORAGE_BUCKET", "datasets")
-
-            # Debug: log the key role
-            import base64
-            import json
-
-            try:
-                payload = supabase_key.split(".")[1]
-                payload += "=" * (4 - len(payload) % 4)
-                decoded = json.loads(base64.urlsafe_b64decode(payload))
-                logfire.info("Supabase key info", role=decoded.get("role", "unknown"))
-            except Exception as e:
-                logfire.warn("Could not decode key", error=str(e))
 
             engine = create_engine(database_url)
 
@@ -1141,11 +1133,11 @@ def economy_comparison_uk(job_id: str, traceparent: str | None = None) -> None:
                 from policyengine_api.models import (
                     BudgetSummary,
                     ConstituencyImpact,
-                    LocalAuthorityImpact,
                     Dataset,
                     DecileImpact,
                     Inequality,
                     IntraDecileImpact,
+                    LocalAuthorityImpact,
                     Poverty,
                     ProgramStatistics,
                     Report,
@@ -1280,9 +1272,8 @@ def economy_comparison_uk(job_id: str, traceparent: str | None = None) -> None:
                                 pass  # Variable may not exist in model
 
                     # Save output datasets for both simulations
-                    from supabase import create_client
-
                     from policyengine_api.services.storage import output_filepath
+                    from supabase import create_client
 
                     supabase = create_client(supabase_url, supabase_key)
 
@@ -1452,9 +1443,7 @@ def economy_comparison_uk(job_id: str, traceparent: str | None = None) -> None:
                         (pe_baseline_sim, baseline_sim),
                         (pe_reform_sim, reform_sim),
                     ]:
-                        age_poverty_results = calculate_uk_poverty_by_age(
-                            pe_sim
-                        )
+                        age_poverty_results = calculate_uk_poverty_by_age(pe_sim)
                         for pov in age_poverty_results.outputs:
                             poverty_record = Poverty(
                                 simulation_id=db_sim.id,
@@ -1473,9 +1462,7 @@ def economy_comparison_uk(job_id: str, traceparent: str | None = None) -> None:
                         (pe_baseline_sim, baseline_sim),
                         (pe_reform_sim, reform_sim),
                     ]:
-                        gender_poverty_results = (
-                            calculate_uk_poverty_by_gender(pe_sim)
-                        )
+                        gender_poverty_results = calculate_uk_poverty_by_gender(pe_sim)
                         for pov in gender_poverty_results.outputs:
                             poverty_record = Poverty(
                                 simulation_id=db_sim.id,
@@ -1545,9 +1532,7 @@ def economy_comparison_uk(job_id: str, traceparent: str | None = None) -> None:
                             entity=entity,
                             baseline_total=float(baseline_agg.result),
                             reform_total=float(reform_agg.result),
-                            change=float(
-                                reform_agg.result - baseline_agg.result
-                            ),
+                            change=float(reform_agg.result - baseline_agg.result),
                         )
                         session.add(budget_record)
 
@@ -1622,28 +1607,20 @@ def economy_comparison_uk(job_id: str, traceparent: str | None = None) -> None:
                             gcs_bucket="policyengine-uk-data-private",
                             gcs_key="constituencies_2024.csv",
                         )
-                        constituency_impact = (
-                            compute_uk_constituency_impacts(
-                                pe_baseline_sim,
-                                pe_reform_sim,
-                                weight_matrix_path=weight_matrix_path,
-                                constituency_csv_path=constituency_csv_path,
-                            )
+                        constituency_impact = compute_uk_constituency_impacts(
+                            pe_baseline_sim,
+                            pe_reform_sim,
+                            weight_matrix_path=weight_matrix_path,
+                            constituency_csv_path=constituency_csv_path,
                         )
                         if constituency_impact.constituency_results:
-                            for cr in (
-                                constituency_impact.constituency_results
-                            ):
+                            for cr in constituency_impact.constituency_results:
                                 record = ConstituencyImpact(
                                     baseline_simulation_id=baseline_sim.id,
                                     reform_simulation_id=reform_sim.id,
                                     report_id=report.id,
-                                    constituency_code=cr[
-                                        "constituency_code"
-                                    ],
-                                    constituency_name=cr[
-                                        "constituency_name"
-                                    ],
+                                    constituency_code=cr["constituency_code"],
+                                    constituency_name=cr["constituency_name"],
                                     x=cr["x"],
                                     y=cr["y"],
                                     average_household_income_change=cr[
@@ -1655,8 +1632,10 @@ def economy_comparison_uk(job_id: str, traceparent: str | None = None) -> None:
                                     population=cr["population"],
                                 )
                                 session.add(record)
-                    except Exception:
-                        pass  # Weight matrix not available, skip
+                    except FileNotFoundError:
+                        logfire.warning(
+                            "Weight matrix not available, skipping constituency impact"
+                        )
 
                     # Calculate local authority impact
                     from policyengine.outputs.local_authority_impact import (
@@ -1683,19 +1662,13 @@ def economy_comparison_uk(job_id: str, traceparent: str | None = None) -> None:
                             local_authority_csv_path=la_csv_path,
                         )
                         if la_impact.local_authority_results:
-                            for lr in (
-                                la_impact.local_authority_results
-                            ):
+                            for lr in la_impact.local_authority_results:
                                 record = LocalAuthorityImpact(
                                     baseline_simulation_id=baseline_sim.id,
                                     reform_simulation_id=reform_sim.id,
                                     report_id=report.id,
-                                    local_authority_code=lr[
-                                        "local_authority_code"
-                                    ],
-                                    local_authority_name=lr[
-                                        "local_authority_name"
-                                    ],
+                                    local_authority_code=lr["local_authority_code"],
+                                    local_authority_name=lr["local_authority_name"],
                                     x=lr["x"],
                                     y=lr["y"],
                                     average_household_income_change=lr[
@@ -1707,8 +1680,10 @@ def economy_comparison_uk(job_id: str, traceparent: str | None = None) -> None:
                                     population=lr["population"],
                                 )
                                 session.add(record)
-                    except Exception:
-                        pass  # Weight matrix not available, skip
+                    except FileNotFoundError:
+                        logfire.warning(
+                            "Weight matrix not available, skipping local authority impact"
+                        )
 
                     # Calculate wealth decile impact (UK only)
                     try:
@@ -1766,8 +1741,10 @@ def economy_comparison_uk(job_id: str, traceparent: str | None = None) -> None:
                                 gain_more_than_5pct=r.gain_more_than_5pct,
                             )
                             session.add(record)
-                    except (KeyError, Exception):
-                        pass  # household_wealth_decile not available, skip
+                    except KeyError:
+                        logfire.warning(
+                            "household_wealth_decile not available, skipping wealth decile impact"
+                        )
 
                     # Mark simulations and report as completed
                     baseline_sim.status = SimulationStatus.COMPLETED
@@ -1827,7 +1804,9 @@ def economy_comparison_us(job_id: str, traceparent: str | None = None) -> None:
         with logfire.span("economy_comparison_us", job_id=job_id):
             database_url = get_database_url()
             supabase_url = os.environ["SUPABASE_URL"]
-            supabase_key = os.environ.get("SUPABASE_SERVICE_KEY", os.environ["SUPABASE_KEY"])
+            supabase_key = os.environ.get(
+                "SUPABASE_SERVICE_KEY", os.environ["SUPABASE_KEY"]
+            )
             storage_bucket = os.environ.get("STORAGE_BUCKET", "datasets")
 
             engine = create_engine(database_url)
@@ -1966,9 +1945,8 @@ def economy_comparison_us(job_id: str, traceparent: str | None = None) -> None:
                                 pass  # Variable may not exist in model
 
                     # Save output datasets for both simulations
-                    from supabase import create_client
-
                     from policyengine_api.services.storage import output_filepath
+                    from supabase import create_client
 
                     supabase = create_client(supabase_url, supabase_key)
 
@@ -2139,9 +2117,7 @@ def economy_comparison_us(job_id: str, traceparent: str | None = None) -> None:
                         (pe_baseline_sim, baseline_sim),
                         (pe_reform_sim, reform_sim),
                     ]:
-                        age_poverty_results = calculate_us_poverty_by_age(
-                            pe_sim
-                        )
+                        age_poverty_results = calculate_us_poverty_by_age(pe_sim)
                         for pov in age_poverty_results.outputs:
                             poverty_record = Poverty(
                                 simulation_id=db_sim.id,
@@ -2160,9 +2136,7 @@ def economy_comparison_us(job_id: str, traceparent: str | None = None) -> None:
                         (pe_baseline_sim, baseline_sim),
                         (pe_reform_sim, reform_sim),
                     ]:
-                        gender_poverty_results = (
-                            calculate_us_poverty_by_gender(pe_sim)
-                        )
+                        gender_poverty_results = calculate_us_poverty_by_gender(pe_sim)
                         for pov in gender_poverty_results.outputs:
                             poverty_record = Poverty(
                                 simulation_id=db_sim.id,
@@ -2181,9 +2155,7 @@ def economy_comparison_us(job_id: str, traceparent: str | None = None) -> None:
                         (pe_baseline_sim, baseline_sim),
                         (pe_reform_sim, reform_sim),
                     ]:
-                        race_poverty_results = (
-                            calculate_us_poverty_by_race(pe_sim)
-                        )
+                        race_poverty_results = calculate_us_poverty_by_race(pe_sim)
                         for pov in race_poverty_results.outputs:
                             poverty_record = Poverty(
                                 simulation_id=db_sim.id,
@@ -2254,9 +2226,7 @@ def economy_comparison_us(job_id: str, traceparent: str | None = None) -> None:
                             entity=entity,
                             baseline_total=float(baseline_agg.result),
                             reform_total=float(reform_agg.result),
-                            change=float(
-                                reform_agg.result - baseline_agg.result
-                            ),
+                            change=float(reform_agg.result - baseline_agg.result),
                         )
                         session.add(budget_record)
 
@@ -2319,10 +2289,8 @@ def economy_comparison_us(job_id: str, traceparent: str | None = None) -> None:
                     )
 
                     try:
-                        district_impact = (
-                            compute_us_congressional_district_impacts(
-                                pe_baseline_sim, pe_reform_sim
-                            )
+                        district_impact = compute_us_congressional_district_impacts(
+                            pe_baseline_sim, pe_reform_sim
                         )
                         if district_impact.district_results:
                             for dr in district_impact.district_results:
@@ -2332,9 +2300,7 @@ def economy_comparison_us(job_id: str, traceparent: str | None = None) -> None:
                                     report_id=report.id,
                                     district_geoid=dr["district_geoid"],
                                     state_fips=dr["state_fips"],
-                                    district_number=dr[
-                                        "district_number"
-                                    ],
+                                    district_number=dr["district_number"],
                                     average_household_income_change=dr[
                                         "average_household_income_change"
                                     ],
@@ -2448,7 +2414,10 @@ def household_impact_uk(report_id: str, traceparent: str | None = None) -> None:
                             continue
 
                         simulation = session.get(Simulation, sim_id)
-                        if not simulation or simulation.status != SimulationStatus.PENDING:
+                        if (
+                            not simulation
+                            or simulation.status != SimulationStatus.PENDING
+                        ):
                             continue
 
                         household = session.get(Household, simulation.household_id)
@@ -2587,7 +2556,10 @@ def household_impact_us(report_id: str, traceparent: str | None = None) -> None:
                             continue
 
                         simulation = session.get(Simulation, sim_id)
-                        if not simulation or simulation.status != SimulationStatus.PENDING:
+                        if (
+                            not simulation
+                            or simulation.status != SimulationStatus.PENDING
+                        ):
                             continue
 
                         household = session.get(Household, simulation.household_id)
@@ -2784,7 +2756,9 @@ def compute_aggregate_uk(aggregate_id: str, traceparent: str | None = None) -> N
         with logfire.span("compute_aggregate_uk", aggregate_id=aggregate_id):
             database_url = get_database_url()
             supabase_url = os.environ["SUPABASE_URL"]
-            supabase_key = os.environ.get("SUPABASE_SERVICE_KEY", os.environ["SUPABASE_KEY"])
+            supabase_key = os.environ.get(
+                "SUPABASE_SERVICE_KEY", os.environ["SUPABASE_KEY"]
+            )
             storage_bucket = os.environ.get("STORAGE_BUCKET", "datasets")
 
             engine = create_engine(database_url)
@@ -2938,7 +2912,9 @@ def compute_aggregate_us(aggregate_id: str, traceparent: str | None = None) -> N
         with logfire.span("compute_aggregate_us", aggregate_id=aggregate_id):
             database_url = get_database_url()
             supabase_url = os.environ["SUPABASE_URL"]
-            supabase_key = os.environ.get("SUPABASE_SERVICE_KEY", os.environ["SUPABASE_KEY"])
+            supabase_key = os.environ.get(
+                "SUPABASE_SERVICE_KEY", os.environ["SUPABASE_KEY"]
+            )
             storage_bucket = os.environ.get("STORAGE_BUCKET", "datasets")
 
             engine = create_engine(database_url)
@@ -3087,7 +3063,9 @@ def compute_change_aggregate_uk(
         ):
             database_url = get_database_url()
             supabase_url = os.environ["SUPABASE_URL"]
-            supabase_key = os.environ.get("SUPABASE_SERVICE_KEY", os.environ["SUPABASE_KEY"])
+            supabase_key = os.environ.get(
+                "SUPABASE_SERVICE_KEY", os.environ["SUPABASE_KEY"]
+            )
             storage_bucket = os.environ.get("STORAGE_BUCKET", "datasets")
 
             engine = create_engine(database_url)
@@ -3290,7 +3268,9 @@ def compute_change_aggregate_us(
         ):
             database_url = get_database_url()
             supabase_url = os.environ["SUPABASE_URL"]
-            supabase_key = os.environ.get("SUPABASE_SERVICE_KEY", os.environ["SUPABASE_KEY"])
+            supabase_key = os.environ.get(
+                "SUPABASE_SERVICE_KEY", os.environ["SUPABASE_KEY"]
+            )
             storage_bucket = os.environ.get("STORAGE_BUCKET", "datasets")
 
             engine = create_engine(database_url)

@@ -53,7 +53,9 @@ def compute_decile_module(
     from policyengine.outputs import DecileImpact as PEDecileImpact
 
     if country_id not in DECILE_INCOME_VARIABLE:
-        raise ValueError(f"No decile income variable configured for country '{country_id}'")
+        raise ValueError(
+            f"No decile income variable configured for country '{country_id}'"
+        )
 
     income_variable = DECILE_INCOME_VARIABLE[country_id]
 
@@ -162,24 +164,27 @@ def compute_program_statistics_module_uk(
                 is_tax=prog_info["is_tax"],
             )
             ps.run()
-            record = ProgramStatistics(
-                baseline_simulation_id=baseline_sim_id,
-                reform_simulation_id=reform_sim_id,
-                report_id=report_id,
-                program_name=prog_name,
-                entity=prog_info["entity"],
-                is_tax=prog_info["is_tax"],
-                baseline_total=ps.baseline_total,
-                reform_total=ps.reform_total,
-                change=ps.change,
-                baseline_count=ps.baseline_count,
-                reform_count=ps.reform_count,
-                winners=ps.winners,
-                losers=ps.losers,
-            )
-            session.add(record)
         except KeyError:
-            pass
+            import logfire
+
+            logfire.warning(f"Program variable not found, skipping: {prog_name}")
+            continue
+        record = ProgramStatistics(
+            baseline_simulation_id=baseline_sim_id,
+            reform_simulation_id=reform_sim_id,
+            report_id=report_id,
+            program_name=prog_name,
+            entity=prog_info["entity"],
+            is_tax=prog_info["is_tax"],
+            baseline_total=ps.baseline_total,
+            reform_total=ps.reform_total,
+            change=ps.change,
+            baseline_count=ps.baseline_count,
+            reform_count=ps.reform_count,
+            winners=ps.winners,
+            losers=ps.losers,
+        )
+        session.add(record)
 
 
 def compute_poverty_module_uk(
@@ -373,8 +378,10 @@ def compute_constituency_module(
                     population=cr["population"],
                 )
                 session.add(record)
-    except Exception:
-        pass  # Weight matrix not available
+    except FileNotFoundError:
+        import logfire
+
+        logfire.warning("Weight matrix not available, skipping constituency impact")
 
 
 def compute_local_authority_module(
@@ -427,8 +434,10 @@ def compute_local_authority_module(
                     population=lr["population"],
                 )
                 session.add(record)
-    except Exception:
-        pass  # Weight matrix not available
+    except FileNotFoundError:
+        import logfire
+
+        logfire.warning("Weight matrix not available, skipping local authority impact")
 
 
 def compute_wealth_decile_module(
@@ -496,8 +505,12 @@ def compute_wealth_decile_module(
                 gain_more_than_5pct=r.gain_more_than_5pct,
             )
             session.add(record)
-    except (KeyError, Exception):
-        pass  # household_wealth_decile not available
+    except KeyError:
+        import logfire
+
+        logfire.warning(
+            "household_wealth_decile not available, skipping wealth decile impact"
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -539,24 +552,27 @@ def compute_program_statistics_module_us(
                 is_tax=prog_info["is_tax"],
             )
             ps.run()
-            record = ProgramStatistics(
-                baseline_simulation_id=baseline_sim_id,
-                reform_simulation_id=reform_sim_id,
-                report_id=report_id,
-                program_name=prog_name,
-                entity=prog_info["entity"],
-                is_tax=prog_info["is_tax"],
-                baseline_total=ps.baseline_total,
-                reform_total=ps.reform_total,
-                change=ps.change,
-                baseline_count=ps.baseline_count,
-                reform_count=ps.reform_count,
-                winners=ps.winners,
-                losers=ps.losers,
-            )
-            session.add(record)
         except KeyError:
-            pass
+            import logfire
+
+            logfire.warning(f"Program variable not found, skipping: {prog_name}")
+            continue
+        record = ProgramStatistics(
+            baseline_simulation_id=baseline_sim_id,
+            reform_simulation_id=reform_sim_id,
+            report_id=report_id,
+            program_name=prog_name,
+            entity=prog_info["entity"],
+            is_tax=prog_info["is_tax"],
+            baseline_total=ps.baseline_total,
+            reform_total=ps.reform_total,
+            change=ps.change,
+            baseline_count=ps.baseline_count,
+            reform_count=ps.reform_count,
+            winners=ps.winners,
+            losers=ps.losers,
+        )
+        session.add(record)
 
 
 def compute_poverty_module_us(
@@ -721,26 +737,27 @@ def compute_congressional_district_module(
         impact = compute_us_congressional_district_impacts(
             pe_baseline_sim, pe_reform_sim
         )
-        if impact.district_results:
-            for dr in impact.district_results:
-                record = CongressionalDistrictImpact(
-                    baseline_simulation_id=baseline_sim_id,
-                    reform_simulation_id=reform_sim_id,
-                    report_id=report_id,
-                    district_geoid=dr["district_geoid"],
-                    state_fips=dr["state_fips"],
-                    district_number=dr["district_number"],
-                    average_household_income_change=dr[
-                        "average_household_income_change"
-                    ],
-                    relative_household_income_change=dr[
-                        "relative_household_income_change"
-                    ],
-                    population=dr["population"],
-                )
-                session.add(record)
     except KeyError:
-        pass  # congressional_district_geoid not in dataset
+        import logfire
+
+        logfire.warning(
+            "congressional_district_geoid not in dataset, skipping congressional district impact"
+        )
+        return
+    if impact.district_results:
+        for dr in impact.district_results:
+            record = CongressionalDistrictImpact(
+                baseline_simulation_id=baseline_sim_id,
+                reform_simulation_id=reform_sim_id,
+                report_id=report_id,
+                district_geoid=dr["district_geoid"],
+                state_fips=dr["state_fips"],
+                district_number=dr["district_number"],
+                average_household_income_change=dr["average_household_income_change"],
+                relative_household_income_change=dr["relative_household_income_change"],
+                population=dr["population"],
+            )
+            session.add(record)
 
 
 # ---------------------------------------------------------------------------

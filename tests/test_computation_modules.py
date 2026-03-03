@@ -1,7 +1,7 @@
 """Tests for the composable computation module dispatch system."""
 
 import inspect
-from unittest.mock import MagicMock, call
+from unittest.mock import MagicMock
 from uuid import uuid4
 
 from policyengine_api.api import computation_modules as cm
@@ -94,14 +94,12 @@ class TestCountrySpecificFunctions:
 
     def test_uk_budget_summary(self):
         assert (
-            UK_MODULE_DISPATCH["budget_summary"]
-            is cm.compute_budget_summary_module_uk
+            UK_MODULE_DISPATCH["budget_summary"] is cm.compute_budget_summary_module_uk
         )
 
     def test_us_budget_summary(self):
         assert (
-            US_MODULE_DISPATCH["budget_summary"]
-            is cm.compute_budget_summary_module_us
+            US_MODULE_DISPATCH["budget_summary"] is cm.compute_budget_summary_module_us
         )
 
     def test_constituency_is_uk_only(self):
@@ -152,9 +150,7 @@ class TestModuleFunctionSignatures:
         """Collect all unique module functions from both dispatch tables."""
         seen = set()
         fns = []
-        for fn in list(UK_MODULE_DISPATCH.values()) + list(
-            US_MODULE_DISPATCH.values()
-        ):
+        for fn in list(UK_MODULE_DISPATCH.values()) + list(US_MODULE_DISPATCH.values()):
             if id(fn) not in seen:
                 seen.add(id(fn))
                 fns.append(fn)
@@ -285,15 +281,15 @@ class TestRunModules:
 
         run_modules(dispatch, ["test_mod"], bl, rf, b_id, r_id, rep_id, session)
 
-        mock_fn.assert_called_once_with(bl, rf, b_id, r_id, rep_id, session, country_id="")
+        mock_fn.assert_called_once_with(
+            bl, rf, b_id, r_id, rep_id, session, country_id=""
+        )
 
     def test_duplicate_module_name_runs_twice(self):
         dispatch = self._make_mock_dispatch(["a"])
         session = MagicMock()
         ids = [uuid4() for _ in range(3)]
 
-        run_modules(
-            dispatch, ["a", "a"], "bl", "rf", ids[0], ids[1], ids[2], session
-        )
+        run_modules(dispatch, ["a", "a"], "bl", "rf", ids[0], ids[1], ids[2], session)
 
         assert dispatch["a"].call_count == 2

@@ -1,9 +1,11 @@
 """Region model for geographic areas used in analysis."""
 
 from datetime import datetime, timezone
+from enum import Enum
 from typing import TYPE_CHECKING
 from uuid import UUID, uuid4
 
+from pydantic import model_validator
 from sqlmodel import Field, Relationship, SQLModel
 
 from .region_dataset_link import RegionDatasetLink
@@ -13,12 +15,25 @@ if TYPE_CHECKING:
     from .tax_benefit_model import TaxBenefitModel
 
 
+class RegionType(str, Enum):
+    """Type of geographic region."""
+
+    NATIONAL = "national"
+    COUNTRY = "country"
+    STATE = "state"
+    CONGRESSIONAL_DISTRICT = "congressional_district"
+    CONSTITUENCY = "constituency"
+    LOCAL_AUTHORITY = "local_authority"
+    CITY = "city"
+    PLACE = "place"
+
+
 class RegionBase(SQLModel):
     """Base region fields."""
 
     code: str  # e.g., "state/ca", "constituency/Sheffield Central"
     label: str  # e.g., "California", "Sheffield Central"
-    region_type: str  # e.g., "state", "congressional_district", "constituency"
+    region_type: RegionType  # e.g., RegionType.STATE, RegionType.CONSTITUENCY
     requires_filter: bool = False
     filter_field: str | None = None  # e.g., "state_code", "place_fips"
     filter_value: str | None = None  # e.g., "CA", "44000"
@@ -51,7 +66,14 @@ class Region(RegionBase, table=True):
 class RegionCreate(RegionBase):
     """Schema for creating regions."""
 
-    pass
+    @model_validator(mode="after")
+    def check_filter_fields(self) -> "RegionCreate":
+        if self.requires_filter:
+            if not self.filter_field or not self.filter_value:
+                raise ValueError(
+                    "requires_filter=True requires filter_field and filter_value"
+                )
+        return self
 
 
 class RegionRead(RegionBase):

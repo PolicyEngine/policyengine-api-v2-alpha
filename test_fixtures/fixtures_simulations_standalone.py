@@ -1,6 +1,5 @@
 """Fixtures and helpers for standalone simulation endpoint tests."""
 
-from uuid import UUID
 
 from policyengine_api.models import (
     Dataset,
@@ -16,7 +15,9 @@ from policyengine_api.models import (
 )
 
 
-def create_us_model_and_version(session) -> tuple[TaxBenefitModel, TaxBenefitModelVersion]:
+def create_us_model_and_version(
+    session,
+) -> tuple[TaxBenefitModel, TaxBenefitModelVersion]:
     """Create a US tax-benefit model and version."""
     model = TaxBenefitModel(name="policyengine-us", description="US model")
     session.add(model)
@@ -33,7 +34,9 @@ def create_us_model_and_version(session) -> tuple[TaxBenefitModel, TaxBenefitMod
     return model, version
 
 
-def create_uk_model_and_version(session) -> tuple[TaxBenefitModel, TaxBenefitModelVersion]:
+def create_uk_model_and_version(
+    session,
+) -> tuple[TaxBenefitModel, TaxBenefitModelVersion]:
     """Create a UK tax-benefit model and version."""
     model = TaxBenefitModel(name="policyengine-uk", description="UK model")
     session.add(model)

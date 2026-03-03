@@ -11,8 +11,8 @@ For baseline-vs-reform comparisons, use the /analysis/ endpoints instead.
 from typing import Any, List, Literal
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, Field
+from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel, Field, model_validator
 from sqlmodel import Session, select
 
 from policyengine_api.models import (
@@ -94,6 +94,12 @@ class EconomySimulationRequest(BaseModel):
         default=None,
         description="Year for the simulation. Uses latest available if omitted.",
     )
+
+    @model_validator(mode="after")
+    def check_dataset_or_region(self) -> "EconomySimulationRequest":
+        if not self.dataset_id and not self.region:
+            raise ValueError("Either dataset_id or region must be provided")
+        return self
 
 
 class EconomySimulationResponse(BaseModel):
@@ -224,9 +230,13 @@ def _build_economy_response(
 
 
 @router.get("/", response_model=List[SimulationRead])
-def list_simulations(session: Session = Depends(get_session)):
-    """List all simulations."""
-    simulations = session.exec(select(Simulation)).all()
+def list_simulations(
+    limit: int = Query(default=50, le=200),
+    offset: int = Query(default=0, ge=0),
+    session: Session = Depends(get_session),
+):
+    """List simulations with pagination."""
+    simulations = session.exec(select(Simulation).offset(offset).limit(limit)).all()
     return simulations
 
 

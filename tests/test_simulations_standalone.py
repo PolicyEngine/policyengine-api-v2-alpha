@@ -9,10 +9,8 @@ from test_fixtures.fixtures_simulations_standalone import (
     create_household_simulation,
     create_policy,
     create_region,
-    create_uk_model_and_version,
     create_us_model_and_version,
 )
-
 
 # ===========================================================================
 # POST /simulations/household
@@ -216,14 +214,13 @@ def test_create_economy_simulation_invalid_region(client, session):
 
 
 def test_create_economy_simulation_no_region_or_dataset(client, session):
-    """Creating without region or dataset_id returns 400."""
+    """Creating without region or dataset_id returns 422 (Pydantic validation)."""
     model, version = create_us_model_and_version(session)
 
     payload = {"tax_benefit_model_name": "policyengine_us"}
     response = client.post("/simulations/economy", json=payload)
 
-    assert response.status_code == 400
-    assert "Either region or dataset_id" in response.json()["detail"]
+    assert response.status_code == 422
 
 
 def test_create_economy_simulation_policy_not_found(client, session):

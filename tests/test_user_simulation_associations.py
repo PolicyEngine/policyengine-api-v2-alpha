@@ -84,9 +84,7 @@ def test_create_association_invalid_country(client, session):
 
 def test_list_by_user_empty(client):
     """List associations for a user with none returns empty list."""
-    response = client.get(
-        "/user-simulations/", params={"user_id": str(uuid4())}
-    )
+    response = client.get("/user-simulations/", params={"user_id": str(uuid4())})
     assert response.status_code == 200
     assert response.json() == []
 
@@ -99,9 +97,7 @@ def test_list_by_user(client, session):
     create_user_simulation_association(session, user_id, sim1, label="First")
     create_user_simulation_association(session, user_id, sim2, label="Second")
 
-    response = client.get(
-        "/user-simulations/", params={"user_id": str(user_id)}
-    )
+    response = client.get("/user-simulations/", params={"user_id": str(user_id)})
     assert response.status_code == 200
     data = response.json()
     assert len(data) == 2
@@ -111,12 +107,8 @@ def test_list_by_user_filter_country(client, session):
     """Filter associations by country_id."""
     user_id = uuid4()
     simulation = create_simulation(session)
-    create_user_simulation_association(
-        session, user_id, simulation, country_id="us"
-    )
-    create_user_simulation_association(
-        session, user_id, simulation, country_id="uk"
-    )
+    create_user_simulation_association(session, user_id, simulation, country_id="us")
+    create_user_simulation_association(session, user_id, simulation, country_id="uk")
 
     response = client.get(
         "/user-simulations/",

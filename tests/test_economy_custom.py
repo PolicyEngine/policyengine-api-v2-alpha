@@ -138,9 +138,7 @@ class TestBuildFilteredResponse:
         filtered = _build_filtered_response(resp, [])
         for field in _ALWAYS_INCLUDED:
             original = getattr(resp, field)
-            assert getattr(filtered, field) == original, (
-                f"{field} should be preserved"
-            )
+            assert getattr(filtered, field) == original, f"{field} should be preserved"
 
     def test_wealth_decile_keeps_both_fields(self):
         resp = _make_stub_response()

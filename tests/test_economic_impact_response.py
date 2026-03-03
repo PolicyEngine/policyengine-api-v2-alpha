@@ -4,7 +4,6 @@ Covers all Phase 2 output fields: poverty, inequality, budget_summary,
 intra_decile, program_statistics, detailed_budget, and decile_impacts.
 """
 
-import math
 
 from policyengine_api.api.analysis import _build_response, _safe_float
 from policyengine_api.models import ReportStatus
@@ -38,7 +37,6 @@ from test_fixtures.fixtures_economic_impact_response import (
     create_fully_populated_report,
     create_report_with_simulations,
 )
-
 
 # ---------------------------------------------------------------------------
 # _safe_float
@@ -632,7 +630,9 @@ class TestBuildResponseWealthDecile:
 
         assert response.wealth_decile is None
 
-    def test__given_wealth_decile_records__then_income_variable_is_wealth(self, session):
+    def test__given_wealth_decile_records__then_income_variable_is_wealth(
+        self, session
+    ):
         report, baseline_sim, reform_sim = create_report_with_simulations(session)
         add_wealth_decile_records(session, report, baseline_sim, reform_sim)
 

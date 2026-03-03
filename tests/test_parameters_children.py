@@ -8,7 +8,6 @@ from policyengine_api.models import (
     TaxBenefitModelVersion,
 )
 
-
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
@@ -321,9 +320,7 @@ class TestEdgeCases:
 
     def test_missing_country_id_returns_422(self, client):
         """Request without country_id returns 422."""
-        response = client.get(
-            "/parameters/children", params={"parent_path": "gov"}
-        )
+        response = client.get("/parameters/children", params={"parent_path": "gov"})
 
         assert response.status_code == 422
 
@@ -331,9 +328,7 @@ class TestEdgeCases:
         """Omitting parent_path defaults to empty string (root level)."""
         _add_params(session, uk_version, [("gov.hmrc.rate", "Rate")])
 
-        response = client.get(
-            "/parameters/children", params={"country_id": "uk"}
-        )
+        response = client.get("/parameters/children", params={"country_id": "uk"})
 
         assert response.status_code == 200
         assert response.json()["parent_path"] == ""

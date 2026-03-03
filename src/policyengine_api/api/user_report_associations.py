@@ -21,6 +21,8 @@ from policyengine_api.api.analysis import (
     EconomicImpactResponse,
     RegionInfo,
     SimulationInfo,
+)
+from policyengine_api.api.analysis import (
     _build_response as build_economic_response,
 )
 from policyengine_api.api.household_analysis import (
@@ -102,9 +104,7 @@ def get_user_report(
     """Get a specific user-report association by ID."""
     record = session.get(UserReportAssociation, user_report_id)
     if not record:
-        raise HTTPException(
-            status_code=404, detail="User-report association not found"
-        )
+        raise HTTPException(status_code=404, detail="User-report association not found")
     return record
 
 
@@ -126,9 +126,7 @@ def update_user_report(
         )
     ).first()
     if not record:
-        raise HTTPException(
-            status_code=404, detail="User-report association not found"
-        )
+        raise HTTPException(status_code=404, detail="User-report association not found")
 
     update_data = updates.model_dump(exclude_unset=True)
     for key, value in update_data.items():
@@ -160,9 +158,7 @@ def delete_user_report(
         )
     ).first()
     if not record:
-        raise HTTPException(
-            status_code=404, detail="User-report association not found"
-        )
+        raise HTTPException(status_code=404, detail="User-report association not found")
 
     session.delete(record)
     session.commit()
@@ -226,9 +222,7 @@ def get_user_report_full(
     # 1. Load association
     record = session.get(UserReportAssociation, user_report_id)
     if not record:
-        raise HTTPException(
-            status_code=404, detail="User-report association not found"
-        )
+        raise HTTPException(status_code=404, detail="User-report association not found")
 
     # 2. Load report
     report = session.get(Report, record.report_id)
@@ -295,7 +289,11 @@ def get_user_report_full(
 
     if is_economy and baseline_sim and reform_sim:
         # Look up region object for full response
-        region_obj = session.get(Region, baseline_sim.region_id) if baseline_sim.region_id else None
+        region_obj = (
+            session.get(Region, baseline_sim.region_id)
+            if baseline_sim.region_id
+            else None
+        )
         economic_impact = build_economic_response(
             report, baseline_sim, reform_sim, session, region_obj
         )
@@ -324,9 +322,7 @@ def get_user_report_full(
     )
 
 
-def _load_policy_read(
-    policy_id: UUID | None, session: Session
-) -> PolicyRead | None:
+def _load_policy_read(policy_id: UUID | None, session: Session) -> PolicyRead | None:
     """Load a policy with eager-loaded parameter values, or return None."""
     if not policy_id:
         return None
@@ -335,9 +331,7 @@ def _load_policy_read(
         select(Policy)
         .where(Policy.id == policy_id)
         .options(
-            selectinload(Policy.parameter_values).selectinload(
-                ParameterValue.parameter
-            )
+            selectinload(Policy.parameter_values).selectinload(ParameterValue.parameter)
         )
     )
     policy = session.exec(query).first()
@@ -480,7 +474,11 @@ def get_report_full(
     is_household = report.report_type and "household" in report.report_type
 
     if is_economy and baseline_sim and reform_sim:
-        region_obj = session.get(Region, baseline_sim.region_id) if baseline_sim.region_id else None
+        region_obj = (
+            session.get(Region, baseline_sim.region_id)
+            if baseline_sim.region_id
+            else None
+        )
         economic_impact = build_economic_response(
             report, baseline_sim, reform_sim, session, region_obj
         )

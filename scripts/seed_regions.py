@@ -23,9 +23,8 @@ import argparse
 import time
 
 from rich.progress import Progress, SpinnerColumn, TextColumn
-from sqlmodel import Session, select
-
 from seed_utils import console, get_session
+from sqlmodel import Session, select
 
 # Import after seed_utils sets up path
 from policyengine_api.models import (  # noqa: E402
@@ -37,7 +36,8 @@ from policyengine_api.models import (  # noqa: E402
 
 
 def _group_us_datasets(
-    session: Session, us_model_id,
+    session: Session,
+    us_model_id,
 ) -> tuple[list[Dataset], dict[str, list[Dataset]], dict[str, list[Dataset]]]:
     """Pre-fetch and group all US datasets by type.
 

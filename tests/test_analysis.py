@@ -136,9 +136,7 @@ class TestResolveDatasetAndRegion:
         assert resolved_region.filter_value == "ENGLAND"
         assert resolved_region.requires_filter is True
 
-    def test__given_us_state_region__then_returns_state_filter(
-        self, session: Session
-    ):
+    def test__given_us_state_region__then_returns_state_filter(self, session: Session):
         model = create_tax_benefit_model(session, name="policyengine-us")
         dataset = create_dataset(session, model, name="us_cps")
         create_region(
@@ -195,9 +193,7 @@ class TestResolveDatasetAndRegion:
 
     # -- region without filter --
 
-    def test__given_national_uk_region__then_filter_params_none(
-        self, session: Session
-    ):
+    def test__given_national_uk_region__then_filter_params_none(self, session: Session):
         model = create_tax_benefit_model(session, name="policyengine-uk")
         dataset = create_dataset(session, model, name="uk_enhanced_frs")
         create_region(
@@ -223,9 +219,7 @@ class TestResolveDatasetAndRegion:
         assert resolved_region.filter_field is None
         assert resolved_region.filter_value is None
 
-    def test__given_national_us_region__then_filter_params_none(
-        self, session: Session
-    ):
+    def test__given_national_us_region__then_filter_params_none(self, session: Session):
         model = create_tax_benefit_model(session, name="policyengine-us")
         dataset = create_dataset(session, model, name="us_cps")
         create_region(
@@ -314,16 +308,15 @@ class TestResolveDatasetAndRegion:
 
         assert exc_info.value.status_code == 404
 
-    def test__given_neither_dataset_nor_region__then_raises_400(self, session: Session):
-        request = EconomicImpactRequest(
-            tax_benefit_model_name="policyengine_uk",
-        )
+    def test__given_neither_dataset_nor_region__then_raises_validation_error(
+        self, session: Session
+    ):
+        from pydantic import ValidationError
 
-        with pytest.raises(HTTPException) as exc_info:
-            _resolve_dataset_and_region(request, session)
-
-        assert exc_info.value.status_code == 400
-        assert "either dataset_id or region" in exc_info.value.detail.lower()
+        with pytest.raises(ValidationError, match="dataset_id or region"):
+            EconomicImpactRequest(
+                tax_benefit_model_name="policyengine_uk",
+            )
 
     def test__given_nonexistent_dataset_id__then_raises_404(self, session: Session):
         nonexistent_id = uuid4()
@@ -685,7 +678,7 @@ class TestEconomicImpactValidation:
                 "tax_benefit_model_name": "policyengine_uk",
             },
         )
-        assert response.status_code == 400
+        assert response.status_code == 422
 
     def test_invalid_uuid(self):
         response = client.post(

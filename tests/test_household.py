@@ -342,7 +342,9 @@ class TestUSPolicyReform:
         """
         # Get the US model and a UBI parameter
         model_id = self._get_us_model_id()
-        param_name = "gov.contrib.ubi_center.basic_income.amount.person.by_age[3].amount"
+        param_name = (
+            "gov.contrib.ubi_center.basic_income.amount.person.by_age[3].amount"
+        )
         param_id = self._get_parameter_id(model_id, param_name)
 
         # Create a policy with $1000 UBI for older adults

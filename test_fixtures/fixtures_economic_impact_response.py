@@ -5,7 +5,6 @@ table records (poverty, inequality, budget_summary, intra_decile,
 program_statistics, decile_impacts) for testing _build_response().
 """
 
-from uuid import uuid4
 
 from sqlmodel import Session
 
@@ -343,7 +342,12 @@ def add_constituency_records(
     records = []
     constituencies = [
         {"code": "E14000530", "name": "Birmingham, Ladywood", "x": 410, "y": 290},
-        {"code": "E14000639", "name": "Cities of London and Westminster", "x": 530, "y": 180},
+        {
+            "code": "E14000639",
+            "name": "Cities of London and Westminster",
+            "x": 530,
+            "y": 180,
+        },
     ]
     for c in constituencies:
         rec = ConstituencyImpact(

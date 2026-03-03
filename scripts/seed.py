@@ -25,13 +25,12 @@ import argparse
 import time
 from dataclasses import dataclass
 
-from seed_utils import console, get_session
-
 # Import seed functions from subscripts
 from seed_datasets import seed_uk_datasets, seed_us_datasets
 from seed_models import seed_uk_model, seed_us_model
 from seed_policies import seed_uk_policy, seed_us_policy
 from seed_regions import seed_uk_regions, seed_us_regions
+from seed_utils import console, get_session
 
 
 @dataclass
@@ -293,18 +292,14 @@ def run_seed(config: SeedConfig):
 
         if config.seed_uk:
             console.print("[bold]UK Datasets[/bold]")
-            uk_created, uk_skipped = seed_uk_datasets(
-                session, year=config.dataset_year
-            )
+            uk_created, uk_skipped = seed_uk_datasets(session, year=config.dataset_year)
             console.print(
                 f"[green]✓[/green] UK: {uk_created} created, {uk_skipped} skipped\n"
             )
 
         if config.seed_us:
             console.print("[bold]US Datasets[/bold]")
-            us_created, us_skipped = seed_us_datasets(
-                session, year=config.dataset_year
-            )
+            us_created, us_skipped = seed_us_datasets(session, year=config.dataset_year)
             console.print(
                 f"[green]✓[/green] US: {us_created} created, {us_skipped} skipped\n"
             )
@@ -344,7 +339,7 @@ def run_seed(config: SeedConfig):
                 )
 
     elapsed = time.time() - start
-    console.print(f"[bold green]✓ Database seeding complete![/bold green]")
+    console.print("[bold green]✓ Database seeding complete![/bold green]")
     console.print(f"[bold]Total time: {elapsed:.1f}s[/bold]")
 
 
@@ -390,7 +385,9 @@ Presets:
         f"[dim](preset: {args.preset})[/dim]\n"
     )
     console.print(f"  Countries: {country_str}")
-    console.print(f"  Datasets: {'all years' if not config.dataset_year else config.dataset_year}")
+    console.print(
+        f"  Datasets: {'all years' if not config.dataset_year else config.dataset_year}"
+    )
     if config.skip_state_params:
         console.print("  State params: skipped")
     if config.variable_whitelist is not None:
@@ -404,7 +401,9 @@ Presets:
             region_details.append("no places")
         if config.skip_districts:
             region_details.append("no districts")
-        region_str = f"yes ({', '.join(region_details)})" if region_details else "yes (all)"
+        region_str = (
+            f"yes ({', '.join(region_details)})" if region_details else "yes (all)"
+        )
         console.print(f"  Regions: {region_str}")
     else:
         console.print("  Regions: no")

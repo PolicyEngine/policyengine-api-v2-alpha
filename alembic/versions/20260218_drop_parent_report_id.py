@@ -10,8 +10,9 @@ the reports table. No code reads or writes this column.
 
 from typing import Sequence, Union
 
-from alembic import op
 import sqlalchemy as sa
+
+from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "drop_parent_report"
@@ -22,9 +23,7 @@ depends_on: Union[str, Sequence[str], None] = None
 
 def upgrade() -> None:
     """Drop parent_report_id column and its FK constraint."""
-    op.drop_constraint(
-        "reports_parent_report_id_fkey", "reports", type_="foreignkey"
-    )
+    op.drop_constraint("reports_parent_report_id_fkey", "reports", type_="foreignkey")
     op.drop_column("reports", "parent_report_id")
 
 
