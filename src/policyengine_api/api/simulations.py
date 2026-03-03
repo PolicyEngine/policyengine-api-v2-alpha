@@ -20,6 +20,7 @@ from policyengine_api.models import (
     Household,
     Policy,
     Region,
+    RegionDatasetLink,
     Simulation,
     SimulationRead,
     SimulationStatus,
@@ -89,6 +90,10 @@ class EconomySimulationRequest(BaseModel):
         default=None,
         description="Optional behavioural response specification ID",
     )
+    year: int | None = Field(
+        default=None,
+        description="Year for the simulation. Uses latest available if omitted.",
+    )
 
 
 class EconomySimulationResponse(BaseModel):
@@ -115,8 +120,14 @@ def _resolve_economy_dataset(
     region_code: str | None,
     dataset_id: UUID | None,
     session: Session,
+    year: int | None = None,
 ) -> tuple[Dataset, Region | None]:
-    """Resolve dataset from region code or dataset_id for economy simulations."""
+    """Resolve dataset from region code or dataset_id for economy simulations.
+
+    When a region is provided, the dataset is resolved from the region_datasets
+    join table. If year is set, the dataset for that year is selected;
+    otherwise the latest available year is used.
+    """
     if region_code:
         model_name = tax_benefit_model_name.replace("_", "-")
         region = session.exec(
@@ -130,11 +141,24 @@ def _resolve_economy_dataset(
                 status_code=404,
                 detail=f"Region '{region_code}' not found for model {model_name}",
             )
-        dataset = session.get(Dataset, region.dataset_id)
+
+        # Resolve dataset from join table
+        query = (
+            select(Dataset)
+            .join(RegionDatasetLink)
+            .where(RegionDatasetLink.region_id == region.id)
+        )
+        if year:
+            query = query.where(Dataset.year == year)
+        else:
+            query = query.order_by(Dataset.year.desc())  # type: ignore
+        dataset = session.exec(query).first()
+
         if not dataset:
+            year_msg = f" for year {year}" if year else ""
             raise HTTPException(
                 status_code=404,
-                detail=f"Dataset for region '{region_code}' not found",
+                detail=f"No dataset found for region '{region_code}'{year_msg}",
             )
         return dataset, region
 
@@ -298,6 +322,7 @@ def create_economy_simulation(
         request.region,
         request.dataset_id,
         session,
+        year=request.year,
     )
 
     # Validate policy exists (if provided)
@@ -327,6 +352,7 @@ def create_economy_simulation(
         filter_field=filter_field,
         filter_value=filter_value,
         region_id=region.id if region else None,
+        year=dataset.year,
     )
 
     return _build_economy_response(simulation, region)

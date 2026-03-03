@@ -60,6 +60,8 @@ class SimulationBase(SQLModel):
         description="Value to match when filtering (e.g., '44000', 'ENGLAND')",
     )
 
+    year: int | None = None
+
 
 class Simulation(SimulationBase, table=True):
     """Simulation database model."""
