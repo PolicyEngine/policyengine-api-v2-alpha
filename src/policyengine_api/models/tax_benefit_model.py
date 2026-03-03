@@ -2,6 +2,7 @@ from datetime import datetime, timezone
 from typing import TYPE_CHECKING
 from uuid import UUID, uuid4
 
+from sqlalchemy import JSON
 from sqlmodel import Field, Relationship, SQLModel
 
 if TYPE_CHECKING:
@@ -22,6 +23,7 @@ class TaxBenefitModel(TaxBenefitModelBase, table=True):
 
     id: UUID = Field(default_factory=uuid4, primary_key=True)
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    modelled_policies: dict | None = Field(default=None, sa_type=JSON)
 
     # Relationships
     versions: list["TaxBenefitModelVersion"] = Relationship(back_populates="model")
@@ -38,3 +40,4 @@ class TaxBenefitModelRead(TaxBenefitModelBase):
 
     id: UUID
     created_at: datetime
+    modelled_policies: dict | None = None
