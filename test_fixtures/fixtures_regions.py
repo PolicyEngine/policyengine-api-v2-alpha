@@ -7,6 +7,7 @@ import pytest
 from policyengine_api.models import (
     Dataset,
     Region,
+    RegionDatasetLink,
     Simulation,
     SimulationStatus,
     TaxBenefitModel,
@@ -116,7 +117,7 @@ def create_region(
     filter_field: str | None = None,
     filter_value: str | None = None,
 ) -> Region:
-    """Create and persist a Region."""
+    """Create and persist a Region with a dataset link."""
     region = Region(
         code=code,
         label=label,
@@ -124,12 +125,17 @@ def create_region(
         requires_filter=requires_filter,
         filter_field=filter_field,
         filter_value=filter_value,
-        dataset_id=dataset.id,
         tax_benefit_model_id=model.id,
     )
     session.add(region)
     session.commit()
     session.refresh(region)
+
+    # Create the join table link
+    link = RegionDatasetLink(region_id=region.id, dataset_id=dataset.id)
+    session.add(link)
+    session.commit()
+
     return region
 
 
