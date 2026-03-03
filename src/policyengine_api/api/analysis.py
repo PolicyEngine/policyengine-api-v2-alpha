@@ -51,6 +51,7 @@ from policyengine_api.models import (
     ProgramStatistics,
     ProgramStatisticsRead,
     Region,
+    RegionDatasetLink,
     Report,
     ReportStatus,
     Simulation,
@@ -159,6 +160,10 @@ class EconomicImpactRequest(BaseModel):
     )
     dynamic_id: UUID | None = Field(
         default=None, description="Optional behavioural response specification ID"
+    )
+    year: int | None = Field(
+        default=None,
+        description="Year for the analysis (e.g., 2026). Selects the dataset for that year. Uses latest available if omitted.",
     )
 
 
@@ -269,6 +274,7 @@ def _get_or_create_simulation(
     filter_field: str | None = None,
     filter_value: str | None = None,
     region_id: UUID | None = None,
+    year: int | None = None,
 ) -> Simulation:
     """Get existing simulation or create a new one."""
     sim_id = _get_deterministic_simulation_id(
@@ -298,6 +304,7 @@ def _get_or_create_simulation(
         filter_field=filter_field,
         filter_value=filter_value,
         region_id=region_id,
+        year=year,
     )
     session.add(simulation)
     session.commit()
@@ -1062,6 +1069,10 @@ def _resolve_dataset_and_region(
 ) -> tuple[Dataset, Region | None]:
     """Resolve dataset from request, optionally via region lookup.
 
+    When a region is provided, the dataset is resolved from the region_datasets
+    join table. If request.year is set, the dataset for that year is selected;
+    otherwise the latest available year is used.
+
     Returns:
         Tuple of (dataset, region) where region is None if dataset_id was provided directly.
     """
@@ -1081,11 +1092,23 @@ def _resolve_dataset_and_region(
                 detail=f"Region '{request.region}' not found for model {model_name}",
             )
 
-        dataset = session.get(Dataset, region.dataset_id)
+        # Resolve dataset from join table, filtered by year if provided
+        query = (
+            select(Dataset)
+            .join(RegionDatasetLink)
+            .where(RegionDatasetLink.region_id == region.id)
+        )
+        if request.year:
+            query = query.where(Dataset.year == request.year)
+        else:
+            query = query.order_by(Dataset.year.desc())  # type: ignore
+        dataset = session.exec(query).first()
+
         if not dataset:
+            year_msg = f" for year {request.year}" if request.year else ""
             raise HTTPException(
                 status_code=404,
-                detail=f"Dataset for region '{request.region}' not found",
+                detail=f"No dataset found for region '{request.region}'{year_msg}",
             )
         return dataset, region
 
@@ -1143,6 +1166,7 @@ def economic_impact(
         filter_field=filter_field,
         filter_value=filter_value,
         region_id=region.id if region else None,
+        year=dataset.year,
     )
 
     reform_sim = _get_or_create_simulation(
@@ -1155,6 +1179,7 @@ def economic_impact(
         filter_field=filter_field,
         filter_value=filter_value,
         region_id=region.id if region else None,
+        year=dataset.year,
     )
 
     # Get or create report
@@ -1230,6 +1255,10 @@ class EconomyCustomRequest(BaseModel):
     dynamic_id: UUID | None = Field(
         default=None, description="Optional behavioural response specification ID"
     )
+    year: int | None = Field(
+        default=None,
+        description="Year for the analysis. Uses latest available if omitted.",
+    )
     modules: list[str] = Field(
         description="List of module names to compute (see GET /analysis/options)"
     )
@@ -1296,6 +1325,7 @@ def economy_custom(
         region=request.region,
         policy_id=request.policy_id,
         dynamic_id=request.dynamic_id,
+        year=request.year,
     )
 
     dataset, region_obj = _resolve_dataset_and_region(impact_request, session)
@@ -1319,6 +1349,7 @@ def economy_custom(
         filter_field=filter_field,
         filter_value=filter_value,
         region_id=region_obj.id if region_obj else None,
+        year=dataset.year,
     )
 
     reform_sim = _get_or_create_simulation(
@@ -1331,6 +1362,7 @@ def economy_custom(
         filter_field=filter_field,
         filter_value=filter_value,
         region_id=region_obj.id if region_obj else None,
+        year=dataset.year,
     )
 
     label = f"Custom analysis: {request.tax_benefit_model_name}"

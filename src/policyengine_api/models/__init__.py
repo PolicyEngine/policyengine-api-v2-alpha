@@ -61,6 +61,7 @@ from .parameter_value import (
 from .policy import Policy, PolicyCreate, PolicyRead
 from .poverty import Poverty, PovertyCreate, PovertyRead
 from .region import Region, RegionCreate, RegionRead
+from .region_dataset_link import RegionDatasetLink
 from .program_statistics import (
     ProgramStatistics,
     ProgramStatisticsCreate,
@@ -174,6 +175,7 @@ __all__ = [
     "PovertyRead",
     "Region",
     "RegionCreate",
+    "RegionDatasetLink",
     "RegionRead",
     "ProgramStatistics",
     "ProgramStatisticsCreate",

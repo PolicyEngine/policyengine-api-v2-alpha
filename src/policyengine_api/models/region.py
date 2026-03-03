@@ -6,6 +6,8 @@ from uuid import UUID, uuid4
 
 from sqlmodel import Field, Relationship, SQLModel
 
+from .region_dataset_link import RegionDatasetLink
+
 if TYPE_CHECKING:
     from .dataset import Dataset
     from .tax_benefit_model import TaxBenefitModel
@@ -23,7 +25,6 @@ class RegionBase(SQLModel):
     parent_code: str | None = None  # e.g., "us", "state/ca"
     state_code: str | None = None  # For US regions
     state_name: str | None = None  # For US regions
-    dataset_id: UUID = Field(foreign_key="datasets.id")
     tax_benefit_model_id: UUID = Field(foreign_key="tax_benefit_models.id")
 
 
@@ -32,7 +33,8 @@ class Region(RegionBase, table=True):
 
     Regions represent geographic areas for analysis, from countries
     down to states, congressional districts, cities, etc.
-    Each region has a dataset (either dedicated or filtered from parent).
+    Each region links to multiple datasets (one per year) via the
+    region_datasets join table.
     """
 
     __tablename__ = "regions"
@@ -42,7 +44,7 @@ class Region(RegionBase, table=True):
     updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
     # Relationships
-    dataset: "Dataset" = Relationship()
+    datasets: list["Dataset"] = Relationship(link_model=RegionDatasetLink)
     tax_benefit_model: "TaxBenefitModel" = Relationship()
 
 
