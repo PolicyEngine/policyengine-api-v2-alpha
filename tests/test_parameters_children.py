@@ -1,5 +1,7 @@
 """Tests for GET /parameters/children endpoint."""
 
+from datetime import datetime, timezone
+
 import pytest
 
 from policyengine_api.models import (
@@ -81,7 +83,11 @@ class TestParameterChildrenBasic:
         )
 
         response = client.get(
-            "/parameters/children", params={"country_id": "uk", "parent_path": "gov"}
+            "/parameters/children",
+            params={
+                "tax_benefit_model_name": "policyengine-uk",
+                "parent_path": "gov",
+            },
         )
 
         assert response.status_code == 200
@@ -107,7 +113,11 @@ class TestParameterChildrenBasic:
         )
 
         response = client.get(
-            "/parameters/children", params={"country_id": "uk", "parent_path": "gov"}
+            "/parameters/children",
+            params={
+                "tax_benefit_model_name": "policyengine-uk",
+                "parent_path": "gov",
+            },
         )
 
         assert response.status_code == 200
@@ -136,7 +146,11 @@ class TestParameterChildrenBasic:
         )
 
         response = client.get(
-            "/parameters/children", params={"country_id": "uk", "parent_path": "gov"}
+            "/parameters/children",
+            params={
+                "tax_benefit_model_name": "policyengine-uk",
+                "parent_path": "gov",
+            },
         )
 
         children = response.json()["children"]
@@ -162,7 +176,11 @@ class TestChildCount:
         )
 
         response = client.get(
-            "/parameters/children", params={"country_id": "uk", "parent_path": "gov"}
+            "/parameters/children",
+            params={
+                "tax_benefit_model_name": "policyengine-uk",
+                "parent_path": "gov",
+            },
         )
 
         children = response.json()["children"]
@@ -184,7 +202,10 @@ class TestChildCount:
 
         response = client.get(
             "/parameters/children",
-            params={"country_id": "uk", "parent_path": "gov.hmrc"},
+            params={
+                "tax_benefit_model_name": "policyengine-uk",
+                "parent_path": "gov.hmrc",
+            },
         )
 
         children = response.json()["children"]
@@ -199,7 +220,11 @@ class TestChildCount:
         _add_params(session, uk_version, [("gov.rate", "Rate")])
 
         response = client.get(
-            "/parameters/children", params={"country_id": "uk", "parent_path": "gov"}
+            "/parameters/children",
+            params={
+                "tax_benefit_model_name": "policyengine-uk",
+                "parent_path": "gov",
+            },
         )
 
         children = response.json()["children"]
@@ -207,41 +232,57 @@ class TestChildCount:
         assert children[0]["child_count"] is None
 
 
-class TestCountryFiltering:
-    """Tests for country_id filtering."""
+class TestModelNameFiltering:
+    """Tests for tax_benefit_model_name filtering."""
 
-    def test_uk_country_id(self, client, session, uk_version):
-        """country_id=uk returns UK parameters."""
+    def test_uk_model(self, client, session, uk_version):
+        """policyengine-uk returns UK parameters."""
         _add_params(session, uk_version, [("gov.hmrc.rate", "Rate")])
 
         response = client.get(
-            "/parameters/children", params={"country_id": "uk", "parent_path": "gov"}
+            "/parameters/children",
+            params={
+                "tax_benefit_model_name": "policyengine-uk",
+                "parent_path": "gov",
+            },
         )
 
         assert response.status_code == 200
         assert len(response.json()["children"]) == 1
 
-    def test_us_country_id(self, client, session, us_version):
-        """country_id=us returns US parameters."""
+    def test_us_model(self, client, session, us_version):
+        """policyengine-us returns US parameters."""
         _add_params(session, us_version, [("gov.irs.rate", "Rate")])
 
         response = client.get(
-            "/parameters/children", params={"country_id": "us", "parent_path": "gov"}
+            "/parameters/children",
+            params={
+                "tax_benefit_model_name": "policyengine-us",
+                "parent_path": "gov",
+            },
         )
 
         assert response.status_code == 200
         assert len(response.json()["children"]) == 1
 
-    def test_country_isolation(self, client, session, uk_version, us_version):
-        """Parameters from a different country are excluded."""
+    def test_model_isolation(self, client, session, uk_version, us_version):
+        """Parameters from a different model are excluded."""
         _add_params(session, uk_version, [("gov.hmrc.rate", "UK rate")])
         _add_params(session, us_version, [("gov.irs.rate", "US rate")])
 
         uk_response = client.get(
-            "/parameters/children", params={"country_id": "uk", "parent_path": "gov"}
+            "/parameters/children",
+            params={
+                "tax_benefit_model_name": "policyengine-uk",
+                "parent_path": "gov",
+            },
         )
         us_response = client.get(
-            "/parameters/children", params={"country_id": "us", "parent_path": "gov"}
+            "/parameters/children",
+            params={
+                "tax_benefit_model_name": "policyengine-us",
+                "parent_path": "gov",
+            },
         )
 
         uk_paths = [c["path"] for c in uk_response.json()["children"]]
@@ -249,11 +290,10 @@ class TestCountryFiltering:
         assert uk_paths == ["gov.hmrc"]
         assert us_paths == ["gov.irs"]
 
-    def test_invalid_country_id_returns_422(self, client):
-        """An invalid country_id is rejected by Literal validation."""
+    def test_missing_model_name_returns_422(self, client):
+        """Request without tax_benefit_model_name returns 422."""
         response = client.get(
-            "/parameters/children",
-            params={"country_id": "fr", "parent_path": "gov"},
+            "/parameters/children", params={"parent_path": "gov"}
         )
 
         assert response.status_code == 422
@@ -267,7 +307,11 @@ class TestEdgeCases:
         _add_params(session, uk_version, [("gov.hmrc.rate", "Rate")])
 
         response = client.get(
-            "/parameters/children", params={"country_id": "uk", "parent_path": ""}
+            "/parameters/children",
+            params={
+                "tax_benefit_model_name": "policyengine-uk",
+                "parent_path": "",
+            },
         )
 
         assert response.status_code == 200
@@ -282,7 +326,10 @@ class TestEdgeCases:
 
         response = client.get(
             "/parameters/children",
-            params={"country_id": "uk", "parent_path": "gov.dwp"},
+            params={
+                "tax_benefit_model_name": "policyengine-uk",
+                "parent_path": "gov.dwp",
+            },
         )
 
         assert response.status_code == 200
@@ -301,7 +348,11 @@ class TestEdgeCases:
         )
 
         response = client.get(
-            "/parameters/children", params={"country_id": "uk", "parent_path": "gov"}
+            "/parameters/children",
+            params={
+                "tax_benefit_model_name": "policyengine-uk",
+                "parent_path": "gov",
+            },
         )
 
         paths = [c["path"] for c in response.json()["children"]]
@@ -312,23 +363,24 @@ class TestEdgeCases:
         _add_params(session, uk_version, [("gov.hmrc.income_tax.rate", "Rate")])
 
         response = client.get(
-            "/parameters/children", params={"country_id": "uk", "parent_path": "gov"}
+            "/parameters/children",
+            params={
+                "tax_benefit_model_name": "policyengine-uk",
+                "parent_path": "gov",
+            },
         )
 
         children = response.json()["children"]
         assert children[0]["label"] == "hmrc"
 
-    def test_missing_country_id_returns_422(self, client):
-        """Request without country_id returns 422."""
-        response = client.get("/parameters/children", params={"parent_path": "gov"})
-
-        assert response.status_code == 422
-
     def test_default_parent_path_is_empty(self, client, session, uk_version):
         """Omitting parent_path defaults to empty string (root level)."""
         _add_params(session, uk_version, [("gov.hmrc.rate", "Rate")])
 
-        response = client.get("/parameters/children", params={"country_id": "uk"})
+        response = client.get(
+            "/parameters/children",
+            params={"tax_benefit_model_name": "policyengine-uk"},
+        )
 
         assert response.status_code == 200
         assert response.json()["parent_path"] == ""
@@ -339,7 +391,11 @@ class TestEdgeCases:
         _add_params(session, uk_version, [("gov.rate", "The rate")])
 
         response = client.get(
-            "/parameters/children", params={"country_id": "uk", "parent_path": "gov"}
+            "/parameters/children",
+            params={
+                "tax_benefit_model_name": "policyengine-uk",
+                "parent_path": "gov",
+            },
         )
 
         param = response.json()["children"][0]["parameter"]
@@ -354,7 +410,11 @@ class TestEdgeCases:
         _add_params(session, uk_version, [("gov.hmrc.rate", "Rate")])
 
         response = client.get(
-            "/parameters/children", params={"country_id": "uk", "parent_path": "gov"}
+            "/parameters/children",
+            params={
+                "tax_benefit_model_name": "policyengine-uk",
+                "parent_path": "gov",
+            },
         )
 
         node = response.json()["children"][0]
@@ -378,7 +438,10 @@ class TestEdgeCases:
         ]:
             resp = client.get(
                 "/parameters/children",
-                params={"country_id": "uk", "parent_path": parent},
+                params={
+                    "tax_benefit_model_name": "policyengine-uk",
+                    "parent_path": parent,
+                },
             )
             children = resp.json()["children"]
             assert len(children) == 1
@@ -389,7 +452,7 @@ class TestEdgeCases:
         resp = client.get(
             "/parameters/children",
             params={
-                "country_id": "uk",
+                "tax_benefit_model_name": "policyengine-uk",
                 "parent_path": "gov.hmrc.income_tax.rates.uk[0]",
             },
         )
@@ -397,3 +460,86 @@ class TestEdgeCases:
         assert len(children) == 1
         assert children[0]["type"] == "parameter"
         assert children[0]["path"] == "gov.hmrc.income_tax.rates.uk[0].rate"
+
+
+class TestVersionFiltering:
+    """Tests for version filtering on the children endpoint."""
+
+    def test_defaults_to_latest_version(self, client, session):
+        """When only model name is given, returns children from latest version."""
+        model = TaxBenefitModel(name="policyengine-uk", description="UK")
+        session.add(model)
+        session.commit()
+        session.refresh(model)
+
+        v1 = TaxBenefitModelVersion(
+            model_id=model.id,
+            version="1.0",
+            created_at=datetime(2025, 1, 1, tzinfo=timezone.utc),
+        )
+        v2 = TaxBenefitModelVersion(
+            model_id=model.id,
+            version="2.0",
+            created_at=datetime(2025, 6, 1, tzinfo=timezone.utc),
+        )
+        session.add(v1)
+        session.add(v2)
+        session.commit()
+        session.refresh(v1)
+        session.refresh(v2)
+
+        _add_params(session, v1, [("gov.old_param", "Old")])
+        _add_params(session, v2, [("gov.new_param", "New")])
+
+        response = client.get(
+            "/parameters/children",
+            params={
+                "tax_benefit_model_name": "policyengine-uk",
+                "parent_path": "gov",
+            },
+        )
+
+        assert response.status_code == 200
+        children = response.json()["children"]
+        assert len(children) == 1
+        assert children[0]["path"] == "gov.new_param"
+
+    def test_explicit_version_id_returns_that_version(self, client, session):
+        """When version ID is given, returns children from that specific version."""
+        model = TaxBenefitModel(name="policyengine-uk", description="UK")
+        session.add(model)
+        session.commit()
+        session.refresh(model)
+
+        v1 = TaxBenefitModelVersion(
+            model_id=model.id,
+            version="1.0",
+            created_at=datetime(2025, 1, 1, tzinfo=timezone.utc),
+        )
+        v2 = TaxBenefitModelVersion(
+            model_id=model.id,
+            version="2.0",
+            created_at=datetime(2025, 6, 1, tzinfo=timezone.utc),
+        )
+        session.add(v1)
+        session.add(v2)
+        session.commit()
+        session.refresh(v1)
+        session.refresh(v2)
+
+        _add_params(session, v1, [("gov.old_param", "Old")])
+        _add_params(session, v2, [("gov.new_param", "New")])
+
+        response = client.get(
+            "/parameters/children",
+            params={
+                "tax_benefit_model_name": "policyengine-uk",
+                "parent_path": "gov",
+                "tax_benefit_model_version_id": str(v1.id),
+            },
+        )
+
+        assert response.status_code == 200
+        children = response.json()["children"]
+        assert len(children) == 1
+        assert children[0]["path"] == "gov.old_param"

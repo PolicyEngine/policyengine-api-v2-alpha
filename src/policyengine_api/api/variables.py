@@ -12,14 +12,12 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlmodel import Session, select
 
-from policyengine_api.config.constants import COUNTRY_MODEL_NAMES, CountryId
 from policyengine_api.models import (
-    TaxBenefitModel,
-    TaxBenefitModelVersion,
     Variable,
     VariableRead,
 )
 from policyengine_api.services.database import get_session
+from policyengine_api.services.tax_benefit_models import resolve_model_version_id
 
 router = APIRouter(prefix="/variables", tags=["variables"])
 
@@ -30,6 +28,7 @@ def list_variables(
     limit: int = 100,
     search: str | None = None,
     tax_benefit_model_name: str | None = None,
+    tax_benefit_model_version_id: UUID | None = None,
     session: Session = Depends(get_session),
 ):
     """List available variables with pagination and search.
@@ -43,20 +42,19 @@ def list_variables(
         tax_benefit_model_name: Filter by country model.
             Use "policyengine-uk" for UK variables.
             Use "policyengine-us" for US variables.
+            Defaults to the latest model version when no version ID is given.
+        tax_benefit_model_version_id: Filter by a specific model version.
+            Takes precedence over tax_benefit_model_name.
     """
     query = select(Variable)
 
-    # Filter by tax benefit model name (country)
-    if tax_benefit_model_name:
-        query = (
-            query.join(TaxBenefitModelVersion)
-            .join(TaxBenefitModel)
-            .where(TaxBenefitModel.name == tax_benefit_model_name)
-        )
+    version_id = resolve_model_version_id(
+        tax_benefit_model_name, tax_benefit_model_version_id, session
+    )
+    if version_id:
+        query = query.where(Variable.tax_benefit_model_version_id == version_id)
 
     if search:
-        # Case-insensitive search using ILIKE
-        # Note: Variables don't have a label field, only name and description
         search_pattern = f"%{search}%"
         search_filter = Variable.name.ilike(
             search_pattern
@@ -73,7 +71,8 @@ class VariableByNameRequest(BaseModel):
     """Request body for looking up variables by name."""
 
     names: list[str]
-    country_id: CountryId
+    tax_benefit_model_name: str
+    tax_benefit_model_version_id: UUID | None = None
 
 
 @router.post("/by-name", response_model=List[VariableRead])
@@ -94,17 +93,17 @@ def get_variables_by_name(
     if not request.names:
         return []
 
-    model_name = COUNTRY_MODEL_NAMES[request.country_id]
-    query = (
-        select(Variable)
-        .join(TaxBenefitModelVersion)
-        .join(TaxBenefitModel)
-        .where(TaxBenefitModel.name == model_name)
-        .where(Variable.name.in_(request.names))
-        .order_by(Variable.name)
+    version_id = resolve_model_version_id(
+        request.tax_benefit_model_name,
+        request.tax_benefit_model_version_id,
+        session,
     )
 
-    return session.exec(query).all()
+    query = select(Variable).where(Variable.name.in_(request.names))
+    if version_id:
+        query = query.where(Variable.tax_benefit_model_version_id == version_id)
+
+    return session.exec(query.order_by(Variable.name)).all()
 
 
 @router.get("/{variable_id}", response_model=VariableRead)

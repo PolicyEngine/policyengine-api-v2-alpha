@@ -1,5 +1,7 @@
 """Tests for POST /variables/by-name endpoint."""
 
+from datetime import datetime, timezone
+
 import pytest
 
 from policyengine_api.models import (
@@ -76,7 +78,10 @@ class TestVariablesByName:
 
         response = client.post(
             "/variables/by-name",
-            json={"names": ["employment_income", "income_tax"], "country_id": "uk"},
+            json={
+                "names": ["employment_income", "income_tax"],
+                "tax_benefit_model_name": "policyengine-uk",
+            },
         )
 
         assert response.status_code == 200
@@ -85,11 +90,14 @@ class TestVariablesByName:
         returned_names = {v["name"] for v in data}
         assert returned_names == {"employment_income", "income_tax"}
 
-    def test_returns_empty_list_for_empty_names(self, client):
+    def test_returns_empty_list_for_empty_names(self, client, session, uk_version):
         """Given an empty names list, returns an empty list."""
         response = client.post(
             "/variables/by-name",
-            json={"names": [], "country_id": "uk"},
+            json={
+                "names": [],
+                "tax_benefit_model_name": "policyengine-uk",
+            },
         )
 
         assert response.status_code == 200
@@ -101,7 +109,10 @@ class TestVariablesByName:
 
         response = client.post(
             "/variables/by-name",
-            json={"names": ["nonexistent_var", "also_missing"], "country_id": "uk"},
+            json={
+                "names": ["nonexistent_var", "also_missing"],
+                "tax_benefit_model_name": "policyengine-uk",
+            },
         )
 
         assert response.status_code == 200
@@ -115,7 +126,10 @@ class TestVariablesByName:
 
         response = client.post(
             "/variables/by-name",
-            json={"names": ["income_tax", "fake_var"], "country_id": "uk"},
+            json={
+                "names": ["income_tax", "fake_var"],
+                "tax_benefit_model_name": "policyengine-uk",
+            },
         )
 
         assert response.status_code == 200
@@ -129,7 +143,10 @@ class TestVariablesByName:
 
         response = client.post(
             "/variables/by-name",
-            json={"names": ["age"], "country_id": "uk"},
+            json={
+                "names": ["age"],
+                "tax_benefit_model_name": "policyengine-uk",
+            },
         )
 
         assert response.status_code == 200
@@ -147,7 +164,7 @@ class TestVariablesByName:
             "/variables/by-name",
             json={
                 "names": ["zzz_var", "aaa_var", "mmm_var"],
-                "country_id": "uk",
+                "tax_benefit_model_name": "policyengine-uk",
             },
         )
 
@@ -161,7 +178,10 @@ class TestVariablesByName:
 
         response = client.post(
             "/variables/by-name",
-            json={"names": ["income_tax"], "country_id": "uk"},
+            json={
+                "names": ["income_tax"],
+                "tax_benefit_model_name": "policyengine-uk",
+            },
         )
 
         assert response.status_code == 200
@@ -174,21 +194,27 @@ class TestVariablesByName:
         assert "tax_benefit_model_version_id" in var
 
 
-class TestVariablesByNameCountryFiltering:
-    """Tests for country_id filtering."""
+class TestVariablesByNameModelFiltering:
+    """Tests for tax_benefit_model_name filtering."""
 
-    def test_country_isolation(self, client, session, uk_version, us_version):
-        """Variables from a different country are excluded."""
+    def test_model_isolation(self, client, session, uk_version, us_version):
+        """Variables from a different model are excluded."""
         _add_var(session, uk_version, "council_tax")
         _add_var(session, us_version, "state_income_tax")
 
         uk_response = client.post(
             "/variables/by-name",
-            json={"names": ["council_tax", "state_income_tax"], "country_id": "uk"},
+            json={
+                "names": ["council_tax", "state_income_tax"],
+                "tax_benefit_model_name": "policyengine-uk",
+            },
         )
         us_response = client.post(
             "/variables/by-name",
-            json={"names": ["council_tax", "state_income_tax"], "country_id": "us"},
+            json={
+                "names": ["council_tax", "state_income_tax"],
+                "tax_benefit_model_name": "policyengine-us",
+            },
         )
 
         assert len(uk_response.json()) == 1
@@ -196,21 +222,12 @@ class TestVariablesByNameCountryFiltering:
         assert len(us_response.json()) == 1
         assert us_response.json()[0]["name"] == "state_income_tax"
 
-    def test_invalid_country_id_returns_422(self, client):
-        """An invalid country_id is rejected."""
-        response = client.post(
-            "/variables/by-name",
-            json={"names": ["income_tax"], "country_id": "fr"},
-        )
-
-        assert response.status_code == 422
-
 
 class TestVariablesByNameValidation:
     """Tests for request validation."""
 
-    def test_missing_country_id_returns_422(self, client):
-        """Request without country_id is rejected."""
+    def test_missing_model_name_returns_422(self, client):
+        """Request without tax_benefit_model_name is rejected."""
         response = client.post(
             "/variables/by-name",
             json={"names": ["income_tax"]},
@@ -222,7 +239,90 @@ class TestVariablesByNameValidation:
         """Request without names field is rejected."""
         response = client.post(
             "/variables/by-name",
-            json={"country_id": "uk"},
+            json={"tax_benefit_model_name": "policyengine-uk"},
         )
 
         assert response.status_code == 422
+
+
+class TestVariablesByNameVersionFilter:
+    """Tests for version filtering on the by-name endpoint."""
+
+    def test_defaults_to_latest_version(self, client, session):
+        """When only model name is given, returns variables from latest version."""
+        model = TaxBenefitModel(name="policyengine-uk", description="UK")
+        session.add(model)
+        session.commit()
+        session.refresh(model)
+
+        v1 = TaxBenefitModelVersion(
+            model_id=model.id,
+            version="1.0",
+            created_at=datetime(2025, 1, 1, tzinfo=timezone.utc),
+        )
+        v2 = TaxBenefitModelVersion(
+            model_id=model.id,
+            version="2.0",
+            created_at=datetime(2025, 6, 1, tzinfo=timezone.utc),
+        )
+        session.add(v1)
+        session.add(v2)
+        session.commit()
+        session.refresh(v1)
+        session.refresh(v2)
+
+        _add_var(session, v1, "old_var")
+        _add_var(session, v2, "new_var")
+
+        response = client.post(
+            "/variables/by-name",
+            json={
+                "names": ["old_var", "new_var"],
+                "tax_benefit_model_name": "policyengine-uk",
+            },
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data) == 1
+        assert data[0]["name"] == "new_var"
+
+    def test_explicit_version_id_returns_that_version(self, client, session):
+        """When version ID is given, returns variables from that specific version."""
+        model = TaxBenefitModel(name="policyengine-uk", description="UK")
+        session.add(model)
+        session.commit()
+        session.refresh(model)
+
+        v1 = TaxBenefitModelVersion(
+            model_id=model.id,
+            version="1.0",
+            created_at=datetime(2025, 1, 1, tzinfo=timezone.utc),
+        )
+        v2 = TaxBenefitModelVersion(
+            model_id=model.id,
+            version="2.0",
+            created_at=datetime(2025, 6, 1, tzinfo=timezone.utc),
+        )
+        session.add(v1)
+        session.add(v2)
+        session.commit()
+        session.refresh(v1)
+        session.refresh(v2)
+
+        _add_var(session, v1, "old_var")
+        _add_var(session, v2, "new_var")
+
+        response = client.post(
+            "/variables/by-name",
+            json={
+                "names": ["old_var", "new_var"],
+                "tax_benefit_model_name": "policyengine-uk",
+                "tax_benefit_model_version_id": str(v1.id),
+            },
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data) == 1
+        assert data[0]["name"] == "old_var"

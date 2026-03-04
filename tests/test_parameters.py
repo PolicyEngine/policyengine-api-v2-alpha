@@ -1,9 +1,11 @@
 """Tests for parameter and parameter-value endpoints."""
 
+from datetime import datetime, timezone
 from uuid import uuid4
 
 import pytest
 
+from policyengine_api.models import TaxBenefitModel, TaxBenefitModelVersion
 from test_fixtures.fixtures_parameters import (
     create_parameter,
     create_parameter_value,
@@ -198,6 +200,120 @@ def test__given_skip_parameter__then_skips_specified_results(
     # Then
     assert response.status_code == 200
     assert len(response.json()) == 2  # 5 total - 3 skipped = 2 remaining
+
+
+# -----------------------------------------------------------------------------
+# Version Filtering Tests
+# -----------------------------------------------------------------------------
+
+
+def test__given_model_name__then_returns_only_latest_version_parameters(
+    client, session
+):
+    """GET /parameters?tax_benefit_model_name=X returns only latest version's params."""
+    model = TaxBenefitModel(name="policyengine-us", description="US")
+    session.add(model)
+    session.commit()
+    session.refresh(model)
+
+    v1 = TaxBenefitModelVersion(
+        model_id=model.id,
+        version="1.0",
+        created_at=datetime(2025, 1, 1, tzinfo=timezone.utc),
+    )
+    v2 = TaxBenefitModelVersion(
+        model_id=model.id,
+        version="2.0",
+        created_at=datetime(2025, 6, 1, tzinfo=timezone.utc),
+    )
+    session.add(v1)
+    session.add(v2)
+    session.commit()
+    session.refresh(v1)
+    session.refresh(v2)
+
+    create_parameter(session, v1, "gov.old_param", "Old")
+    create_parameter(session, v2, "gov.new_param", "New")
+
+    response = client.get("/parameters?tax_benefit_model_name=policyengine-us")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data) == 1
+    assert data[0]["name"] == "gov.new_param"
+
+
+def test__given_explicit_version_id__then_returns_that_versions_parameters(
+    client, session
+):
+    """GET /parameters?tax_benefit_model_version_id=X returns that version's params."""
+    model = TaxBenefitModel(name="policyengine-us", description="US")
+    session.add(model)
+    session.commit()
+    session.refresh(model)
+
+    v1 = TaxBenefitModelVersion(
+        model_id=model.id,
+        version="1.0",
+        created_at=datetime(2025, 1, 1, tzinfo=timezone.utc),
+    )
+    v2 = TaxBenefitModelVersion(
+        model_id=model.id,
+        version="2.0",
+        created_at=datetime(2025, 6, 1, tzinfo=timezone.utc),
+    )
+    session.add(v1)
+    session.add(v2)
+    session.commit()
+    session.refresh(v1)
+    session.refresh(v2)
+
+    create_parameter(session, v1, "gov.old_param", "Old")
+    create_parameter(session, v2, "gov.new_param", "New")
+
+    response = client.get(f"/parameters?tax_benefit_model_version_id={v1.id}")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data) == 1
+    assert data[0]["name"] == "gov.old_param"
+
+
+def test__given_version_id_overrides_model_name(client, session):
+    """Version ID takes precedence over model name when both are provided."""
+    model = TaxBenefitModel(name="policyengine-us", description="US")
+    session.add(model)
+    session.commit()
+    session.refresh(model)
+
+    v1 = TaxBenefitModelVersion(
+        model_id=model.id,
+        version="1.0",
+        created_at=datetime(2025, 1, 1, tzinfo=timezone.utc),
+    )
+    v2 = TaxBenefitModelVersion(
+        model_id=model.id,
+        version="2.0",
+        created_at=datetime(2025, 6, 1, tzinfo=timezone.utc),
+    )
+    session.add(v1)
+    session.add(v2)
+    session.commit()
+    session.refresh(v1)
+    session.refresh(v2)
+
+    create_parameter(session, v1, "gov.old_param", "Old")
+    create_parameter(session, v2, "gov.new_param", "New")
+
+    # Provide model name (would resolve to v2) but also provide explicit v1 ID
+    response = client.get(
+        f"/parameters?tax_benefit_model_name=policyengine-us&tax_benefit_model_version_id={v1.id}"
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data) == 1
+    assert data[0]["name"] == "gov.old_param"
 
 
 if __name__ == "__main__":

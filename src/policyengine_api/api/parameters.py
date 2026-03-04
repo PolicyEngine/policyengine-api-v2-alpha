@@ -14,14 +14,12 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlmodel import Session, select
 
-from policyengine_api.config.constants import COUNTRY_MODEL_NAMES, CountryId
 from policyengine_api.models import (
     Parameter,
     ParameterRead,
-    TaxBenefitModel,
-    TaxBenefitModelVersion,
 )
 from policyengine_api.services.database import get_session
+from policyengine_api.services.tax_benefit_models import resolve_model_version_id
 
 router = APIRouter(prefix="/parameters", tags=["parameters"])
 
@@ -32,6 +30,7 @@ def list_parameters(
     limit: int = 100,
     search: str | None = None,
     tax_benefit_model_name: str | None = None,
+    tax_benefit_model_version_id: UUID | None = None,
     session: Session = Depends(get_session),
 ):
     """List available parameters with pagination and search.
@@ -44,19 +43,19 @@ def list_parameters(
         tax_benefit_model_name: Filter by country model.
             Use "policyengine-uk" for UK parameters.
             Use "policyengine-us" for US parameters.
+            Defaults to the latest model version when no version ID is given.
+        tax_benefit_model_version_id: Filter by a specific model version.
+            Takes precedence over tax_benefit_model_name.
     """
     query = select(Parameter)
 
-    # Filter by tax benefit model name (country)
-    if tax_benefit_model_name:
-        query = (
-            query.join(TaxBenefitModelVersion)
-            .join(TaxBenefitModel)
-            .where(TaxBenefitModel.name == tax_benefit_model_name)
-        )
+    version_id = resolve_model_version_id(
+        tax_benefit_model_name, tax_benefit_model_version_id, session
+    )
+    if version_id:
+        query = query.where(Parameter.tax_benefit_model_version_id == version_id)
 
     if search:
-        # Case-insensitive search using ILIKE
         search_pattern = f"%{search}%"
         search_filter = (
             Parameter.name.ilike(search_pattern)
@@ -75,7 +74,8 @@ class ParameterByNameRequest(BaseModel):
     """Request body for looking up parameters by name."""
 
     names: list[str]
-    country_id: CountryId
+    tax_benefit_model_name: str
+    tax_benefit_model_version_id: UUID | None = None
 
 
 @router.post("/by-name", response_model=List[ParameterRead])
@@ -95,18 +95,17 @@ def get_parameters_by_name(
     if not request.names:
         return []
 
-    model_name = COUNTRY_MODEL_NAMES[request.country_id]
-
-    query = (
-        select(Parameter)
-        .join(TaxBenefitModelVersion)
-        .join(TaxBenefitModel)
-        .where(TaxBenefitModel.name == model_name)
-        .where(Parameter.name.in_(request.names))
-        .order_by(Parameter.name)
+    version_id = resolve_model_version_id(
+        request.tax_benefit_model_name,
+        request.tax_benefit_model_version_id,
+        session,
     )
 
-    return session.exec(query).all()
+    query = select(Parameter).where(Parameter.name.in_(request.names))
+    if version_id:
+        query = query.where(Parameter.tax_benefit_model_version_id == version_id)
+
+    return session.exec(query.order_by(Parameter.name)).all()
 
 
 class ParameterChild(BaseModel):
@@ -128,9 +127,14 @@ class ParameterChildrenResponse(BaseModel):
 
 @router.get("/children", response_model=ParameterChildrenResponse)
 def get_parameter_children(
-    country_id: CountryId = Query(description='Country ID ("us" or "uk")'),
+    tax_benefit_model_name: str = Query(
+        description='Model name (e.g. "policyengine-us" or "policyengine-uk")'
+    ),
     parent_path: str = Query(
         default="", description="Parent parameter path (e.g. 'gov' or 'gov.hmrc')"
+    ),
+    tax_benefit_model_version_id: UUID | None = Query(
+        default=None, description="Optional specific model version ID"
     ),
     session: Session = Depends(get_session),
 ) -> ParameterChildrenResponse:
@@ -140,17 +144,16 @@ def get_parameter_children(
     parameters (with full metadata). Use this to lazily load the parameter
     tree one level at a time.
     """
-    model_name = COUNTRY_MODEL_NAMES[country_id]
+    version_id = resolve_model_version_id(
+        tax_benefit_model_name, tax_benefit_model_version_id, session
+    )
+
     prefix = f"{parent_path}." if parent_path else ""
 
-    # Fetch all parameters under this path
-    query = (
-        select(Parameter)
-        .join(TaxBenefitModelVersion)
-        .join(TaxBenefitModel)
-        .where(TaxBenefitModel.name == model_name)
-        .where(Parameter.name.startswith(prefix))
-    )
+    query = select(Parameter).where(Parameter.name.startswith(prefix))
+    if version_id:
+        query = query.where(Parameter.tax_benefit_model_version_id == version_id)
+
     descendants = session.exec(query).all()
 
     # Group by direct child path
