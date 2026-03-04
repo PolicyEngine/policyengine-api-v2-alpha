@@ -1,314 +1,229 @@
 """Tests for POST /parameters/by-name endpoint."""
 
-from datetime import datetime, timezone
-
 import pytest
 
-from policyengine_api.models import (
-    Parameter,
-    TaxBenefitModel,
-    TaxBenefitModelVersion,
+from test_fixtures.fixtures_version_filter import (
+    MODEL_NAMES,
+    create_parameter,
+    uk_model,  # noqa: F401
+    uk_version,  # noqa: F401
+    us_model,  # noqa: F401
+    us_two_versions,  # noqa: F401
+    us_version,  # noqa: F401
 )
 
-# ---------------------------------------------------------------------------
-# Fixtures
-# ---------------------------------------------------------------------------
 
-
-@pytest.fixture
-def us_version(session):
-    """Create a policyengine-us model and version."""
-    model = TaxBenefitModel(name="policyengine-us", description="US model")
-    session.add(model)
-    session.commit()
-    session.refresh(model)
-
-    version = TaxBenefitModelVersion(
-        model_id=model.id, version="1.0", description="US v1"
-    )
-    session.add(version)
-    session.commit()
-    session.refresh(version)
-    return version
-
-
-def create_parameter(session, model_version, name: str, label: str) -> Parameter:
-    """Create and persist a Parameter."""
-    param = Parameter(
-        name=name,
-        label=label,
-        tax_benefit_model_version_id=model_version.id,
-    )
-    session.add(param)
-    session.commit()
-    session.refresh(param)
-    return param
+# -----------------------------------------------------------------------------
+# Happy-path lookups
+# -----------------------------------------------------------------------------
 
 
 class TestParametersByName:
-    """Tests for looking up parameters by their exact names."""
-
-    def test_returns_matching_parameters(self, client, session, us_version):
-        """Given known parameter names, returns their full metadata."""
-        create_parameter(session, us_version, "gov.tax.rate", "Tax rate")
+    def test_given_known_names_then_returns_matching(
+        self, client, session, us_version  # noqa: F811
+    ):
+        """Returns full metadata for each matching name."""
+        create_parameter(session, us_version, "gov.tax.rate", "Rate")
         create_parameter(session, us_version, "gov.tax.threshold", "Threshold")
 
-        response = client.post(
+        data = client.post(
             "/parameters/by-name",
             json={
                 "names": ["gov.tax.rate", "gov.tax.threshold"],
-                "tax_benefit_model_name": "policyengine-us",
+                "tax_benefit_model_name": MODEL_NAMES["US"],
             },
-        )
+        ).json()
 
-        assert response.status_code == 200
-        data = response.json()
         assert len(data) == 2
-        returned_names = {p["name"] for p in data}
-        assert returned_names == {"gov.tax.rate", "gov.tax.threshold"}
+        assert {p["name"] for p in data} == {"gov.tax.rate", "gov.tax.threshold"}
 
-    def test_returns_empty_list_for_empty_names(self, client, session, us_version):
-        """Given an empty names list, returns an empty list."""
-        response = client.post(
+    def test_given_empty_names_then_returns_empty_list(
+        self, client, session, us_version  # noqa: F811
+    ):
+        """Empty names list → empty response (no DB query)."""
+        data = client.post(
             "/parameters/by-name",
-            json={
-                "names": [],
-                "tax_benefit_model_name": "policyengine-us",
-            },
-        )
+            json={"names": [], "tax_benefit_model_name": MODEL_NAMES["US"]},
+        ).json()
+        assert data == []
 
-        assert response.status_code == 200
-        assert response.json() == []
-
-    def test_returns_empty_list_for_unknown_names(self, client, session, us_version):
-        """Given names that don't match any parameter, returns an empty list."""
+    def test_given_unknown_names_then_returns_empty_list(
+        self, client, session, us_version  # noqa: F811
+    ):
+        """Names that don't match anything → empty list."""
         create_parameter(session, us_version, "gov.exists", "Exists")
 
-        response = client.post(
+        data = client.post(
             "/parameters/by-name",
             json={
-                "names": ["gov.does_not_exist", "gov.also_missing"],
-                "tax_benefit_model_name": "policyengine-us",
+                "names": ["gov.nope", "gov.also_missing"],
+                "tax_benefit_model_name": MODEL_NAMES["US"],
             },
-        )
+        ).json()
+        assert data == []
 
-        assert response.status_code == 200
-        assert response.json() == []
-
-    def test_returns_only_matching_when_mix_of_known_and_unknown(
-        self, client, session, us_version
+    def test_given_mixed_names_then_returns_only_known(
+        self, client, session, us_version  # noqa: F811
     ):
-        """Given a mix of known and unknown names, returns only the known ones."""
-        create_parameter(session, us_version, "gov.real", "Real param")
+        """Only matching names are returned; unknowns silently omitted."""
+        create_parameter(session, us_version, "gov.real", "Real")
 
-        response = client.post(
+        data = client.post(
             "/parameters/by-name",
             json={
                 "names": ["gov.real", "gov.fake"],
-                "tax_benefit_model_name": "policyengine-us",
+                "tax_benefit_model_name": MODEL_NAMES["US"],
             },
-        )
-
-        assert response.status_code == 200
-        data = response.json()
+        ).json()
         assert len(data) == 1
         assert data[0]["name"] == "gov.real"
 
-    def test_filters_by_model_name(self, client, session):
-        """Parameters from a different model are excluded."""
-        # Create two models
-        model_uk = TaxBenefitModel(name="policyengine-uk", description="UK")
-        model_us = TaxBenefitModel(name="policyengine-us", description="US")
-        session.add(model_uk)
-        session.add(model_us)
-        session.commit()
-        session.refresh(model_uk)
-        session.refresh(model_us)
-
-        ver_uk = TaxBenefitModelVersion(
-            model_id=model_uk.id, version="1.0", description="UK v1"
-        )
-        ver_us = TaxBenefitModelVersion(
-            model_id=model_us.id, version="1.0", description="US v1"
-        )
-        session.add(ver_uk)
-        session.add(ver_us)
-        session.commit()
-        session.refresh(ver_uk)
-        session.refresh(ver_us)
-
-        # Same parameter name in both models
-        create_parameter(session, ver_uk, "gov.shared_name", "UK version")
-        create_parameter(session, ver_us, "gov.shared_name", "US version")
-
-        # Request only UK
-        response = client.post(
-            "/parameters/by-name",
-            json={
-                "names": ["gov.shared_name"],
-                "tax_benefit_model_name": "policyengine-uk",
-            },
-        )
-
-        assert response.status_code == 200
-        data = response.json()
-        assert len(data) == 1
-        assert data[0]["label"] == "UK version"
-
-    def test_response_shape_matches_parameter_read(self, client, session, us_version):
-        """Returned objects have the same shape as ParameterRead."""
-        create_parameter(session, us_version, "gov.shape_test", "Shape test")
-
-        response = client.post(
-            "/parameters/by-name",
-            json={
-                "names": ["gov.shape_test"],
-                "tax_benefit_model_name": "policyengine-us",
-            },
-        )
-
-        assert response.status_code == 200
-        data = response.json()
-        assert len(data) == 1
-        param = data[0]
-        assert "id" in param
-        assert "name" in param
-        assert "label" in param
-        assert "created_at" in param
-        assert "tax_benefit_model_version_id" in param
-
-    def test_results_ordered_by_name(self, client, session, us_version):
-        """Returned parameters are sorted alphabetically by name."""
-        create_parameter(session, us_version, "gov.zzz", "Last")
-        create_parameter(session, us_version, "gov.aaa", "First")
-        create_parameter(session, us_version, "gov.mmm", "Middle")
-
-        response = client.post(
-            "/parameters/by-name",
-            json={
-                "names": ["gov.zzz", "gov.aaa", "gov.mmm"],
-                "tax_benefit_model_name": "policyengine-us",
-            },
-        )
-
-        assert response.status_code == 200
-        names = [p["name"] for p in response.json()]
-        assert names == ["gov.aaa", "gov.mmm", "gov.zzz"]
-
-    def test_missing_model_name_returns_422(self, client):
-        """Request without tax_benefit_model_name is rejected."""
-        response = client.post(
-            "/parameters/by-name",
-            json={"names": ["gov.something"]},
-        )
-
-        assert response.status_code == 422
-
-    def test_missing_names_field_returns_422(self, client):
-        """Request without names field is rejected."""
-        response = client.post(
-            "/parameters/by-name",
-            json={"tax_benefit_model_name": "policyengine-us"},
-        )
-
-        assert response.status_code == 422
-
-    def test_single_name_lookup(self, client, session, us_version):
-        """Looking up a single parameter name works."""
-        create_parameter(session, us_version, "gov.single", "Single param")
-
-        response = client.post(
+    def test_given_single_name_then_returns_one(
+        self, client, session, us_version  # noqa: F811
+    ):
+        """Single-element lookup works."""
+        create_parameter(session, us_version, "gov.single", "Single")
+        data = client.post(
             "/parameters/by-name",
             json={
                 "names": ["gov.single"],
-                "tax_benefit_model_name": "policyengine-us",
+                "tax_benefit_model_name": MODEL_NAMES["US"],
+            },
+        ).json()
+        assert len(data) == 1
+
+    def test_results_ordered_by_name(
+        self, client, session, us_version  # noqa: F811
+    ):
+        """Response is sorted alphabetically by name."""
+        create_parameter(session, us_version, "gov.zzz", "Z")
+        create_parameter(session, us_version, "gov.aaa", "A")
+        create_parameter(session, us_version, "gov.mmm", "M")
+
+        names = [
+            p["name"]
+            for p in client.post(
+                "/parameters/by-name",
+                json={
+                    "names": ["gov.zzz", "gov.aaa", "gov.mmm"],
+                    "tax_benefit_model_name": MODEL_NAMES["US"],
+                },
+            ).json()
+        ]
+        assert names == ["gov.aaa", "gov.mmm", "gov.zzz"]
+
+    def test_response_shape(self, client, session, us_version):  # noqa: F811
+        """Each returned object has the ParameterRead fields."""
+        create_parameter(session, us_version, "gov.shape", "Shape")
+        param = client.post(
+            "/parameters/by-name",
+            json={
+                "names": ["gov.shape"],
+                "tax_benefit_model_name": MODEL_NAMES["US"],
+            },
+        ).json()[0]
+        for field in ("id", "name", "label", "created_at", "tax_benefit_model_version_id"):
+            assert field in param
+
+
+# -----------------------------------------------------------------------------
+# Model isolation
+# -----------------------------------------------------------------------------
+
+
+class TestParametersByNameModelIsolation:
+    def test_given_two_models_then_returns_only_requested(
+        self, client, session, us_version, uk_version  # noqa: F811
+    ):
+        """Parameters from the other model are excluded."""
+        create_parameter(session, us_version, "gov.shared", "US")
+        create_parameter(session, uk_version, "gov.shared", "UK")
+
+        data = client.post(
+            "/parameters/by-name",
+            json={
+                "names": ["gov.shared"],
+                "tax_benefit_model_name": MODEL_NAMES["UK"],
+            },
+        ).json()
+        assert len(data) == 1
+        assert data[0]["label"] == "UK"
+
+
+# -----------------------------------------------------------------------------
+# Validation
+# -----------------------------------------------------------------------------
+
+
+class TestParametersByNameValidation:
+    def test_given_missing_model_name_then_422(self, client):
+        """Omitting tax_benefit_model_name → 422."""
+        response = client.post(
+            "/parameters/by-name", json={"names": ["gov.x"]}
+        )
+        assert response.status_code == 422
+
+    def test_given_missing_names_then_422(self, client):
+        """Omitting names → 422."""
+        response = client.post(
+            "/parameters/by-name",
+            json={"tax_benefit_model_name": MODEL_NAMES["US"]},
+        )
+        assert response.status_code == 422
+
+    def test_given_nonexistent_model_name_then_404(
+        self, client, session
+    ):
+        """Model that doesn't exist → 404 from resolve_model_version_id."""
+        response = client.post(
+            "/parameters/by-name",
+            json={
+                "names": ["gov.x"],
+                "tax_benefit_model_name": "nonexistent-model",
             },
         )
+        assert response.status_code == 404
 
-        assert response.status_code == 200
-        data = response.json()
-        assert len(data) == 1
-        assert data[0]["name"] == "gov.single"
+
+# -----------------------------------------------------------------------------
+# Version filtering
+# -----------------------------------------------------------------------------
 
 
 class TestParametersByNameVersionFilter:
-    """Tests for version filtering on the by-name endpoint."""
+    def test_given_model_name_only_then_defaults_to_latest(
+        self, client, session, us_two_versions  # noqa: F811
+    ):
+        """Model name resolves to latest version."""
+        v1, v2 = us_two_versions
+        create_parameter(session, v1, "gov.old", "Old")
+        create_parameter(session, v2, "gov.new", "New")
 
-    def test_defaults_to_latest_version(self, client, session):
-        """When only model name is given, returns parameters from latest version."""
-        model = TaxBenefitModel(name="policyengine-us", description="US")
-        session.add(model)
-        session.commit()
-        session.refresh(model)
-
-        v1 = TaxBenefitModelVersion(
-            model_id=model.id,
-            version="1.0",
-            created_at=datetime(2025, 1, 1, tzinfo=timezone.utc),
-        )
-        v2 = TaxBenefitModelVersion(
-            model_id=model.id,
-            version="2.0",
-            created_at=datetime(2025, 6, 1, tzinfo=timezone.utc),
-        )
-        session.add(v1)
-        session.add(v2)
-        session.commit()
-        session.refresh(v1)
-        session.refresh(v2)
-
-        create_parameter(session, v1, "gov.old_param", "Old")
-        create_parameter(session, v2, "gov.new_param", "New")
-
-        response = client.post(
+        data = client.post(
             "/parameters/by-name",
             json={
-                "names": ["gov.old_param", "gov.new_param"],
-                "tax_benefit_model_name": "policyengine-us",
+                "names": ["gov.old", "gov.new"],
+                "tax_benefit_model_name": MODEL_NAMES["US"],
             },
-        )
-
-        assert response.status_code == 200
-        data = response.json()
+        ).json()
         assert len(data) == 1
-        assert data[0]["name"] == "gov.new_param"
+        assert data[0]["name"] == "gov.new"
 
-    def test_explicit_version_id_returns_that_version(self, client, session):
-        """When version ID is given, returns parameters from that specific version."""
-        model = TaxBenefitModel(name="policyengine-us", description="US")
-        session.add(model)
-        session.commit()
-        session.refresh(model)
+    def test_given_explicit_version_id_then_returns_that_version(
+        self, client, session, us_two_versions  # noqa: F811
+    ):
+        """Explicit version_id overrides latest-version default."""
+        v1, v2 = us_two_versions
+        create_parameter(session, v1, "gov.old", "Old")
+        create_parameter(session, v2, "gov.new", "New")
 
-        v1 = TaxBenefitModelVersion(
-            model_id=model.id,
-            version="1.0",
-            created_at=datetime(2025, 1, 1, tzinfo=timezone.utc),
-        )
-        v2 = TaxBenefitModelVersion(
-            model_id=model.id,
-            version="2.0",
-            created_at=datetime(2025, 6, 1, tzinfo=timezone.utc),
-        )
-        session.add(v1)
-        session.add(v2)
-        session.commit()
-        session.refresh(v1)
-        session.refresh(v2)
-
-        create_parameter(session, v1, "gov.old_param", "Old")
-        create_parameter(session, v2, "gov.new_param", "New")
-
-        response = client.post(
+        data = client.post(
             "/parameters/by-name",
             json={
-                "names": ["gov.old_param", "gov.new_param"],
-                "tax_benefit_model_name": "policyengine-us",
+                "names": ["gov.old", "gov.new"],
+                "tax_benefit_model_name": MODEL_NAMES["US"],
                 "tax_benefit_model_version_id": str(v1.id),
             },
-        )
-
-        assert response.status_code == 200
-        data = response.json()
+        ).json()
         assert len(data) == 1
-        assert data[0]["name"] == "gov.old_param"
+        assert data[0]["name"] == "gov.old"

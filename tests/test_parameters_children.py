@@ -1,78 +1,30 @@
 """Tests for GET /parameters/children endpoint."""
 
-from datetime import datetime, timezone
-
 import pytest
 
-from policyengine_api.models import (
-    Parameter,
-    TaxBenefitModel,
-    TaxBenefitModelVersion,
+from test_fixtures.fixtures_version_filter import (
+    MODEL_NAMES,
+    add_params_bulk,
+    create_parameter,
+    uk_model,  # noqa: F401
+    uk_two_versions,  # noqa: F401
+    uk_version,  # noqa: F401
+    us_model,  # noqa: F401
+    us_version,  # noqa: F401
 )
 
-# ---------------------------------------------------------------------------
-# Fixtures
-# ---------------------------------------------------------------------------
 
-
-@pytest.fixture
-def uk_version(session):
-    """Create a policyengine-uk model and version."""
-    model = TaxBenefitModel(name="policyengine-uk", description="UK model")
-    session.add(model)
-    session.commit()
-    session.refresh(model)
-
-    version = TaxBenefitModelVersion(
-        model_id=model.id, version="1.0", description="UK v1"
-    )
-    session.add(version)
-    session.commit()
-    session.refresh(version)
-    return version
-
-
-@pytest.fixture
-def us_version(session):
-    """Create a policyengine-us model and version."""
-    model = TaxBenefitModel(name="policyengine-us", description="US model")
-    session.add(model)
-    session.commit()
-    session.refresh(model)
-
-    version = TaxBenefitModelVersion(
-        model_id=model.id, version="1.0", description="US v1"
-    )
-    session.add(version)
-    session.commit()
-    session.refresh(version)
-    return version
-
-
-def _add_params(session, version, names_and_labels):
-    """Bulk-add parameters. names_and_labels is [(name, label), ...]."""
-    for name, label in names_and_labels:
-        session.add(
-            Parameter(
-                name=name,
-                label=label,
-                tax_benefit_model_version_id=version.id,
-            )
-        )
-    session.commit()
-
-
-# ---------------------------------------------------------------------------
-# Tests
-# ---------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
+# Tree structure
+# -----------------------------------------------------------------------------
 
 
 class TestParameterChildrenBasic:
-    """Basic tree structure tests."""
-
-    def test_returns_nodes_for_intermediate_paths(self, client, session, uk_version):
+    def test_returns_nodes_for_intermediate_paths(
+        self, client, session, uk_version  # noqa: F811
+    ):
         """Parameters at gov.hmrc.x and gov.dwp.x produce nodes for hmrc and dwp."""
-        _add_params(
+        add_params_bulk(
             session,
             uk_version,
             [
@@ -85,7 +37,7 @@ class TestParameterChildrenBasic:
         response = client.get(
             "/parameters/children",
             params={
-                "tax_benefit_model_name": "policyengine-uk",
+                "tax_benefit_model_name": MODEL_NAMES["UK"],
                 "parent_path": "gov",
             },
         )
@@ -101,9 +53,11 @@ class TestParameterChildrenBasic:
             assert child["type"] == "node"
             assert child["child_count"] > 0
 
-    def test_returns_leaf_parameters(self, client, session, uk_version):
+    def test_returns_leaf_parameters(
+        self, client, session, uk_version  # noqa: F811
+    ):
         """Direct child parameters are returned with type='parameter'."""
-        _add_params(
+        add_params_bulk(
             session,
             uk_version,
             [
@@ -115,7 +69,7 @@ class TestParameterChildrenBasic:
         response = client.get(
             "/parameters/children",
             params={
-                "tax_benefit_model_name": "policyengine-uk",
+                "tax_benefit_model_name": MODEL_NAMES["UK"],
                 "parent_path": "gov",
             },
         )
@@ -133,9 +87,11 @@ class TestParameterChildrenBasic:
         node = next(c for c in children if c["type"] == "node")
         assert node["path"] == "gov.hmrc"
 
-    def test_mixed_nodes_and_leaves(self, client, session, uk_version):
+    def test_mixed_nodes_and_leaves(
+        self, client, session, uk_version  # noqa: F811
+    ):
         """Both nodes and leaf parameters can appear at the same level."""
-        _add_params(
+        add_params_bulk(
             session,
             uk_version,
             [
@@ -145,27 +101,31 @@ class TestParameterChildrenBasic:
             ],
         )
 
-        response = client.get(
+        children = client.get(
             "/parameters/children",
             params={
-                "tax_benefit_model_name": "policyengine-uk",
+                "tax_benefit_model_name": MODEL_NAMES["UK"],
                 "parent_path": "gov",
             },
-        )
+        ).json()["children"]
 
-        children = response.json()["children"]
         types = {c["path"]: c["type"] for c in children}
         assert types["gov.hmrc"] == "node"
         assert types["gov.flat_rate"] == "parameter"
         assert types["gov.threshold"] == "parameter"
 
 
-class TestChildCount:
-    """Tests for child_count accuracy."""
+# -----------------------------------------------------------------------------
+# Child counts
+# -----------------------------------------------------------------------------
 
-    def test_child_count_reflects_total_descendants(self, client, session, uk_version):
+
+class TestChildCount:
+    def test_child_count_reflects_total_descendants(
+        self, client, session, uk_version  # noqa: F811
+    ):
         """child_count counts all leaf parameters under the node."""
-        _add_params(
+        add_params_bulk(
             session,
             uk_version,
             [
@@ -175,22 +135,23 @@ class TestChildCount:
             ],
         )
 
-        response = client.get(
+        children = client.get(
             "/parameters/children",
             params={
-                "tax_benefit_model_name": "policyengine-uk",
+                "tax_benefit_model_name": MODEL_NAMES["UK"],
                 "parent_path": "gov",
             },
-        )
+        ).json()["children"]
 
-        children = response.json()["children"]
         hmrc = children[0]
         assert hmrc["path"] == "gov.hmrc"
         assert hmrc["child_count"] == 3
 
-    def test_nested_child_count(self, client, session, uk_version):
+    def test_nested_child_count(
+        self, client, session, uk_version  # noqa: F811
+    ):
         """Querying a deeper level gives accurate child counts."""
-        _add_params(
+        add_params_bulk(
             session,
             uk_version,
             [
@@ -200,49 +161,54 @@ class TestChildCount:
             ],
         )
 
-        response = client.get(
+        children = client.get(
             "/parameters/children",
             params={
-                "tax_benefit_model_name": "policyengine-uk",
+                "tax_benefit_model_name": MODEL_NAMES["UK"],
                 "parent_path": "gov.hmrc",
             },
-        )
+        ).json()["children"]
 
-        children = response.json()["children"]
         assert len(children) == 2
         income_tax = next(c for c in children if c["path"] == "gov.hmrc.income_tax")
         ni = next(c for c in children if c["path"] == "gov.hmrc.ni")
         assert income_tax["child_count"] == 2
         assert ni["child_count"] == 1
 
-    def test_leaf_has_no_child_count(self, client, session, uk_version):
+    def test_leaf_has_no_child_count(
+        self, client, session, uk_version  # noqa: F811
+    ):
         """Leaf parameters have child_count=None."""
-        _add_params(session, uk_version, [("gov.rate", "Rate")])
+        add_params_bulk(session, uk_version, [("gov.rate", "Rate")])
 
-        response = client.get(
+        children = client.get(
             "/parameters/children",
             params={
-                "tax_benefit_model_name": "policyengine-uk",
+                "tax_benefit_model_name": MODEL_NAMES["UK"],
                 "parent_path": "gov",
             },
-        )
+        ).json()["children"]
 
-        children = response.json()["children"]
         assert len(children) == 1
         assert children[0]["child_count"] is None
 
 
-class TestModelNameFiltering:
-    """Tests for tax_benefit_model_name filtering."""
+# -----------------------------------------------------------------------------
+# Model isolation
+# -----------------------------------------------------------------------------
 
-    def test_uk_model(self, client, session, uk_version):
+
+class TestParameterChildrenModelIsolation:
+    def test_given_uk_model_then_returns_uk_params(
+        self, client, session, uk_version  # noqa: F811
+    ):
         """policyengine-uk returns UK parameters."""
-        _add_params(session, uk_version, [("gov.hmrc.rate", "Rate")])
+        add_params_bulk(session, uk_version, [("gov.hmrc.rate", "Rate")])
 
         response = client.get(
             "/parameters/children",
             params={
-                "tax_benefit_model_name": "policyengine-uk",
+                "tax_benefit_model_name": MODEL_NAMES["UK"],
                 "parent_path": "gov",
             },
         )
@@ -250,14 +216,16 @@ class TestModelNameFiltering:
         assert response.status_code == 200
         assert len(response.json()["children"]) == 1
 
-    def test_us_model(self, client, session, us_version):
+    def test_given_us_model_then_returns_us_params(
+        self, client, session, us_version  # noqa: F811
+    ):
         """policyengine-us returns US parameters."""
-        _add_params(session, us_version, [("gov.irs.rate", "Rate")])
+        add_params_bulk(session, us_version, [("gov.irs.rate", "Rate")])
 
         response = client.get(
             "/parameters/children",
             params={
-                "tax_benefit_model_name": "policyengine-us",
+                "tax_benefit_model_name": MODEL_NAMES["US"],
                 "parent_path": "gov",
             },
         )
@@ -265,51 +233,68 @@ class TestModelNameFiltering:
         assert response.status_code == 200
         assert len(response.json()["children"]) == 1
 
-    def test_model_isolation(self, client, session, uk_version, us_version):
+    def test_given_two_models_then_returns_only_requested(
+        self, client, session, uk_version, us_version  # noqa: F811
+    ):
         """Parameters from a different model are excluded."""
-        _add_params(session, uk_version, [("gov.hmrc.rate", "UK rate")])
-        _add_params(session, us_version, [("gov.irs.rate", "US rate")])
+        add_params_bulk(session, uk_version, [("gov.hmrc.rate", "UK rate")])
+        add_params_bulk(session, us_version, [("gov.irs.rate", "US rate")])
 
-        uk_response = client.get(
-            "/parameters/children",
-            params={
-                "tax_benefit_model_name": "policyengine-uk",
-                "parent_path": "gov",
-            },
-        )
-        us_response = client.get(
-            "/parameters/children",
-            params={
-                "tax_benefit_model_name": "policyengine-us",
-                "parent_path": "gov",
-            },
-        )
+        uk_paths = [
+            c["path"]
+            for c in client.get(
+                "/parameters/children",
+                params={
+                    "tax_benefit_model_name": MODEL_NAMES["UK"],
+                    "parent_path": "gov",
+                },
+            ).json()["children"]
+        ]
+        us_paths = [
+            c["path"]
+            for c in client.get(
+                "/parameters/children",
+                params={
+                    "tax_benefit_model_name": MODEL_NAMES["US"],
+                    "parent_path": "gov",
+                },
+            ).json()["children"]
+        ]
 
-        uk_paths = [c["path"] for c in uk_response.json()["children"]]
-        us_paths = [c["path"] for c in us_response.json()["children"]]
         assert uk_paths == ["gov.hmrc"]
         assert us_paths == ["gov.irs"]
 
-    def test_missing_model_name_returns_422(self, client):
+
+# -----------------------------------------------------------------------------
+# Validation
+# -----------------------------------------------------------------------------
+
+
+class TestParameterChildrenValidation:
+    def test_given_missing_model_name_then_422(self, client):
         """Request without tax_benefit_model_name returns 422."""
         response = client.get(
             "/parameters/children", params={"parent_path": "gov"}
         )
-
         assert response.status_code == 422
 
 
-class TestEdgeCases:
-    """Tests for edge cases and special inputs."""
+# -----------------------------------------------------------------------------
+# Edge cases
+# -----------------------------------------------------------------------------
 
-    def test_empty_parent_path(self, client, session, uk_version):
+
+class TestParameterChildrenEdgeCases:
+    def test_empty_parent_path(
+        self, client, session, uk_version  # noqa: F811
+    ):
         """Empty parent_path returns top-level children."""
-        _add_params(session, uk_version, [("gov.hmrc.rate", "Rate")])
+        add_params_bulk(session, uk_version, [("gov.hmrc.rate", "Rate")])
 
         response = client.get(
             "/parameters/children",
             params={
-                "tax_benefit_model_name": "policyengine-uk",
+                "tax_benefit_model_name": MODEL_NAMES["UK"],
                 "parent_path": "",
             },
         )
@@ -320,24 +305,27 @@ class TestEdgeCases:
         assert children[0]["path"] == "gov"
         assert children[0]["type"] == "node"
 
-    def test_nonexistent_parent_returns_empty(self, client, session, uk_version):
+    def test_nonexistent_parent_returns_empty(
+        self, client, session, uk_version  # noqa: F811
+    ):
         """A parent path with no descendants returns empty children list."""
-        _add_params(session, uk_version, [("gov.hmrc.rate", "Rate")])
+        add_params_bulk(session, uk_version, [("gov.hmrc.rate", "Rate")])
 
-        response = client.get(
+        children = client.get(
             "/parameters/children",
             params={
-                "tax_benefit_model_name": "policyengine-uk",
+                "tax_benefit_model_name": MODEL_NAMES["UK"],
                 "parent_path": "gov.dwp",
             },
-        )
+        ).json()["children"]
 
-        assert response.status_code == 200
-        assert response.json()["children"] == []
+        assert children == []
 
-    def test_children_sorted_by_path(self, client, session, uk_version):
+    def test_children_sorted_by_path(
+        self, client, session, uk_version  # noqa: F811
+    ):
         """Children are returned sorted alphabetically by path."""
-        _add_params(
+        add_params_bulk(
             session,
             uk_version,
             [
@@ -347,199 +335,167 @@ class TestEdgeCases:
             ],
         )
 
-        response = client.get(
-            "/parameters/children",
-            params={
-                "tax_benefit_model_name": "policyengine-uk",
-                "parent_path": "gov",
-            },
-        )
-
-        paths = [c["path"] for c in response.json()["children"]]
+        paths = [
+            c["path"]
+            for c in client.get(
+                "/parameters/children",
+                params={
+                    "tax_benefit_model_name": MODEL_NAMES["UK"],
+                    "parent_path": "gov",
+                },
+            ).json()["children"]
+        ]
         assert paths == ["gov.aaa", "gov.mmm", "gov.zzz"]
 
-    def test_node_label_from_path_segment(self, client, session, uk_version):
-        """Node labels default to the last path segment when no parameter exists."""
-        _add_params(session, uk_version, [("gov.hmrc.income_tax.rate", "Rate")])
-
-        response = client.get(
-            "/parameters/children",
-            params={
-                "tax_benefit_model_name": "policyengine-uk",
-                "parent_path": "gov",
-            },
+    def test_node_label_from_path_segment(
+        self, client, session, uk_version  # noqa: F811
+    ):
+        """Node labels default to the last path segment."""
+        add_params_bulk(
+            session, uk_version, [("gov.hmrc.income_tax.rate", "Rate")]
         )
 
-        children = response.json()["children"]
+        children = client.get(
+            "/parameters/children",
+            params={
+                "tax_benefit_model_name": MODEL_NAMES["UK"],
+                "parent_path": "gov",
+            },
+        ).json()["children"]
+
         assert children[0]["label"] == "hmrc"
 
-    def test_default_parent_path_is_empty(self, client, session, uk_version):
+    def test_default_parent_path_is_empty(
+        self, client, session, uk_version  # noqa: F811
+    ):
         """Omitting parent_path defaults to empty string (root level)."""
-        _add_params(session, uk_version, [("gov.hmrc.rate", "Rate")])
+        add_params_bulk(session, uk_version, [("gov.hmrc.rate", "Rate")])
 
-        response = client.get(
+        data = client.get(
             "/parameters/children",
-            params={"tax_benefit_model_name": "policyengine-uk"},
-        )
+            params={"tax_benefit_model_name": MODEL_NAMES["UK"]},
+        ).json()
 
-        assert response.status_code == 200
-        assert response.json()["parent_path"] == ""
-        assert len(response.json()["children"]) == 1
+        assert data["parent_path"] == ""
+        assert len(data["children"]) == 1
 
-    def test_leaf_parameter_includes_full_metadata(self, client, session, uk_version):
+    def test_leaf_parameter_includes_full_metadata(
+        self, client, session, uk_version  # noqa: F811
+    ):
         """Leaf parameters include the full ParameterRead shape."""
-        _add_params(session, uk_version, [("gov.rate", "The rate")])
+        add_params_bulk(session, uk_version, [("gov.rate", "The rate")])
 
-        response = client.get(
+        param = client.get(
             "/parameters/children",
             params={
-                "tax_benefit_model_name": "policyengine-uk",
+                "tax_benefit_model_name": MODEL_NAMES["UK"],
                 "parent_path": "gov",
             },
-        )
+        ).json()["children"][0]["parameter"]
 
-        param = response.json()["children"][0]["parameter"]
         assert param["name"] == "gov.rate"
         assert param["label"] == "The rate"
-        assert "id" in param
-        assert "created_at" in param
-        assert "tax_benefit_model_version_id" in param
+        for field in ("id", "created_at", "tax_benefit_model_version_id"):
+            assert field in param
 
-    def test_node_has_no_parameter_field(self, client, session, uk_version):
+    def test_node_has_no_parameter_field(
+        self, client, session, uk_version  # noqa: F811
+    ):
         """Nodes do not include the parameter field."""
-        _add_params(session, uk_version, [("gov.hmrc.rate", "Rate")])
+        add_params_bulk(session, uk_version, [("gov.hmrc.rate", "Rate")])
 
-        response = client.get(
+        node = client.get(
             "/parameters/children",
             params={
-                "tax_benefit_model_name": "policyengine-uk",
+                "tax_benefit_model_name": MODEL_NAMES["UK"],
                 "parent_path": "gov",
             },
-        )
+        ).json()["children"][0]
 
-        node = response.json()["children"][0]
         assert node["type"] == "node"
         assert node["parameter"] is None
 
-    def test_deep_nesting(self, client, session, uk_version):
+    def test_deep_nesting(
+        self, client, session, uk_version  # noqa: F811
+    ):
         """Works correctly with deeply nested parameter paths."""
-        _add_params(
+        add_params_bulk(
             session,
             uk_version,
             [("gov.hmrc.income_tax.rates.uk[0].rate", "Basic rate")],
         )
 
-        # Each level should show the correct child
         for parent, expected_child in [
             ("gov", "gov.hmrc"),
             ("gov.hmrc", "gov.hmrc.income_tax"),
             ("gov.hmrc.income_tax", "gov.hmrc.income_tax.rates"),
             ("gov.hmrc.income_tax.rates", "gov.hmrc.income_tax.rates.uk[0]"),
         ]:
-            resp = client.get(
+            children = client.get(
                 "/parameters/children",
                 params={
-                    "tax_benefit_model_name": "policyengine-uk",
+                    "tax_benefit_model_name": MODEL_NAMES["UK"],
                     "parent_path": parent,
                 },
-            )
-            children = resp.json()["children"]
+            ).json()["children"]
             assert len(children) == 1
             assert children[0]["path"] == expected_child
             assert children[0]["type"] == "node"
 
         # Final level should be a leaf
-        resp = client.get(
+        children = client.get(
             "/parameters/children",
             params={
-                "tax_benefit_model_name": "policyengine-uk",
+                "tax_benefit_model_name": MODEL_NAMES["UK"],
                 "parent_path": "gov.hmrc.income_tax.rates.uk[0]",
             },
-        )
-        children = resp.json()["children"]
+        ).json()["children"]
         assert len(children) == 1
         assert children[0]["type"] == "parameter"
         assert children[0]["path"] == "gov.hmrc.income_tax.rates.uk[0].rate"
 
 
-class TestVersionFiltering:
-    """Tests for version filtering on the children endpoint."""
+# -----------------------------------------------------------------------------
+# Version filtering
+# -----------------------------------------------------------------------------
 
-    def test_defaults_to_latest_version(self, client, session):
+
+class TestParameterChildrenVersionFilter:
+    def test_given_model_name_only_then_defaults_to_latest(
+        self, client, session, uk_two_versions  # noqa: F811
+    ):
         """When only model name is given, returns children from latest version."""
-        model = TaxBenefitModel(name="policyengine-uk", description="UK")
-        session.add(model)
-        session.commit()
-        session.refresh(model)
+        v1, v2 = uk_two_versions
+        add_params_bulk(session, v1, [("gov.old_param", "Old")])
+        add_params_bulk(session, v2, [("gov.new_param", "New")])
 
-        v1 = TaxBenefitModelVersion(
-            model_id=model.id,
-            version="1.0",
-            created_at=datetime(2025, 1, 1, tzinfo=timezone.utc),
-        )
-        v2 = TaxBenefitModelVersion(
-            model_id=model.id,
-            version="2.0",
-            created_at=datetime(2025, 6, 1, tzinfo=timezone.utc),
-        )
-        session.add(v1)
-        session.add(v2)
-        session.commit()
-        session.refresh(v1)
-        session.refresh(v2)
-
-        _add_params(session, v1, [("gov.old_param", "Old")])
-        _add_params(session, v2, [("gov.new_param", "New")])
-
-        response = client.get(
+        children = client.get(
             "/parameters/children",
             params={
-                "tax_benefit_model_name": "policyengine-uk",
+                "tax_benefit_model_name": MODEL_NAMES["UK"],
                 "parent_path": "gov",
             },
-        )
+        ).json()["children"]
 
-        assert response.status_code == 200
-        children = response.json()["children"]
         assert len(children) == 1
         assert children[0]["path"] == "gov.new_param"
 
-    def test_explicit_version_id_returns_that_version(self, client, session):
+    def test_given_explicit_version_id_then_returns_that_version(
+        self, client, session, uk_two_versions  # noqa: F811
+    ):
         """When version ID is given, returns children from that specific version."""
-        model = TaxBenefitModel(name="policyengine-uk", description="UK")
-        session.add(model)
-        session.commit()
-        session.refresh(model)
+        v1, v2 = uk_two_versions
+        add_params_bulk(session, v1, [("gov.old_param", "Old")])
+        add_params_bulk(session, v2, [("gov.new_param", "New")])
 
-        v1 = TaxBenefitModelVersion(
-            model_id=model.id,
-            version="1.0",
-            created_at=datetime(2025, 1, 1, tzinfo=timezone.utc),
-        )
-        v2 = TaxBenefitModelVersion(
-            model_id=model.id,
-            version="2.0",
-            created_at=datetime(2025, 6, 1, tzinfo=timezone.utc),
-        )
-        session.add(v1)
-        session.add(v2)
-        session.commit()
-        session.refresh(v1)
-        session.refresh(v2)
-
-        _add_params(session, v1, [("gov.old_param", "Old")])
-        _add_params(session, v2, [("gov.new_param", "New")])
-
-        response = client.get(
+        children = client.get(
             "/parameters/children",
             params={
-                "tax_benefit_model_name": "policyengine-uk",
+                "tax_benefit_model_name": MODEL_NAMES["UK"],
                 "parent_path": "gov",
                 "tax_benefit_model_version_id": str(v1.id),
             },
-        )
+        ).json()["children"]
 
-        assert response.status_code == 200
-        children = response.json()["children"]
         assert len(children) == 1
         assert children[0]["path"] == "gov.old_param"

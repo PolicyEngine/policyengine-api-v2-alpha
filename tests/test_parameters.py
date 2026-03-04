@@ -1,320 +1,215 @@
-"""Tests for parameter and parameter-value endpoints."""
+"""Tests for GET /parameters/ and GET /parameters/{id} endpoints."""
 
-from datetime import datetime, timezone
 from uuid import uuid4
 
 import pytest
 
-from policyengine_api.models import TaxBenefitModel, TaxBenefitModelVersion
-from test_fixtures.fixtures_parameters import (
+from test_fixtures.fixtures_version_filter import (
+    MODEL_NAMES,
     create_parameter,
-    create_parameter_value,
-    create_parameter_values_batch,
-    create_policy,
-    model_version,  # noqa: F401 - pytest fixture
+    create_version,
+    us_model,  # noqa: F401
+    us_two_versions,  # noqa: F401
+    us_version,  # noqa: F401
 )
 
 # -----------------------------------------------------------------------------
-# Parameter Endpoint Tests
+# GET /parameters/ — basic
 # -----------------------------------------------------------------------------
 
 
-def test__given_parameters_endpoint_called__then_returns_list(client):
-    """GET /parameters returns a list."""
-    # Given
-    endpoint = "/parameters"
+class TestListParameters:
+    def test_given_no_params_then_returns_empty_list(self, client):
+        """Empty database returns an empty list."""
+        response = client.get("/parameters")
+        assert response.status_code == 200
+        assert response.json() == []
 
-    # When
-    response = client.get(endpoint)
+    def test_given_parameters_exist_then_returns_list(
+        self, client, session, us_version  # noqa: F811
+    ):
+        """Returns parameters that exist."""
+        create_parameter(session, us_version, "gov.rate", "Rate")
+        response = client.get("/parameters")
+        assert response.status_code == 200
+        assert len(response.json()) == 1
 
-    # Then
-    assert response.status_code == 200
-    assert isinstance(response.json(), list)
+    def test_given_search_by_name_then_returns_matching(
+        self, client, session, us_version  # noqa: F811
+    ):
+        """Search filter matches parameter name."""
+        create_parameter(session, us_version, "gov.tax.rate", "Rate")
+        create_parameter(session, us_version, "gov.benefit.amount", "Amount")
 
+        response = client.get("/parameters?search=tax")
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data) == 1
+        assert data[0]["name"] == "gov.tax.rate"
 
-def test__given_nonexistent_parameter_id__then_returns_404(client):
-    """GET /parameters/{id} returns 404 for non-existent parameter."""
-    # Given
-    fake_id = uuid4()
+    def test_given_search_by_label_then_returns_matching(
+        self, client, session, us_version  # noqa: F811
+    ):
+        """Search filter matches parameter label (case-insensitive)."""
+        create_parameter(session, us_version, "gov.x", "Basic Rate")
+        create_parameter(session, us_version, "gov.y", "Amount")
 
-    # When
-    response = client.get(f"/parameters/{fake_id}")
+        response = client.get("/parameters?search=basic")
+        data = response.json()
+        assert len(data) == 1
+        assert data[0]["label"] == "Basic Rate"
 
-    # Then
-    assert response.status_code == 404
+    def test_given_search_by_description_then_returns_matching(
+        self, client, session, us_version  # noqa: F811
+    ):
+        """Search filter matches parameter description."""
+        create_parameter(
+            session, us_version, "gov.x", "X", description="The income tax rate"
+        )
+        create_parameter(session, us_version, "gov.y", "Y", description="A benefit")
 
+        response = client.get("/parameters?search=income")
+        data = response.json()
+        assert len(data) == 1
+        assert data[0]["name"] == "gov.x"
 
-# -----------------------------------------------------------------------------
-# Parameter Value Endpoint Tests
-# -----------------------------------------------------------------------------
+    def test_given_limit_then_returns_at_most_n(
+        self, client, session, us_version  # noqa: F811
+    ):
+        """Limit caps the number of results."""
+        for i in range(5):
+            create_parameter(session, us_version, f"gov.p{i}", f"P{i}")
 
+        response = client.get("/parameters?limit=2")
+        assert len(response.json()) == 2
 
-def test__given_parameter_values_endpoint_called__then_returns_list(client):
-    """GET /parameter-values returns a list."""
-    # Given
-    endpoint = "/parameter-values"
+    def test_given_skip_then_skips_first_n(
+        self, client, session, us_version  # noqa: F811
+    ):
+        """Skip omits the first N results."""
+        for i in range(5):
+            create_parameter(session, us_version, f"gov.p{i}", f"P{i}")
 
-    # When
-    response = client.get(endpoint)
+        response = client.get("/parameters?skip=3&limit=10")
+        assert len(response.json()) == 2
 
-    # Then
-    assert response.status_code == 200
-    assert isinstance(response.json(), list)
-
-
-def test__given_nonexistent_parameter_value_id__then_returns_404(client):
-    """GET /parameter-values/{id} returns 404 for non-existent parameter value."""
-    # Given
-    fake_id = uuid4()
-
-    # When
-    response = client.get(f"/parameter-values/{fake_id}")
-
-    # Then
-    assert response.status_code == 404
-
-
-# -----------------------------------------------------------------------------
-# Parameter Value Filtering Tests
-# -----------------------------------------------------------------------------
-
-
-def test__given_parameter_id_filter__then_returns_only_matching_values(
-    client,
-    session,
-    model_version,  # noqa: F811
-):
-    """GET /parameter-values?parameter_id=X returns only values for that parameter."""
-    # Given
-    param1 = create_parameter(session, model_version, "test.param1", "Test Param 1")
-    param2 = create_parameter(session, model_version, "test.param2", "Test Param 2")
-    create_parameter_value(session, param1.id, 100)
-    create_parameter_value(session, param2.id, 200)
-
-    # When
-    response = client.get(f"/parameter-values?parameter_id={param1.id}")
-
-    # Then
-    assert response.status_code == 200
-    data = response.json()
-    assert len(data) == 1
-    assert data[0]["parameter_id"] == str(param1.id)
-
-
-def test__given_policy_id_filter__then_returns_only_matching_values(
-    client,
-    session,
-    model_version,  # noqa: F811
-):
-    """GET /parameter-values?policy_id=X returns only values for that policy."""
-    # Given
-    param = create_parameter(session, model_version, "test.param", "Test Param")
-    policy = create_policy(session, "Test Policy", model_version)
-    create_parameter_value(session, param.id, 100, policy_id=None)  # baseline
-    create_parameter_value(session, param.id, 150, policy_id=policy.id)  # reform
-
-    # When
-    response = client.get(f"/parameter-values?policy_id={policy.id}")
-
-    # Then
-    assert response.status_code == 200
-    data = response.json()
-    assert len(data) == 1
-    assert data[0]["policy_id"] == str(policy.id)
-    assert data[0]["value_json"] == 150
-
-
-def test__given_both_parameter_and_policy_filters__then_returns_matching_intersection(
-    client,
-    session,
-    model_version,  # noqa: F811
-):
-    """GET /parameter-values?parameter_id=X&policy_id=Y returns intersection."""
-    # Given
-    param1 = create_parameter(
-        session, model_version, "test.both.param1", "Test Both Param 1"
-    )
-    param2 = create_parameter(
-        session, model_version, "test.both.param2", "Test Both Param 2"
-    )
-    policy = create_policy(session, "Test Both Policy", model_version)
-
-    create_parameter_value(session, param1.id, 100, policy_id=None)  # baseline
-    create_parameter_value(session, param1.id, 150, policy_id=policy.id)  # target
-    create_parameter_value(session, param2.id, 200, policy_id=policy.id)  # other
-
-    # When
-    response = client.get(
-        f"/parameter-values?parameter_id={param1.id}&policy_id={policy.id}"
-    )
-
-    # Then
-    assert response.status_code == 200
-    data = response.json()
-    assert len(data) == 1
-    assert data[0]["parameter_id"] == str(param1.id)
-    assert data[0]["policy_id"] == str(policy.id)
-    assert data[0]["value_json"] == 150
+    def test_results_ordered_by_name(
+        self, client, session, us_version  # noqa: F811
+    ):
+        """Parameters come back sorted alphabetically by name."""
+        create_parameter(session, us_version, "gov.zzz", "Z")
+        create_parameter(session, us_version, "gov.aaa", "A")
+        names = [p["name"] for p in client.get("/parameters").json()]
+        assert names == ["gov.aaa", "gov.zzz"]
 
 
 # -----------------------------------------------------------------------------
-# Parameter Value Pagination Tests
+# GET /parameters/ — version filtering
 # -----------------------------------------------------------------------------
 
 
-def test__given_limit_parameter__then_returns_limited_results(
-    client,
-    session,
-    model_version,  # noqa: F811
-):
-    """GET /parameter-values?limit=N returns at most N results."""
-    # Given
-    param = create_parameter(
-        session, model_version, "test.pagination.param", "Test Pagination Param"
-    )
-    create_parameter_values_batch(session, param.id, count=5)
+class TestListParametersVersionFilter:
+    def test_given_model_name_then_returns_only_latest_version(
+        self, client, session, us_two_versions  # noqa: F811
+    ):
+        """Model name resolves to latest version; old-version params excluded."""
+        v1, v2 = us_two_versions
+        create_parameter(session, v1, "gov.old", "Old")
+        create_parameter(session, v2, "gov.new", "New")
 
-    # When
-    response = client.get(f"/parameter-values?parameter_id={param.id}&limit=2")
+        data = client.get(
+            f"/parameters?tax_benefit_model_name={MODEL_NAMES['US']}"
+        ).json()
+        assert len(data) == 1
+        assert data[0]["name"] == "gov.new"
 
-    # Then
-    assert response.status_code == 200
-    assert len(response.json()) == 2
+    def test_given_explicit_version_id_then_returns_that_version(
+        self, client, session, us_two_versions  # noqa: F811
+    ):
+        """Explicit version_id pins to a specific version."""
+        v1, v2 = us_two_versions
+        create_parameter(session, v1, "gov.old", "Old")
+        create_parameter(session, v2, "gov.new", "New")
 
+        data = client.get(
+            f"/parameters?tax_benefit_model_version_id={v1.id}"
+        ).json()
+        assert len(data) == 1
+        assert data[0]["name"] == "gov.old"
 
-def test__given_skip_parameter__then_skips_specified_results(
-    client,
-    session,
-    model_version,  # noqa: F811
-):
-    """GET /parameter-values?skip=N skips first N results."""
-    # Given
-    param = create_parameter(
-        session, model_version, "test.skip.param", "Test Skip Param"
-    )
-    create_parameter_values_batch(session, param.id, count=5)
+    def test_given_both_then_version_id_takes_precedence(
+        self, client, session, us_two_versions  # noqa: F811
+    ):
+        """version_id overrides model_name."""
+        v1, v2 = us_two_versions
+        create_parameter(session, v1, "gov.old", "Old")
+        create_parameter(session, v2, "gov.new", "New")
 
-    # When
-    response = client.get(f"/parameter-values?parameter_id={param.id}&skip=3&limit=10")
+        data = client.get(
+            f"/parameters?tax_benefit_model_name={MODEL_NAMES['US']}"
+            f"&tax_benefit_model_version_id={v1.id}"
+        ).json()
+        assert len(data) == 1
+        assert data[0]["name"] == "gov.old"
 
-    # Then
-    assert response.status_code == 200
-    assert len(response.json()) == 2  # 5 total - 3 skipped = 2 remaining
+    def test_given_no_filters_then_returns_all_versions(
+        self, client, session, us_two_versions  # noqa: F811
+    ):
+        """Without model/version filter, params from all versions are returned."""
+        v1, v2 = us_two_versions
+        create_parameter(session, v1, "gov.old", "Old")
+        create_parameter(session, v2, "gov.new", "New")
+
+        data = client.get("/parameters").json()
+        assert len(data) == 2
+
+    def test_given_nonexistent_model_name_then_returns_404(self, client):
+        """Unknown model name → 404."""
+        response = client.get(
+            "/parameters?tax_benefit_model_name=nonexistent-model"
+        )
+        assert response.status_code == 404
+
+    def test_given_search_combined_with_version_filter(
+        self, client, session, us_two_versions  # noqa: F811
+    ):
+        """Search + version filter work together."""
+        v1, v2 = us_two_versions
+        create_parameter(session, v2, "gov.tax.rate", "Rate")
+        create_parameter(session, v2, "gov.benefit.amount", "Amount")
+
+        data = client.get(
+            f"/parameters?tax_benefit_model_name={MODEL_NAMES['US']}&search=tax"
+        ).json()
+        assert len(data) == 1
+        assert data[0]["name"] == "gov.tax.rate"
 
 
 # -----------------------------------------------------------------------------
-# Version Filtering Tests
+# GET /parameters/{id}
 # -----------------------------------------------------------------------------
 
 
-def test__given_model_name__then_returns_only_latest_version_parameters(
-    client, session
-):
-    """GET /parameters?tax_benefit_model_name=X returns only latest version's params."""
-    model = TaxBenefitModel(name="policyengine-us", description="US")
-    session.add(model)
-    session.commit()
-    session.refresh(model)
+class TestGetParameter:
+    def test_given_valid_id_then_returns_parameter(
+        self, client, session, us_version  # noqa: F811
+    ):
+        """Returns the full parameter data."""
+        param = create_parameter(session, us_version, "gov.rate", "Rate")
+        response = client.get(f"/parameters/{param.id}")
+        assert response.status_code == 200
+        assert response.json()["name"] == "gov.rate"
 
-    v1 = TaxBenefitModelVersion(
-        model_id=model.id,
-        version="1.0",
-        created_at=datetime(2025, 1, 1, tzinfo=timezone.utc),
-    )
-    v2 = TaxBenefitModelVersion(
-        model_id=model.id,
-        version="2.0",
-        created_at=datetime(2025, 6, 1, tzinfo=timezone.utc),
-    )
-    session.add(v1)
-    session.add(v2)
-    session.commit()
-    session.refresh(v1)
-    session.refresh(v2)
+    def test_given_nonexistent_id_then_returns_404(self, client):
+        """Unknown UUID → 404."""
+        response = client.get(f"/parameters/{uuid4()}")
+        assert response.status_code == 404
 
-    create_parameter(session, v1, "gov.old_param", "Old")
-    create_parameter(session, v2, "gov.new_param", "New")
-
-    response = client.get("/parameters?tax_benefit_model_name=policyengine-us")
-
-    assert response.status_code == 200
-    data = response.json()
-    assert len(data) == 1
-    assert data[0]["name"] == "gov.new_param"
-
-
-def test__given_explicit_version_id__then_returns_that_versions_parameters(
-    client, session
-):
-    """GET /parameters?tax_benefit_model_version_id=X returns that version's params."""
-    model = TaxBenefitModel(name="policyengine-us", description="US")
-    session.add(model)
-    session.commit()
-    session.refresh(model)
-
-    v1 = TaxBenefitModelVersion(
-        model_id=model.id,
-        version="1.0",
-        created_at=datetime(2025, 1, 1, tzinfo=timezone.utc),
-    )
-    v2 = TaxBenefitModelVersion(
-        model_id=model.id,
-        version="2.0",
-        created_at=datetime(2025, 6, 1, tzinfo=timezone.utc),
-    )
-    session.add(v1)
-    session.add(v2)
-    session.commit()
-    session.refresh(v1)
-    session.refresh(v2)
-
-    create_parameter(session, v1, "gov.old_param", "Old")
-    create_parameter(session, v2, "gov.new_param", "New")
-
-    response = client.get(f"/parameters?tax_benefit_model_version_id={v1.id}")
-
-    assert response.status_code == 200
-    data = response.json()
-    assert len(data) == 1
-    assert data[0]["name"] == "gov.old_param"
-
-
-def test__given_version_id_overrides_model_name(client, session):
-    """Version ID takes precedence over model name when both are provided."""
-    model = TaxBenefitModel(name="policyengine-us", description="US")
-    session.add(model)
-    session.commit()
-    session.refresh(model)
-
-    v1 = TaxBenefitModelVersion(
-        model_id=model.id,
-        version="1.0",
-        created_at=datetime(2025, 1, 1, tzinfo=timezone.utc),
-    )
-    v2 = TaxBenefitModelVersion(
-        model_id=model.id,
-        version="2.0",
-        created_at=datetime(2025, 6, 1, tzinfo=timezone.utc),
-    )
-    session.add(v1)
-    session.add(v2)
-    session.commit()
-    session.refresh(v1)
-    session.refresh(v2)
-
-    create_parameter(session, v1, "gov.old_param", "Old")
-    create_parameter(session, v2, "gov.new_param", "New")
-
-    # Provide model name (would resolve to v2) but also provide explicit v1 ID
-    response = client.get(
-        f"/parameters?tax_benefit_model_name=policyengine-us&tax_benefit_model_version_id={v1.id}"
-    )
-
-    assert response.status_code == 200
-    data = response.json()
-    assert len(data) == 1
-    assert data[0]["name"] == "gov.old_param"
-
-
-if __name__ == "__main__":
-    pytest.main([__file__, "-v"])
+    def test_response_shape_matches_parameter_read(
+        self, client, session, us_version  # noqa: F811
+    ):
+        """Response contains all ParameterRead fields."""
+        param = create_parameter(session, us_version, "gov.rate", "Rate")
+        data = client.get(f"/parameters/{param.id}").json()
+        for field in ("id", "name", "label", "created_at", "tax_benefit_model_version_id"):
+            assert field in data
