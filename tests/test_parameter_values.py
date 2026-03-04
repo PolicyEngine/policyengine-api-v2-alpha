@@ -3,8 +3,6 @@
 from datetime import datetime, timezone
 from uuid import uuid4
 
-import pytest
-
 from test_fixtures.fixtures_version_filter import (
     MODEL_NAMES,
     create_parameter,
@@ -14,7 +12,6 @@ from test_fixtures.fixtures_version_filter import (
     us_two_versions,  # noqa: F401
     us_version,  # noqa: F401
 )
-
 
 # -----------------------------------------------------------------------------
 # GET /parameter-values/ — basic
@@ -29,7 +26,10 @@ class TestListParameterValues:
         assert response.json() == []
 
     def test_given_values_exist_then_returns_list(
-        self, client, session, us_version  # noqa: F811
+        self,
+        client,
+        session,
+        us_version,  # noqa: F811
     ):
         """Returns parameter values that exist."""
         param = create_parameter(session, us_version, "gov.rate", "Rate")
@@ -39,7 +39,10 @@ class TestListParameterValues:
         assert len(data) == 1
 
     def test_given_parameter_id_then_filters_by_parameter(
-        self, client, session, us_version  # noqa: F811
+        self,
+        client,
+        session,
+        us_version,  # noqa: F811
     ):
         """Filters values to a specific parameter."""
         p1 = create_parameter(session, us_version, "gov.rate", "Rate")
@@ -52,7 +55,11 @@ class TestListParameterValues:
         assert data[0]["parameter_id"] == str(p1.id)
 
     def test_given_policy_id_then_filters_by_policy(
-        self, client, session, us_version, us_model  # noqa: F811
+        self,
+        client,
+        session,
+        us_version,  # noqa: F811
+        us_model,  # noqa: F811
     ):
         """Filters values to a specific policy."""
         param = create_parameter(session, us_version, "gov.rate", "Rate")
@@ -65,7 +72,11 @@ class TestListParameterValues:
         assert data[0]["policy_id"] == str(policy.id)
 
     def test_given_combined_parameter_and_policy_filters(
-        self, client, session, us_version, us_model  # noqa: F811
+        self,
+        client,
+        session,
+        us_version,  # noqa: F811
+        us_model,  # noqa: F811
     ):
         """parameter_id + policy_id work together."""
         p1 = create_parameter(session, us_version, "gov.rate", "Rate")
@@ -81,7 +92,10 @@ class TestListParameterValues:
         assert len(data) == 1
 
     def test_given_limit_then_returns_at_most_n(
-        self, client, session, us_version  # noqa: F811
+        self,
+        client,
+        session,
+        us_version,  # noqa: F811
     ):
         """Limit caps the number of results."""
         param = create_parameter(session, us_version, "gov.rate", "Rate")
@@ -96,7 +110,10 @@ class TestListParameterValues:
         assert len(client.get("/parameter-values?limit=2").json()) == 2
 
     def test_given_skip_then_skips_first_n(
-        self, client, session, us_version  # noqa: F811
+        self,
+        client,
+        session,
+        us_version,  # noqa: F811
     ):
         """Skip omits the first N results."""
         param = create_parameter(session, us_version, "gov.rate", "Rate")
@@ -111,16 +128,23 @@ class TestListParameterValues:
         assert len(client.get("/parameter-values?skip=3&limit=10").json()) == 2
 
     def test_results_ordered_by_start_date_desc(
-        self, client, session, us_version  # noqa: F811
+        self,
+        client,
+        session,
+        us_version,  # noqa: F811
     ):
         """Parameter values come back sorted by start_date descending."""
         param = create_parameter(session, us_version, "gov.rate", "Rate")
         create_parameter_value(
-            session, param.id, 0.1,
+            session,
+            param.id,
+            0.1,
             start_date=datetime(2020, 1, 1, tzinfo=timezone.utc),
         )
         create_parameter_value(
-            session, param.id, 0.2,
+            session,
+            param.id,
+            0.2,
             start_date=datetime(2025, 1, 1, tzinfo=timezone.utc),
         )
 
@@ -138,7 +162,10 @@ class TestListParameterValues:
 
 class TestListParameterValuesVersionFilter:
     def test_given_model_name_then_returns_only_latest_version(
-        self, client, session, us_two_versions  # noqa: F811
+        self,
+        client,
+        session,
+        us_two_versions,  # noqa: F811
     ):
         """Model name resolves to latest version; old-version param values excluded."""
         v1, v2 = us_two_versions
@@ -154,7 +181,10 @@ class TestListParameterValuesVersionFilter:
         assert data[0]["parameter_id"] == str(p_new.id)
 
     def test_given_explicit_version_id_then_returns_that_version(
-        self, client, session, us_two_versions  # noqa: F811
+        self,
+        client,
+        session,
+        us_two_versions,  # noqa: F811
     ):
         """Explicit version_id pins to a specific version."""
         v1, v2 = us_two_versions
@@ -170,7 +200,10 @@ class TestListParameterValuesVersionFilter:
         assert data[0]["parameter_id"] == str(p_old.id)
 
     def test_given_both_then_version_id_takes_precedence(
-        self, client, session, us_two_versions  # noqa: F811
+        self,
+        client,
+        session,
+        us_two_versions,  # noqa: F811
     ):
         """version_id overrides model_name."""
         v1, v2 = us_two_versions
@@ -187,7 +220,10 @@ class TestListParameterValuesVersionFilter:
         assert data[0]["parameter_id"] == str(p_old.id)
 
     def test_given_no_filters_then_returns_all_versions(
-        self, client, session, us_two_versions  # noqa: F811
+        self,
+        client,
+        session,
+        us_two_versions,  # noqa: F811
     ):
         """Without model/version filter, values from all versions are returned."""
         v1, v2 = us_two_versions
@@ -207,7 +243,10 @@ class TestListParameterValuesVersionFilter:
         assert response.status_code == 404
 
     def test_given_version_filter_combined_with_parameter_id(
-        self, client, session, us_two_versions  # noqa: F811
+        self,
+        client,
+        session,
+        us_two_versions,  # noqa: F811
     ):
         """Version filter + parameter_id work together."""
         v1, v2 = us_two_versions
@@ -231,7 +270,10 @@ class TestListParameterValuesVersionFilter:
 
 class TestGetParameterValue:
     def test_given_valid_id_then_returns_value(
-        self, client, session, us_version  # noqa: F811
+        self,
+        client,
+        session,
+        us_version,  # noqa: F811
     ):
         """Returns the full parameter value data."""
         param = create_parameter(session, us_version, "gov.rate", "Rate")
@@ -247,7 +289,10 @@ class TestGetParameterValue:
         assert response.status_code == 404
 
     def test_response_shape_matches_parameter_value_read(
-        self, client, session, us_version  # noqa: F811
+        self,
+        client,
+        session,
+        us_version,  # noqa: F811
     ):
         """Response contains all ParameterValueRead fields."""
         param = create_parameter(session, us_version, "gov.rate", "Rate")

@@ -18,7 +18,6 @@ from test_fixtures.fixtures_version_filter import (
     us_two_versions,  # noqa: F401
 )
 
-
 # ---------------------------------------------------------------------------
 # get_latest_model_version
 # ---------------------------------------------------------------------------
@@ -26,7 +25,10 @@ from test_fixtures.fixtures_version_filter import (
 
 class TestGetLatestModelVersion:
     def test_given_multiple_versions_then_returns_newest(
-        self, session, us_model, us_two_versions  # noqa: F811
+        self,
+        session,
+        us_model,  # noqa: F811
+        us_two_versions,  # noqa: F811
     ):
         """Returns the version with the most recent created_at."""
         _v1, v2 = us_two_versions
@@ -35,7 +37,10 @@ class TestGetLatestModelVersion:
         assert result.version == "2.0"
 
     def test_given_underscore_name_then_normalizes_to_hyphens(
-        self, session, us_model, us_two_versions  # noqa: F811
+        self,
+        session,
+        us_model,  # noqa: F811
+        us_two_versions,  # noqa: F811
     ):
         """'policyengine_us' is normalised to 'policyengine-us'."""
         _v1, v2 = us_two_versions
@@ -49,7 +54,9 @@ class TestGetLatestModelVersion:
         assert exc_info.value.status_code == 404
 
     def test_given_model_without_versions_then_raises_404(
-        self, session, us_model  # noqa: F811
+        self,
+        session,
+        us_model,  # noqa: F811
     ):
         """Model that exists but has zero versions raises 404."""
         with pytest.raises(HTTPException) as exc_info:
@@ -71,7 +78,9 @@ class TestGetLatestModelVersion:
 
 class TestGetModelVersionById:
     def test_given_valid_id_then_returns_version(
-        self, session, us_two_versions  # noqa: F811
+        self,
+        session,
+        us_two_versions,  # noqa: F811
     ):
         """Returns the matching version."""
         v1, _v2 = us_two_versions
@@ -93,7 +102,9 @@ class TestGetModelVersionById:
 
 class TestResolveModelVersionId:
     def test_given_version_id_then_takes_precedence_over_model_name(
-        self, session, us_two_versions  # noqa: F811
+        self,
+        session,
+        us_two_versions,  # noqa: F811
     ):
         """Explicit version_id wins over model_name."""
         v1, _v2 = us_two_versions
@@ -101,7 +112,10 @@ class TestResolveModelVersionId:
         assert result == v1.id
 
     def test_given_only_model_name_then_resolves_to_latest(
-        self, session, us_model, us_two_versions  # noqa: F811
+        self,
+        session,
+        us_model,  # noqa: F811
+        us_two_versions,  # noqa: F811
     ):
         """Model name alone returns the latest version's ID."""
         _v1, v2 = us_two_versions

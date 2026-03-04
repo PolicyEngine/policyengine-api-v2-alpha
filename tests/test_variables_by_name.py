@@ -1,6 +1,5 @@
 """Tests for POST /variables/by-name endpoint."""
 
-import pytest
 
 from test_fixtures.fixtures_version_filter import (
     MODEL_NAMES,
@@ -12,7 +11,6 @@ from test_fixtures.fixtures_version_filter import (
     us_version,  # noqa: F401
 )
 
-
 # -----------------------------------------------------------------------------
 # Happy-path lookups
 # -----------------------------------------------------------------------------
@@ -20,7 +18,10 @@ from test_fixtures.fixtures_version_filter import (
 
 class TestVariablesByName:
     def test_given_known_names_then_returns_matching(
-        self, client, session, uk_version  # noqa: F811
+        self,
+        client,
+        session,
+        uk_version,  # noqa: F811
     ):
         """Returns full metadata for each matching name."""
         create_variable(session, uk_version, "employment_income")
@@ -38,7 +39,10 @@ class TestVariablesByName:
         assert {v["name"] for v in data} == {"employment_income", "income_tax"}
 
     def test_given_empty_names_then_returns_empty_list(
-        self, client, session, uk_version  # noqa: F811
+        self,
+        client,
+        session,
+        uk_version,  # noqa: F811
     ):
         """Empty names list returns empty response (no DB query)."""
         data = client.post(
@@ -48,7 +52,10 @@ class TestVariablesByName:
         assert data == []
 
     def test_given_unknown_names_then_returns_empty_list(
-        self, client, session, uk_version  # noqa: F811
+        self,
+        client,
+        session,
+        uk_version,  # noqa: F811
     ):
         """Names that don't match anything return empty list."""
         create_variable(session, uk_version, "employment_income")
@@ -63,7 +70,10 @@ class TestVariablesByName:
         assert data == []
 
     def test_given_mixed_names_then_returns_only_known(
-        self, client, session, uk_version  # noqa: F811
+        self,
+        client,
+        session,
+        uk_version,  # noqa: F811
     ):
         """Only matching names are returned; unknowns silently omitted."""
         create_variable(session, uk_version, "income_tax")
@@ -79,7 +89,10 @@ class TestVariablesByName:
         assert data[0]["name"] == "income_tax"
 
     def test_given_single_name_then_returns_one(
-        self, client, session, uk_version  # noqa: F811
+        self,
+        client,
+        session,
+        uk_version,  # noqa: F811
     ):
         """Single-element lookup works."""
         create_variable(session, uk_version, "age")
@@ -93,7 +106,10 @@ class TestVariablesByName:
         assert len(data) == 1
 
     def test_results_ordered_by_name(
-        self, client, session, uk_version  # noqa: F811
+        self,
+        client,
+        session,
+        uk_version,  # noqa: F811
     ):
         """Response is sorted alphabetically by name."""
         create_variable(session, uk_version, "zzz_var")
@@ -124,7 +140,14 @@ class TestVariablesByName:
                 "tax_benefit_model_name": MODEL_NAMES["UK"],
             },
         ).json()[0]
-        for field in ("id", "name", "entity", "description", "created_at", "tax_benefit_model_version_id"):
+        for field in (
+            "id",
+            "name",
+            "entity",
+            "description",
+            "created_at",
+            "tax_benefit_model_version_id",
+        ):
             assert field in var
 
 
@@ -135,7 +158,11 @@ class TestVariablesByName:
 
 class TestVariablesByNameModelIsolation:
     def test_given_two_models_then_returns_only_requested(
-        self, client, session, uk_version, us_version  # noqa: F811
+        self,
+        client,
+        session,
+        uk_version,  # noqa: F811
+        us_version,  # noqa: F811
     ):
         """Variables from the other model are excluded."""
         create_variable(session, uk_version, "council_tax")
@@ -170,9 +197,7 @@ class TestVariablesByNameModelIsolation:
 class TestVariablesByNameValidation:
     def test_given_missing_model_name_then_422(self, client):
         """Omitting tax_benefit_model_name returns 422."""
-        response = client.post(
-            "/variables/by-name", json={"names": ["income_tax"]}
-        )
+        response = client.post("/variables/by-name", json={"names": ["income_tax"]})
         assert response.status_code == 422
 
     def test_given_missing_names_then_422(self, client):
@@ -202,7 +227,10 @@ class TestVariablesByNameValidation:
 
 class TestVariablesByNameVersionFilter:
     def test_given_model_name_only_then_defaults_to_latest(
-        self, client, session, uk_two_versions  # noqa: F811
+        self,
+        client,
+        session,
+        uk_two_versions,  # noqa: F811
     ):
         """Model name resolves to latest version."""
         v1, v2 = uk_two_versions
@@ -220,7 +248,10 @@ class TestVariablesByNameVersionFilter:
         assert data[0]["name"] == "new_var"
 
     def test_given_explicit_version_id_then_returns_that_version(
-        self, client, session, uk_two_versions  # noqa: F811
+        self,
+        client,
+        session,
+        uk_two_versions,  # noqa: F811
     ):
         """Explicit version_id overrides latest-version default."""
         v1, v2 = uk_two_versions

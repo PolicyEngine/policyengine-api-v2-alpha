@@ -1,6 +1,5 @@
 """Tests for POST /parameters/by-name endpoint."""
 
-import pytest
 
 from test_fixtures.fixtures_version_filter import (
     MODEL_NAMES,
@@ -12,7 +11,6 @@ from test_fixtures.fixtures_version_filter import (
     us_version,  # noqa: F401
 )
 
-
 # -----------------------------------------------------------------------------
 # Happy-path lookups
 # -----------------------------------------------------------------------------
@@ -20,7 +18,10 @@ from test_fixtures.fixtures_version_filter import (
 
 class TestParametersByName:
     def test_given_known_names_then_returns_matching(
-        self, client, session, us_version  # noqa: F811
+        self,
+        client,
+        session,
+        us_version,  # noqa: F811
     ):
         """Returns full metadata for each matching name."""
         create_parameter(session, us_version, "gov.tax.rate", "Rate")
@@ -38,7 +39,10 @@ class TestParametersByName:
         assert {p["name"] for p in data} == {"gov.tax.rate", "gov.tax.threshold"}
 
     def test_given_empty_names_then_returns_empty_list(
-        self, client, session, us_version  # noqa: F811
+        self,
+        client,
+        session,
+        us_version,  # noqa: F811
     ):
         """Empty names list → empty response (no DB query)."""
         data = client.post(
@@ -48,7 +52,10 @@ class TestParametersByName:
         assert data == []
 
     def test_given_unknown_names_then_returns_empty_list(
-        self, client, session, us_version  # noqa: F811
+        self,
+        client,
+        session,
+        us_version,  # noqa: F811
     ):
         """Names that don't match anything → empty list."""
         create_parameter(session, us_version, "gov.exists", "Exists")
@@ -63,7 +70,10 @@ class TestParametersByName:
         assert data == []
 
     def test_given_mixed_names_then_returns_only_known(
-        self, client, session, us_version  # noqa: F811
+        self,
+        client,
+        session,
+        us_version,  # noqa: F811
     ):
         """Only matching names are returned; unknowns silently omitted."""
         create_parameter(session, us_version, "gov.real", "Real")
@@ -79,7 +89,10 @@ class TestParametersByName:
         assert data[0]["name"] == "gov.real"
 
     def test_given_single_name_then_returns_one(
-        self, client, session, us_version  # noqa: F811
+        self,
+        client,
+        session,
+        us_version,  # noqa: F811
     ):
         """Single-element lookup works."""
         create_parameter(session, us_version, "gov.single", "Single")
@@ -93,7 +106,10 @@ class TestParametersByName:
         assert len(data) == 1
 
     def test_results_ordered_by_name(
-        self, client, session, us_version  # noqa: F811
+        self,
+        client,
+        session,
+        us_version,  # noqa: F811
     ):
         """Response is sorted alphabetically by name."""
         create_parameter(session, us_version, "gov.zzz", "Z")
@@ -122,7 +138,13 @@ class TestParametersByName:
                 "tax_benefit_model_name": MODEL_NAMES["US"],
             },
         ).json()[0]
-        for field in ("id", "name", "label", "created_at", "tax_benefit_model_version_id"):
+        for field in (
+            "id",
+            "name",
+            "label",
+            "created_at",
+            "tax_benefit_model_version_id",
+        ):
             assert field in param
 
 
@@ -133,7 +155,11 @@ class TestParametersByName:
 
 class TestParametersByNameModelIsolation:
     def test_given_two_models_then_returns_only_requested(
-        self, client, session, us_version, uk_version  # noqa: F811
+        self,
+        client,
+        session,
+        us_version,  # noqa: F811
+        uk_version,  # noqa: F811
     ):
         """Parameters from the other model are excluded."""
         create_parameter(session, us_version, "gov.shared", "US")
@@ -158,9 +184,7 @@ class TestParametersByNameModelIsolation:
 class TestParametersByNameValidation:
     def test_given_missing_model_name_then_422(self, client):
         """Omitting tax_benefit_model_name → 422."""
-        response = client.post(
-            "/parameters/by-name", json={"names": ["gov.x"]}
-        )
+        response = client.post("/parameters/by-name", json={"names": ["gov.x"]})
         assert response.status_code == 422
 
     def test_given_missing_names_then_422(self, client):
@@ -171,9 +195,7 @@ class TestParametersByNameValidation:
         )
         assert response.status_code == 422
 
-    def test_given_nonexistent_model_name_then_404(
-        self, client, session
-    ):
+    def test_given_nonexistent_model_name_then_404(self, client, session):
         """Model that doesn't exist → 404 from resolve_model_version_id."""
         response = client.post(
             "/parameters/by-name",
@@ -192,7 +214,10 @@ class TestParametersByNameValidation:
 
 class TestParametersByNameVersionFilter:
     def test_given_model_name_only_then_defaults_to_latest(
-        self, client, session, us_two_versions  # noqa: F811
+        self,
+        client,
+        session,
+        us_two_versions,  # noqa: F811
     ):
         """Model name resolves to latest version."""
         v1, v2 = us_two_versions
@@ -210,7 +235,10 @@ class TestParametersByNameVersionFilter:
         assert data[0]["name"] == "gov.new"
 
     def test_given_explicit_version_id_then_returns_that_version(
-        self, client, session, us_two_versions  # noqa: F811
+        self,
+        client,
+        session,
+        us_two_versions,  # noqa: F811
     ):
         """Explicit version_id overrides latest-version default."""
         v1, v2 = us_two_versions

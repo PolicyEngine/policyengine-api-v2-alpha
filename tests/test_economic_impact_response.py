@@ -4,7 +4,6 @@ Covers all Phase 2 output fields: poverty, inequality, budget_summary,
 intra_decile, program_statistics, detailed_budget, and decile_impacts.
 """
 
-
 from policyengine_api.api.analysis import _build_response, _safe_float
 from policyengine_api.models import ReportStatus
 from test_fixtures.fixtures_economic_impact_response import (
