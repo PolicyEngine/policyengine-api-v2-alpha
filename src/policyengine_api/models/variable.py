@@ -1,5 +1,5 @@
 from datetime import datetime, timezone
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 from uuid import UUID, uuid4
 
 from sqlmodel import JSON, Column, Field, Relationship, SQLModel
@@ -15,9 +15,12 @@ class VariableBase(SQLModel):
     entity: str
     description: str | None = None
     data_type: str | None = None  # Store as string representation
-    possible_values: str | None = Field(
+    possible_values: list[str] | None = Field(
         default=None, sa_column=Column(JSON)
     )  # Store as JSON list
+    default_value: Any = Field(
+        default=None, sa_column=Column(JSON)
+    )  # Store as JSON (handles int, float, bool, str, etc.)
     tax_benefit_model_version_id: UUID = Field(
         foreign_key="tax_benefit_model_versions.id"
     )

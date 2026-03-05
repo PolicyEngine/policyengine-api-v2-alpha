@@ -300,11 +300,13 @@ def _calculate_household_uk(
     from pathlib import Path
 
     import pandas as pd
-    from policyengine.core import Simulation
     from microdf import MicroDataFrame
+    from policyengine.core import Simulation
     from policyengine.tax_benefit_models.uk import uk_latest
-    from policyengine.tax_benefit_models.uk.datasets import PolicyEngineUKDataset
-    from policyengine.tax_benefit_models.uk.datasets import UKYearData
+    from policyengine.tax_benefit_models.uk.datasets import (
+        PolicyEngineUKDataset,
+        UKYearData,
+    )
 
     n_people = len(people)
     n_benunits = max(1, len(benunit))
@@ -466,7 +468,14 @@ def _run_local_household_us(
 
     try:
         result = _calculate_household_us(
-            people, marital_unit, family, spm_unit, tax_unit, household, year, policy_data
+            people,
+            marital_unit,
+            family,
+            spm_unit,
+            tax_unit,
+            household,
+            year,
+            policy_data,
         )
 
         # Update job with result
@@ -512,11 +521,13 @@ def _calculate_household_us(
     from pathlib import Path
 
     import pandas as pd
-    from policyengine.core import Simulation
     from microdf import MicroDataFrame
+    from policyengine.core import Simulation
     from policyengine.tax_benefit_models.us import us_latest
-    from policyengine.tax_benefit_models.us.datasets import PolicyEngineUSDataset
-    from policyengine.tax_benefit_models.us.datasets import USYearData
+    from policyengine.tax_benefit_models.us.datasets import (
+        PolicyEngineUSDataset,
+        USYearData,
+    )
 
     n_people = len(people)
     n_households = max(1, len(household))
@@ -672,7 +683,9 @@ def _calculate_household_us(
         except (ValueError, TypeError):
             return str(value)
 
-    def extract_entity_outputs(entity_name: str, entity_data, n_rows: int) -> list[dict]:
+    def extract_entity_outputs(
+        entity_name: str, entity_data, n_rows: int
+    ) -> list[dict]:
         outputs = []
         for i in range(n_rows):
             row_dict = {}
@@ -743,7 +756,11 @@ def _trigger_modal_household(
         traceparent = get_traceparent()
 
         if request.tax_benefit_model_name == "policyengine_uk":
-            fn = modal.Function.from_name("policyengine", "simulate_household_uk")
+            fn = modal.Function.from_name(
+                "policyengine",
+                "simulate_household_uk",
+                environment_name=settings.modal_environment,
+            )
             fn.spawn(
                 job_id=job_id,
                 people=request.people,
@@ -755,7 +772,11 @@ def _trigger_modal_household(
                 traceparent=traceparent,
             )
         else:
-            fn = modal.Function.from_name("policyengine", "simulate_household_us")
+            fn = modal.Function.from_name(
+                "policyengine",
+                "simulate_household_us",
+                environment_name=settings.modal_environment,
+            )
             fn.spawn(
                 job_id=job_id,
                 people=request.people,

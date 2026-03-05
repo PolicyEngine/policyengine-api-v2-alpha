@@ -235,8 +235,7 @@ def openapi_to_claude_tools(spec: dict) -> list[dict]:
 
                 prop = schema_to_json_schema(spec, param_schema)
                 prop["description"] = (
-                    param.get("description", "")
-                    + f" (in: {param_in})"
+                    param.get("description", "") + f" (in: {param_in})"
                 )
                 properties[param_name] = prop
 
@@ -268,16 +267,18 @@ def openapi_to_claude_tools(spec: dict) -> list[dict]:
             if required:
                 input_schema["required"] = list(set(required))
 
-            tools.append({
-                "name": tool_name,
-                "description": full_desc[:1024],  # Claude has limits
-                "input_schema": input_schema,
-                "_meta": {
-                    "path": path,
-                    "method": method,
-                    "parameters": operation.get("parameters", []),
-                },
-            })
+            tools.append(
+                {
+                    "name": tool_name,
+                    "description": full_desc[:1024],  # Claude has limits
+                    "input_schema": input_schema,
+                    "_meta": {
+                        "path": path,
+                        "method": method,
+                        "parameters": operation.get("parameters", []),
+                    },
+                }
+            )
 
     return tools
 
@@ -347,7 +348,9 @@ def execute_api_tool(
                 url, params=query_params, json=body_data, headers=headers, timeout=60
             )
         elif method == "delete":
-            resp = requests.delete(url, params=query_params, headers=headers, timeout=60)
+            resp = requests.delete(
+                url, params=query_params, headers=headers, timeout=60
+            )
         else:
             return f"Unsupported method: {method}"
 
@@ -415,9 +418,7 @@ def _run_agent_impl(
     tool_lookup = {t["name"]: t for t in tools}
 
     # Strip _meta from tools before sending to Claude (it doesn't need it)
-    claude_tools = [
-        {k: v for k, v in t.items() if k != "_meta"} for t in tools
-    ]
+    claude_tools = [{k: v for k, v in t.items() if k != "_meta"} for t in tools]
     # Add the sleep tool
     claude_tools.append(SLEEP_TOOL)
 
@@ -477,11 +478,13 @@ def _run_agent_impl(
 
                 log(f"[TOOL_RESULT] {result[:300]}")
 
-                tool_results.append({
-                    "type": "tool_result",
-                    "tool_use_id": block.id,
-                    "content": result,
-                })
+                tool_results.append(
+                    {
+                        "type": "tool_result",
+                        "tool_use_id": block.id,
+                        "content": result,
+                    }
+                )
 
         messages.append({"role": "assistant", "content": assistant_content})
 

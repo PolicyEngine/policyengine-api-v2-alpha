@@ -27,21 +27,52 @@ WORKFLOW: To analyze a policy reform (e.g. lowering UK basic income tax rate to 
 6. Poll GET /analysis/economic-impact/{report_id} until status="completed"
 """
 
-from datetime import datetime
 from typing import List
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy.orm import selectinload
 from sqlmodel import Session, select
 
 from policyengine_api.models import (
     Parameter,
     ParameterValue,
+    ParameterValueWithName,
     Policy,
     PolicyCreate,
     PolicyRead,
+    TaxBenefitModel,
 )
 from policyengine_api.services.database import get_session
+
+
+def _policy_to_read(policy: Policy) -> PolicyRead:
+    """Convert a Policy ORM object to PolicyRead with parameter names."""
+    pv_with_names = []
+    for pv in policy.parameter_values:
+        pv_with_names.append(
+            ParameterValueWithName(
+                id=pv.id,
+                parameter_id=pv.parameter_id,
+                value_json=pv.value_json,
+                start_date=pv.start_date,
+                end_date=pv.end_date,
+                policy_id=pv.policy_id,
+                dynamic_id=pv.dynamic_id,
+                created_at=pv.created_at,
+                parameter_name=pv.parameter.name,
+            )
+        )
+    return PolicyRead(
+        id=policy.id,
+        name=policy.name,
+        description=policy.description,
+        tax_benefit_model_id=policy.tax_benefit_model_id,
+        created_at=policy.created_at,
+        updated_at=policy.updated_at,
+        parameter_values=pv_with_names,
+    )
+
 
 router = APIRouter(prefix="/policies", tags=["policies"])
 
@@ -67,61 +98,82 @@ def create_policy(policy: PolicyCreate, session: Session = Depends(get_session))
         ]
     }
     """
+    # Validate tax_benefit_model exists
+    tax_model = session.get(TaxBenefitModel, policy.tax_benefit_model_id)
+    if not tax_model:
+        raise HTTPException(status_code=404, detail="Tax benefit model not found")
+
     # Create the policy
-    db_policy = Policy(name=policy.name, description=policy.description)
+    db_policy = Policy(
+        name=policy.name,
+        description=policy.description,
+        tax_benefit_model_id=policy.tax_benefit_model_id,
+    )
     session.add(db_policy)
     session.flush()  # Get the policy ID before adding parameter values
 
     # Create associated parameter values
     for pv_data in policy.parameter_values:
         # Validate parameter exists
-        param = session.get(Parameter, pv_data["parameter_id"])
+        param = session.get(Parameter, pv_data.parameter_id)
         if not param:
             raise HTTPException(
                 status_code=404,
-                detail=f"Parameter {pv_data['parameter_id']} not found",
+                detail=f"Parameter {pv_data.parameter_id} not found",
             )
 
-        # Parse dates
-        start_date = (
-            datetime.fromisoformat(pv_data["start_date"].replace("Z", "+00:00"))
-            if isinstance(pv_data["start_date"], str)
-            else pv_data["start_date"]
-        )
-        end_date = None
-        if pv_data.get("end_date"):
-            end_date = (
-                datetime.fromisoformat(pv_data["end_date"].replace("Z", "+00:00"))
-                if isinstance(pv_data["end_date"], str)
-                else pv_data["end_date"]
-            )
-
-        # Create parameter value
+        # Create parameter value (dates already parsed by Pydantic)
         db_pv = ParameterValue(
-            parameter_id=pv_data["parameter_id"],
-            value_json=pv_data["value_json"],
-            start_date=start_date,
-            end_date=end_date,
+            parameter_id=pv_data.parameter_id,
+            value_json=pv_data.value_json,
+            start_date=pv_data.start_date,
+            end_date=pv_data.end_date,
             policy_id=db_policy.id,
         )
         session.add(db_pv)
 
     session.commit()
-    session.refresh(db_policy)
-    return db_policy
+
+    # Re-fetch with eager loading for the response
+    query = (
+        select(Policy)
+        .where(Policy.id == db_policy.id)
+        .options(
+            selectinload(Policy.parameter_values).selectinload(ParameterValue.parameter)
+        )
+    )
+    db_policy = session.exec(query).one()
+    return _policy_to_read(db_policy)
 
 
 @router.get("/", response_model=List[PolicyRead])
-def list_policies(session: Session = Depends(get_session)):
-    """List all policies."""
-    policies = session.exec(select(Policy)).all()
-    return policies
+def list_policies(
+    tax_benefit_model_id: UUID | None = Query(
+        None, description="Filter by tax benefit model"
+    ),
+    session: Session = Depends(get_session),
+):
+    """List all policies, optionally filtered by tax benefit model."""
+    query = select(Policy).options(
+        selectinload(Policy.parameter_values).selectinload(ParameterValue.parameter)
+    )
+    if tax_benefit_model_id:
+        query = query.where(Policy.tax_benefit_model_id == tax_benefit_model_id)
+    policies = session.exec(query).all()
+    return [_policy_to_read(p) for p in policies]
 
 
 @router.get("/{policy_id}", response_model=PolicyRead)
 def get_policy(policy_id: UUID, session: Session = Depends(get_session)):
     """Get a specific policy."""
-    policy = session.get(Policy, policy_id)
+    query = (
+        select(Policy)
+        .where(Policy.id == policy_id)
+        .options(
+            selectinload(Policy.parameter_values).selectinload(ParameterValue.parameter)
+        )
+    )
+    policy = session.exec(query).first()
     if not policy:
         raise HTTPException(status_code=404, detail="Policy not found")
-    return policy
+    return _policy_to_read(policy)

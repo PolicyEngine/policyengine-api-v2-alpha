@@ -1,7 +1,5 @@
 """Pytest fixtures for tests."""
 
-from uuid import uuid4
-
 import pytest
 from fastapi.testclient import TestClient
 from fastapi_cache import FastAPICache
@@ -46,6 +44,26 @@ def client_fixture(session: Session):
     client = TestClient(app)
     yield client
     app.dependency_overrides.clear()
+
+
+@pytest.fixture(name="tax_benefit_model")
+def tax_benefit_model_fixture(session: Session):
+    """Create a TaxBenefitModel for tests."""
+    model = TaxBenefitModel(name="policyengine-us", description="US model")
+    session.add(model)
+    session.commit()
+    session.refresh(model)
+    return model
+
+
+@pytest.fixture(name="uk_tax_benefit_model")
+def uk_tax_benefit_model_fixture(session: Session):
+    """Create a UK TaxBenefitModel for tests."""
+    model = TaxBenefitModel(name="policyengine-uk", description="UK model")
+    session.add(model)
+    session.commit()
+    session.refresh(model)
+    return model
 
 
 @pytest.fixture(name="simulation_id")

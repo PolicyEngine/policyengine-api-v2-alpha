@@ -107,7 +107,7 @@ def test__given_policy_id_filter__then_returns_only_matching_values(
     """GET /parameter-values?policy_id=X returns only values for that policy."""
     # Given
     param = create_parameter(session, model_version, "test.param", "Test Param")
-    policy = create_policy(session, "Test Policy")
+    policy = create_policy(session, "Test Policy", model_version)
     create_parameter_value(session, param.id, 100, policy_id=None)  # baseline
     create_parameter_value(session, param.id, 150, policy_id=policy.id)  # reform
 
@@ -135,7 +135,7 @@ def test__given_both_parameter_and_policy_filters__then_returns_matching_interse
     param2 = create_parameter(
         session, model_version, "test.both.param2", "Test Both Param 2"
     )
-    policy = create_policy(session, "Test Both Policy")
+    policy = create_policy(session, "Test Both Policy", model_version)
 
     create_parameter_value(session, param1.id, 100, policy_id=None)  # baseline
     create_parameter_value(session, param1.id, 150, policy_id=policy.id)  # target

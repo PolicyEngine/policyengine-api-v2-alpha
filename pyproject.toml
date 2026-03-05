@@ -11,7 +11,11 @@ dependencies = [
     "psycopg2-binary>=2.9.10",
     "supabase>=2.10.0",
     "storage3>=0.8.1",
-    "policyengine>=3.1.15",
+    # IMPORTANT: Before merging app-v2-migration into main, replace this git
+    # dependency with the production PyPI version of policyengine (e.g., "policyengine>=X.Y.Z").
+    # The git ref is used here because the app-v2-migration branch contains fixes
+    # (US reform application, regions support) not yet released to PyPI.
+    "policyengine @ git+https://github.com/PolicyEngine/policyengine.py.git@app-v2-migration",
     "policyengine-uk>=2.0.0",
     "policyengine-us>=1.0.0",
     "pydantic>=2.9.2",
@@ -24,6 +28,7 @@ dependencies = [
     "fastapi-mcp>=0.4.0",
     "modal>=0.68.0",
     "anthropic>=0.40.0",
+    "alembic>=1.13.0",
 ]
 
 [project.optional-dependencies]
@@ -37,6 +42,9 @@ dev = [
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+[tool.hatch.metadata]
+allow-direct-references = true
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/policyengine_api"]
