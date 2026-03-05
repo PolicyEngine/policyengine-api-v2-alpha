@@ -125,6 +125,7 @@ def seed_model(
                         {
                             "id": uuid4(),
                             "name": var.name,
+                            "label": getattr(var, "label", None) or "",
                             "entity": var.entity,
                             "description": var.description or "",
                             "data_type": var.data_type.__name__
@@ -144,6 +145,7 @@ def seed_model(
                 [
                     "id",
                     "name",
+                    "label",
                     "entity",
                     "description",
                     "data_type",

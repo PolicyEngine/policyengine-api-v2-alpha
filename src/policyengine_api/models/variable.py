@@ -12,6 +12,7 @@ class VariableBase(SQLModel):
     """Base variable fields."""
 
     name: str
+    label: str | None = None
     entity: str
     description: str | None = None
     data_type: str | None = None  # Store as string representation
