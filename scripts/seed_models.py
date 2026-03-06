@@ -150,6 +150,8 @@ def seed_model(
                             "description": var.description or "",
                             "data_type": data_type,
                             "possible_values": possible_values,
+                            "adds": var.adds,
+                            "subtracts": var.subtracts,
                             "tax_benefit_model_version_id": db_version.id,
                             "created_at": datetime.now(timezone.utc),
                         }
@@ -167,6 +169,8 @@ def seed_model(
                     "description",
                     "data_type",
                     "possible_values",
+                    "adds",
+                    "subtracts",
                     "tax_benefit_model_version_id",
                     "created_at",
                 ],

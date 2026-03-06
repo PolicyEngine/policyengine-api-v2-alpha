@@ -21,6 +21,12 @@ class VariableBase(SQLModel):
     default_value: Any = Field(
         default=None, sa_column=Column(JSON)
     )  # Store as JSON (handles int, float, bool, str, etc.)
+    adds: list[str] | None = Field(
+        default=None, sa_column=Column(JSON)
+    )  # Variable names that are added to compute this variable
+    subtracts: list[str] | None = Field(
+        default=None, sa_column=Column(JSON)
+    )  # Variable names that are subtracted to compute this variable
     tax_benefit_model_version_id: UUID = Field(
         foreign_key="tax_benefit_model_versions.id"
     )
