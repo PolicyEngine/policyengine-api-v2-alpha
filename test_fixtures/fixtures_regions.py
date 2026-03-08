@@ -115,6 +115,7 @@ def create_region(
     requires_filter: bool = False,
     filter_field: str | None = None,
     filter_value: str | None = None,
+    filter_strategy: str | None = None,
 ) -> Region:
     """Create and persist a Region with a dataset link."""
     region = Region(
@@ -124,6 +125,7 @@ def create_region(
         requires_filter=requires_filter,
         filter_field=filter_field,
         filter_value=filter_value,
+        filter_strategy=filter_strategy,
         tax_benefit_model_id=model.id,
     )
     session.add(region)
@@ -144,6 +146,7 @@ def create_simulation(
     model_version: TaxBenefitModelVersion,
     filter_field: str | None = None,
     filter_value: str | None = None,
+    filter_strategy: str | None = None,
     status: SimulationStatus = SimulationStatus.PENDING,
 ) -> Simulation:
     """Create and persist a Simulation with optional filter parameters."""
@@ -153,6 +156,7 @@ def create_simulation(
         status=status,
         filter_field=filter_field,
         filter_value=filter_value,
+        filter_strategy=filter_strategy,
     )
     session.add(simulation)
     session.commit()
@@ -262,4 +266,58 @@ def us_region_california(session, us_model_and_version, us_dataset):
         requires_filter=True,
         filter_field="state_code",
         filter_value="CA",
+    )
+
+
+@pytest.fixture
+def uk_region_england_with_strategy(session, uk_model_and_version, uk_dataset):
+    """Create England region with row_filter strategy."""
+    model, _ = uk_model_and_version
+    return create_region(
+        session,
+        model=model,
+        dataset=uk_dataset,
+        code="country/england",
+        label="England",
+        region_type="country",
+        requires_filter=True,
+        filter_field="country",
+        filter_value="ENGLAND",
+        filter_strategy="row_filter",
+    )
+
+
+@pytest.fixture
+def uk_region_constituency(session, uk_model_and_version, uk_dataset):
+    """Create a UK constituency region with weight_replacement strategy."""
+    model, _ = uk_model_and_version
+    return create_region(
+        session,
+        model=model,
+        dataset=uk_dataset,
+        code="constituency/sheffield-central",
+        label="Sheffield Central",
+        region_type="constituency",
+        requires_filter=True,
+        filter_field=None,
+        filter_value="E14001551",
+        filter_strategy="weight_replacement",
+    )
+
+
+@pytest.fixture
+def uk_region_local_authority(session, uk_model_and_version, uk_dataset):
+    """Create a UK local authority region with weight_replacement strategy."""
+    model, _ = uk_model_and_version
+    return create_region(
+        session,
+        model=model,
+        dataset=uk_dataset,
+        code="local_authority/manchester",
+        label="Manchester",
+        region_type="local_authority",
+        requires_filter=True,
+        filter_field=None,
+        filter_value="E09000003",
+        filter_strategy="weight_replacement",
     )

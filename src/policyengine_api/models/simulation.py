@@ -60,6 +60,10 @@ class SimulationBase(SQLModel):
         default=None,
         description="Value to match when filtering (e.g., '44000', 'ENGLAND')",
     )
+    filter_strategy: str | None = Field(
+        default=None,
+        description="Scoping strategy: 'row_filter' or 'weight_replacement'",
+    )
 
     year: int | None = None
 
@@ -118,6 +122,7 @@ class SimulationCreate(SQLModel):
     region_id: UUID | None = None
     filter_field: str | None = None
     filter_value: str | None = None
+    filter_strategy: str | None = None
     year: int | None = None
 
     @model_validator(mode="after")

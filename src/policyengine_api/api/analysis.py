@@ -251,10 +251,15 @@ def _get_deterministic_simulation_id(
     household_id: UUID | None = None,
     filter_field: str | None = None,
     filter_value: str | None = None,
+    filter_strategy: str | None = None,
 ) -> UUID:
     """Generate a deterministic UUID from simulation parameters."""
     if simulation_type == SimulationType.ECONOMY:
         key = f"economy:{dataset_id}:{model_version_id}:{policy_id}:{dynamic_id}:{filter_field}:{filter_value}"
+        # Only append filter_strategy when non-null to preserve backward
+        # compatibility with existing simulation IDs
+        if filter_strategy is not None:
+            key += f":{filter_strategy}"
     else:
         key = f"household:{household_id}:{model_version_id}:{policy_id}:{dynamic_id}"
     return uuid5(SIMULATION_NAMESPACE, key)
@@ -279,6 +284,7 @@ def _get_or_create_simulation(
     household_id: UUID | None = None,
     filter_field: str | None = None,
     filter_value: str | None = None,
+    filter_strategy: str | None = None,
     region_id: UUID | None = None,
     year: int | None = None,
 ) -> Simulation:
@@ -292,6 +298,7 @@ def _get_or_create_simulation(
         household_id=household_id,
         filter_field=filter_field,
         filter_value=filter_value,
+        filter_strategy=filter_strategy,
     )
 
     existing = session.get(Simulation, sim_id)
@@ -309,6 +316,7 @@ def _get_or_create_simulation(
         status=SimulationStatus.PENDING,
         filter_field=filter_field,
         filter_value=filter_value,
+        filter_strategy=filter_strategy,
         region_id=region_id,
         year=year,
     )
@@ -846,12 +854,32 @@ def _run_local_economy_comparison_uk(
         year=dataset.year,
     )
 
-    # Run simulations (with optional regional filtering)
+    # Reconstruct scoping strategy from DB columns (if applicable)
+    from policyengine_api.utils.strategy_reconstruction import reconstruct_strategy
+
+    baseline_region = session.get(Region, baseline_sim.region_id) if baseline_sim.region_id else None
+    baseline_strategy = reconstruct_strategy(
+        filter_strategy=baseline_sim.filter_strategy,
+        filter_field=baseline_sim.filter_field,
+        filter_value=baseline_sim.filter_value,
+        region_type=baseline_region.region_type.value if baseline_region else None,
+    )
+
+    reform_region = session.get(Region, reform_sim.region_id) if reform_sim.region_id else None
+    reform_strategy = reconstruct_strategy(
+        filter_strategy=reform_sim.filter_strategy,
+        filter_field=reform_sim.filter_field,
+        filter_value=reform_sim.filter_value,
+        region_type=reform_region.region_type.value if reform_region else None,
+    )
+
+    # Run simulations (with optional regional scoping)
     pe_baseline_sim = PESimulation(
         dataset=pe_dataset,
         tax_benefit_model_version=pe_model_version,
         policy=baseline_policy,
         dynamic=baseline_dynamic,
+        scoping_strategy=baseline_strategy,
         filter_field=baseline_sim.filter_field,
         filter_value=baseline_sim.filter_value,
     )
@@ -862,6 +890,7 @@ def _run_local_economy_comparison_uk(
         tax_benefit_model_version=pe_model_version,
         policy=reform_policy,
         dynamic=reform_dynamic,
+        scoping_strategy=reform_strategy,
         filter_field=reform_sim.filter_field,
         filter_value=reform_sim.filter_value,
     )
@@ -1006,12 +1035,32 @@ def _run_local_economy_comparison_us(
         year=dataset.year,
     )
 
-    # Run simulations (with optional regional filtering)
+    # Reconstruct scoping strategy from DB columns (if applicable)
+    from policyengine_api.utils.strategy_reconstruction import reconstruct_strategy
+
+    baseline_region = session.get(Region, baseline_sim.region_id) if baseline_sim.region_id else None
+    baseline_strategy = reconstruct_strategy(
+        filter_strategy=baseline_sim.filter_strategy,
+        filter_field=baseline_sim.filter_field,
+        filter_value=baseline_sim.filter_value,
+        region_type=baseline_region.region_type.value if baseline_region else None,
+    )
+
+    reform_region = session.get(Region, reform_sim.region_id) if reform_sim.region_id else None
+    reform_strategy = reconstruct_strategy(
+        filter_strategy=reform_sim.filter_strategy,
+        filter_field=reform_sim.filter_field,
+        filter_value=reform_sim.filter_value,
+        region_type=reform_region.region_type.value if reform_region else None,
+    )
+
+    # Run simulations (with optional regional scoping)
     pe_baseline_sim = PESimulation(
         dataset=pe_dataset,
         tax_benefit_model_version=pe_model_version,
         policy=baseline_policy,
         dynamic=baseline_dynamic,
+        scoping_strategy=baseline_strategy,
         filter_field=baseline_sim.filter_field,
         filter_value=baseline_sim.filter_value,
     )
@@ -1022,6 +1071,7 @@ def _run_local_economy_comparison_us(
         tax_benefit_model_version=pe_model_version,
         policy=reform_policy,
         dynamic=reform_dynamic,
+        scoping_strategy=reform_strategy,
         filter_field=reform_sim.filter_field,
         filter_value=reform_sim.filter_value,
     )
@@ -1199,6 +1249,7 @@ def economic_impact(
     # Extract filter parameters from region (if present)
     filter_field = region.filter_field if region and region.requires_filter else None
     filter_value = region.filter_value if region and region.requires_filter else None
+    filter_strategy = region.filter_strategy if region and region.requires_filter else None
 
     # Get model version
     model_version = _get_model_version(request.tax_benefit_model_name, session)
@@ -1213,6 +1264,7 @@ def economic_impact(
         dataset_id=dataset.id,
         filter_field=filter_field,
         filter_value=filter_value,
+        filter_strategy=filter_strategy,
         region_id=region.id if region else None,
         year=dataset.year,
     )
@@ -1226,6 +1278,7 @@ def economic_impact(
         dataset_id=dataset.id,
         filter_field=filter_field,
         filter_value=filter_value,
+        filter_strategy=filter_strategy,
         region_id=region.id if region else None,
         year=dataset.year,
     )
@@ -1392,6 +1445,9 @@ def economy_custom(
     filter_value = (
         region_obj.filter_value if region_obj and region_obj.requires_filter else None
     )
+    filter_strategy = (
+        region_obj.filter_strategy if region_obj and region_obj.requires_filter else None
+    )
 
     model_version = _get_model_version(request.tax_benefit_model_name, session)
 
@@ -1404,6 +1460,7 @@ def economy_custom(
         dataset_id=dataset.id,
         filter_field=filter_field,
         filter_value=filter_value,
+        filter_strategy=filter_strategy,
         region_id=region_obj.id if region_obj else None,
         year=dataset.year,
     )
@@ -1417,6 +1474,7 @@ def economy_custom(
         dataset_id=dataset.id,
         filter_field=filter_field,
         filter_value=filter_value,
+        filter_strategy=filter_strategy,
         region_id=region_obj.id if region_obj else None,
         year=dataset.year,
     )
