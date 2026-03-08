@@ -7,12 +7,6 @@ filter_field, filter_value, and region_type columns plus a constant
 config mapping for weight matrix locations.
 """
 
-from policyengine.core.scoping_strategy import (
-    RowFilterStrategy,
-    ScopingStrategy,
-    WeightReplacementStrategy,
-)
-
 # GCS locations for weight matrices, keyed by region type
 WEIGHT_MATRIX_CONFIG: dict[str, dict[str, str]] = {
     "constituency": {
@@ -35,8 +29,12 @@ def reconstruct_strategy(
     filter_field: str | None,
     filter_value: str | None,
     region_type: str | None,
-) -> ScopingStrategy | None:
+) -> object | None:
     """Reconstruct a ScopingStrategy from DB columns.
+
+    Imports from policyengine.core.scoping_strategy are deferred to avoid
+    import errors when the published policyengine package does not yet
+    include the scoping_strategy module.
 
     Args:
         filter_strategy: Strategy type ('row_filter' or 'weight_replacement').
@@ -49,6 +47,11 @@ def reconstruct_strategy(
     """
     if filter_strategy is None:
         return None
+
+    from policyengine.core.scoping_strategy import (
+        RowFilterStrategy,
+        WeightReplacementStrategy,
+    )
 
     if filter_strategy == "row_filter":
         if not filter_field or not filter_value:

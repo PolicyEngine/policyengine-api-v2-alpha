@@ -2,13 +2,15 @@
 
 Tests for policyengine_api.utils.strategy_reconstruction.reconstruct_strategy(),
 which rebuilds policyengine.py ScopingStrategy objects from DB columns.
+
+The scoping_strategy module may not exist in the published policyengine package,
+so we provide mock strategy classes and inject them into sys.modules when needed.
 """
 
+import sys
+from types import ModuleType
+
 import pytest
-from policyengine.core.scoping_strategy import (
-    RowFilterStrategy,
-    WeightReplacementStrategy,
-)
 
 from policyengine_api.utils.strategy_reconstruction import (
     WEIGHT_MATRIX_CONFIG,
@@ -22,6 +24,53 @@ from test_fixtures.fixtures_strategy_reconstruction import (
     FILTER_VALUES,
     REGION_TYPES,
 )
+
+
+# ---------------------------------------------------------------------------
+# Mock strategy classes (match the real constructor signatures)
+# ---------------------------------------------------------------------------
+
+
+class _MockRowFilterStrategy:
+    strategy_type = "row_filter"
+
+    def __init__(self, *, variable_name: str, variable_value: str):
+        self.variable_name = variable_name
+        self.variable_value = variable_value
+
+
+class _MockWeightReplacementStrategy:
+    strategy_type = "weight_replacement"
+
+    def __init__(
+        self,
+        *,
+        region_code: str,
+        weight_matrix_bucket: str,
+        weight_matrix_key: str,
+        lookup_csv_bucket: str,
+        lookup_csv_key: str,
+    ):
+        self.region_code = region_code
+        self.weight_matrix_bucket = weight_matrix_bucket
+        self.weight_matrix_key = weight_matrix_key
+        self.lookup_csv_bucket = lookup_csv_bucket
+        self.lookup_csv_key = lookup_csv_key
+
+
+@pytest.fixture(autouse=True)
+def _ensure_scoping_strategy_module(monkeypatch):
+    """Inject a mock scoping_strategy module if the real one is not installed."""
+    try:
+        from policyengine.core.scoping_strategy import (  # noqa: F401
+            RowFilterStrategy,
+            WeightReplacementStrategy,
+        )
+    except (ImportError, ModuleNotFoundError):
+        mock_mod = ModuleType("policyengine.core.scoping_strategy")
+        mock_mod.RowFilterStrategy = _MockRowFilterStrategy  # type: ignore[attr-defined]
+        mock_mod.WeightReplacementStrategy = _MockWeightReplacementStrategy  # type: ignore[attr-defined]
+        monkeypatch.setitem(sys.modules, "policyengine.core.scoping_strategy", mock_mod)
 
 
 # ---------------------------------------------------------------------------
@@ -126,7 +175,7 @@ class TestReconstructStrategyRowFilter:
         )
 
         # Then
-        assert isinstance(result, RowFilterStrategy)
+        assert result.strategy_type == "row_filter"
 
     def test__given_row_filter_strategy__then_variable_name_matches(self):
         # Given / When
@@ -162,7 +211,7 @@ class TestReconstructStrategyRowFilter:
         )
 
         # Then
-        assert isinstance(result, RowFilterStrategy)
+        assert result.strategy_type == "row_filter"
         assert result.variable_name == FILTER_FIELDS["STATE_CODE"]
         assert result.variable_value == FILTER_VALUES["CALIFORNIA"]
 
@@ -179,7 +228,7 @@ class TestReconstructStrategyRowFilter:
         )
 
         # Then
-        assert isinstance(result, RowFilterStrategy)
+        assert result.strategy_type == "row_filter"
         assert result.variable_name == FILTER_FIELDS["PLACE_FIPS"]
         assert result.variable_value == fips_value
 
@@ -204,7 +253,7 @@ class TestReconstructStrategyWeightReplacement:
         )
 
         # Then
-        assert isinstance(result, WeightReplacementStrategy)
+        assert result.strategy_type == "weight_replacement"
 
     def test__given_constituency_weight_replacement__then_region_code_matches(self):
         # Given / When
@@ -245,7 +294,7 @@ class TestReconstructStrategyWeightReplacement:
         )
 
         # Then
-        assert isinstance(result, WeightReplacementStrategy)
+        assert result.strategy_type == "weight_replacement"
 
     def test__given_local_authority_weight_replacement__then_gcs_config_matches(self):
         # Given / When
