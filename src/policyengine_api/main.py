@@ -12,7 +12,6 @@ from rich.console import Console
 
 from policyengine_api.api import api_router
 from policyengine_api.config.settings import settings
-from policyengine_api.services.database import init_db
 
 console = Console()
 
@@ -46,11 +45,7 @@ if _logfire_enabled:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Initialize database and cache on startup."""
-    console.print("[bold green]Initializing database...[/bold green]")
-    init_db()
-    console.print("[bold green]Database initialized[/bold green]")
-
+    """Initialize cache on startup."""
     console.print("[bold green]Initializing cache...[/bold green]")
     FastAPICache.init(InMemoryBackend(), prefix="fastapi-cache")
     console.print("[bold green]Cache initialized[/bold green]")

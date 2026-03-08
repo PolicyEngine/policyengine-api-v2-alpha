@@ -36,9 +36,9 @@ This project uses **Alembic** for database migrations with **SQLModel** models. 
 
 ## Essential Rules
 
-### 1. NEVER use SQLModel.metadata.create_all() for schema creation
+### 1. NEVER use SQLModel.metadata.create_all()
 
-The old pattern of using `SQLModel.metadata.create_all()` is deprecated. All tables are created via Alembic migrations.
+`create_all()` is not used anywhere in this project. It was removed because it conflicts with Alembic (creates tables but can't modify them, masking missing migrations). For how migrations reach production, see the `database-deployment-pipeline` skill.
 
 ### 2. Every schema change requires a migration
 
@@ -200,66 +200,11 @@ uv run alembic upgrade head
 
 ## Production Considerations
 
-### Applying migrations to production
+Migrations are automatically applied in `deploy.yml` (runs `alembic upgrade head` before updating Cloud Run). For full details on the production pipeline, connection types, lock_timeout, RLS policy handling, and zero-downtime patterns, see the `database-deployment-pipeline` skill.
 
-1. Migrations are automatically applied when deploying
-2. Always test migrations locally first
-3. For data migrations, consider running during low-traffic periods
+### alembic stamp (for one-time transitions)
 
-### Transitioning production from old system to Alembic
-
-Production databases that were created before Alembic (using the old `SQLModel.metadata.create_all()` approach or raw Supabase migrations) need special handling. Running `alembic upgrade head` would fail because the tables already exist.
-
-**The solution: `alembic stamp`**
-
-The `alembic stamp` command marks a migration as "already applied" without actually running it. This tells Alembic "the database is already at this state, start tracking from here."
-
-**How it works:**
-
-1. `alembic stamp <revision_id>` inserts a row into the `alembic_version` table with the specified revision ID
-2. Alembic now thinks that migration (and all migrations before it) have been applied
-3. Future migrations will run normally starting from that point
-
-**Step-by-step production transition:**
-
-```bash
-# 1. Connect to production database
-# (set SUPABASE_DB_URL or other connection env vars)
-
-# 2. Check if alembic_version table exists
-# If not, Alembic will create it automatically
-
-# 3. Verify production schema matches the initial migration
-# Compare tables/columns in production against alembic/versions/20260204_d6e30d3b834d_initial_schema.py
-
-# 4. Stamp the initial migration as applied
-uv run alembic stamp d6e30d3b834d
-
-# 5. If production also has the indexes from the second migration, stamp that too
-uv run alembic stamp a17ac554f4aa
-
-# 6. Verify the stamp worked
-uv run alembic current
-# Should show: a17ac554f4aa (head)
-
-# 7. From now on, new migrations will apply normally
-uv run alembic upgrade head
-```
-
-**Handling partially applied migrations:**
-
-If production has some but not all changes from a migration:
-
-1. Manually apply the missing changes via SQL
-2. Then stamp that migration as complete
-3. Or: create a new migration that only adds the missing pieces
-
-**After stamping:**
-
-- All future schema changes go through Alembic migrations
-- Developers generate migrations with `alembic revision --autogenerate`
-- Deployments run `alembic upgrade head` to apply pending migrations
-- The `alembic_version` table tracks what's been applied
+If production has tables that predate Alembic, use `alembic stamp <revision_id>` to mark migrations as already applied without running them. This tells Alembic to start tracking from that point forward.
 
 ## File Structure
 

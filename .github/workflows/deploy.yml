@@ -10,6 +10,7 @@ on:
       - "docs/**"
       - ".github/workflows/deploy.yml"
       - "terraform/**"
+      - "alembic/**"
       - "Dockerfile"
       - "pyproject.toml"
       - "uv.lock"
@@ -64,6 +65,20 @@ jobs:
       - name: Configure Docker for Artifact Registry
         run: gcloud auth configure-docker ${{ vars.GCP_REGION }}-docker.pkg.dev
 
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Setup Python
+        run: uv python install 3.13
+
+      - name: Sync dependencies
+        run: uv sync
+
+      - name: Run database migrations
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: uv run alembic upgrade head
+
       - name: Build and push Docker image
         run: |
           docker build -t $IMAGE_URL:${{ github.sha }} .
@@ -106,15 +121,6 @@ jobs:
           echo "API: $API_URL"
           echo "Health: $API_URL/health"
           echo "Docs: $API_URL/docs"
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@v5
-
-      - name: Setup Python
-        run: uv python install 3.13
-
-      - name: Sync dependencies
-        run: uv sync
 
       - name: Sync Modal secrets from GitHub
         env:
