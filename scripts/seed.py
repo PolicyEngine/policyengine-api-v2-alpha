@@ -377,8 +377,8 @@ Presets:
         countries.append("US")
     country_str = " + ".join(countries)
 
-    year_str = f", {config.dataset_year} only" if config.dataset_year else ""
-    state_str = ", skip state params" if config.skip_state_params else ""
+    year_str = f", {config.dataset_year} only" if config.dataset_year else ""  # noqa: F841
+    state_str = ", skip state params" if config.skip_state_params else ""  # noqa: F841
 
     console.print(
         f"[bold green]PolicyEngine database seeding[/bold green] "

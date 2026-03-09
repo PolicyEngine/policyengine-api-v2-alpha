@@ -155,7 +155,7 @@ def seed_us_regions(
 
     # Pre-fetch existing dataset links for efficiency
     existing_links = session.exec(select(RegionDatasetLink)).all()
-    existing_link_set = {(l.region_id, l.dataset_id) for l in existing_links}
+    existing_link_set = {(link.region_id, link.dataset_id) for link in existing_links}
 
     created = 0
     skipped = 0
@@ -260,7 +260,7 @@ def seed_uk_regions(session: Session) -> tuple[int, int, int]:
 
     # Pre-fetch existing dataset links
     existing_links = session.exec(select(RegionDatasetLink)).all()
-    existing_link_set = {(l.region_id, l.dataset_id) for l in existing_links}
+    existing_link_set = {(link.region_id, link.dataset_id) for link in existing_links}
 
     created = 0
     skipped = 0

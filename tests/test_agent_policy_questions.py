@@ -7,13 +7,13 @@ The goal is to track agent performance and identify opportunities
 to improve API metadata/documentation to reduce turns needed.
 """
 
-import pytest
-
-pytestmark = pytest.mark.integration
-
 import os
 
+import pytest
+
 from policyengine_api.agent_sandbox import _run_agent_impl
+
+pytestmark = pytest.mark.integration
 
 # Use local API by default, override with POLICYENGINE_API_URL env var
 API_BASE = os.environ.get("POLICYENGINE_API_URL", "http://localhost:8000")

@@ -35,13 +35,13 @@ warnings.filterwarnings("ignore")
 # Add src to path for policyengine_api imports
 sys.path.insert(0, str(Path(__file__).parent / "src"))
 
-from policyengine.countries.us.data import DISTRICT_COUNTS
-from rich.console import Console
-from sqlmodel import Session, create_engine, select
+from policyengine.countries.us.data import DISTRICT_COUNTS  # noqa: E402
+from rich.console import Console  # noqa: E402
+from sqlmodel import Session, create_engine, select  # noqa: E402
 
-from policyengine_api.config.settings import settings
-from policyengine_api.models import Dataset, TaxBenefitModel
-from policyengine_api.services.storage import upload_dataset_for_seeding
+from policyengine_api.config.settings import settings  # noqa: E402
+from policyengine_api.models import Dataset, TaxBenefitModel  # noqa: E402
+from policyengine_api.services.storage import upload_dataset_for_seeding  # noqa: E402
 
 console = Console()
 
