@@ -1,6 +1,5 @@
 """Fixtures and helpers for standalone simulation endpoint tests."""
 
-
 from policyengine_api.models import (
     Dataset,
     Household,

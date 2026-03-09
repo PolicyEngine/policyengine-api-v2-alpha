@@ -5,7 +5,6 @@ table records (poverty, inequality, budget_summary, intra_decile,
 program_statistics, decile_impacts) for testing _build_response().
 """
 
-
 from sqlmodel import Session
 
 from policyengine_api.models import (
