@@ -122,6 +122,10 @@ resource "google_cloud_run_v2_service" "api" {
         name  = "POLICYENGINE_API_URL"
         value = "https://v2.api.policyengine.org"
       }
+      env {
+        name  = "MODAL_ENVIRONMENT"
+        value = var.modal_environment
+      }
 
       startup_probe {
         http_get {

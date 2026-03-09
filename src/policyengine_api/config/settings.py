@@ -1,4 +1,13 @@
+from importlib.metadata import version
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+def _get_version() -> str:
+    try:
+        return version("policyengine-api-v2")
+    except Exception:
+        return "0.0.0-dev"
 
 
 class Settings(BaseSettings):
@@ -25,7 +34,7 @@ class Settings(BaseSettings):
 
     # API
     api_title: str = "PolicyEngine API v2"
-    api_version: str = "0.1.0"
+    api_version: str = _get_version()
     api_port: int = 8000
     debug: bool = False
 
@@ -39,7 +48,7 @@ class Settings(BaseSettings):
     policyengine_api_url: str = "https://v2.api.policyengine.org"
 
     # Modal
-    modal_environment: str = "testing"
+    modal_environment: str = "main"
 
     @property
     def database_url(self) -> str:

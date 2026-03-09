@@ -2,6 +2,12 @@ name: Deploy to GCP Cloud Run
 
 on:
   workflow_dispatch:
+    inputs:
+      skip_staging:
+        description: 'Skip staging and deploy directly to production'
+        required: false
+        default: false
+        type: boolean
   push:
     branches:
       - main
@@ -17,9 +23,14 @@ on:
 
 permissions:
   id-token: write
-  contents: read
+  contents: write
+
+concurrency:
+  group: deploy-main
+  cancel-in-progress: false
 
 jobs:
+  # ── Stage 1: Test ──────────────────────────────────────────────
   test:
     name: Test
     runs-on: ubuntu-latest
@@ -38,8 +49,9 @@ jobs:
         run: uv sync --extra dev
 
       - name: Run tests
-        run: uv run pytest -v -m "not integration"
+        run: uv run pytest -v -m "not integration and not staging"
 
+  # ── Stage 2: Build + Migrate + Infra (parallel) ───────────────
   migrate:
     name: Migrate database
     runs-on: ubuntu-latest
@@ -134,16 +146,163 @@ jobs:
           TF_VAR_logfire_environment: prod
           TF_VAR_modal_token_id: ${{ secrets.MODAL_TOKEN_ID }}
           TF_VAR_modal_token_secret: ${{ secrets.MODAL_TOKEN_SECRET }}
+          TF_VAR_modal_environment: main
         run: terraform plan -out=tfplan -input=false
 
       - name: Terraform apply
         working-directory: ./terraform
         run: terraform apply -input=false tfplan
 
-  deploy-modal:
-    name: Deploy Modal functions
+  # ── Stage 3: Deploy to staging ─────────────────────────────────
+  setup-modal-environments:
+    name: Setup Modal environments
     runs-on: ubuntu-latest
-    needs: migrate
+    needs: test
+    if: ${{ !inputs.skip_staging }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Setup Python
+        run: uv python install 3.13
+
+      - name: Sync dependencies
+        run: uv sync
+
+      - name: Create staging environment
+        env:
+          MODAL_TOKEN_ID: ${{ secrets.MODAL_TOKEN_ID }}
+          MODAL_TOKEN_SECRET: ${{ secrets.MODAL_TOKEN_SECRET }}
+        run: |
+          chmod +x .github/scripts/*.sh
+          .github/scripts/modal-setup-environments.sh
+
+  deploy-staging-modal:
+    name: Deploy Modal to staging
+    runs-on: ubuntu-latest
+    needs: [migrate, setup-modal-environments]
+    if: ${{ !inputs.skip_staging }}
+    environment: staging
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Setup Python
+        run: uv python install 3.13
+
+      - name: Sync dependencies
+        run: uv sync
+
+      - name: Sync secrets to staging
+        env:
+          MODAL_TOKEN_ID: ${{ secrets.MODAL_TOKEN_ID }}
+          MODAL_TOKEN_SECRET: ${{ secrets.MODAL_TOKEN_SECRET }}
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+          LOGFIRE_TOKEN: ${{ secrets.LOGFIRE_TOKEN }}
+        run: |
+          chmod +x .github/scripts/*.sh
+          .github/scripts/modal-sync-secrets.sh staging staging
+
+      - name: Deploy Modal functions to staging
+        env:
+          MODAL_TOKEN_ID: ${{ secrets.MODAL_TOKEN_ID }}
+          MODAL_TOKEN_SECRET: ${{ secrets.MODAL_TOKEN_SECRET }}
+        run: |
+          uv run modal deploy --env=staging src/policyengine_api/modal_app.py
+          uv run modal deploy --env=staging src/policyengine_api/agent_sandbox.py
+
+  deploy-staging-cloudrun:
+    name: Deploy Cloud Run staging
+    runs-on: ubuntu-latest
+    needs: [build, infra, deploy-staging-modal]
+    if: ${{ !inputs.skip_staging }}
+    environment: staging
+    outputs:
+      staging_url: ${{ steps.get-staging-url.outputs.url }}
+
+    env:
+      IMAGE_URL: ${{ vars.GCP_REGION }}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/${{ vars.PROJECT_NAME }}/${{ vars.PROJECT_NAME }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Deploy staging revision (no traffic)
+        run: |
+          gcloud run deploy ${{ vars.API_SERVICE_NAME }} \
+            --region=${{ vars.GCP_REGION }} \
+            --image=$IMAGE_URL:${{ github.sha }} \
+            --tag=staging \
+            --no-traffic \
+            --update-env-vars=MODAL_ENVIRONMENT=staging,LOGFIRE_ENVIRONMENT=staging
+
+      - name: Get staging URL
+        id: get-staging-url
+        run: |
+          STAGING_URL=$(gcloud run services describe ${{ vars.API_SERVICE_NAME }} \
+            --region=${{ vars.GCP_REGION }} \
+            --format='value(status.traffic[tag=staging].url)')
+          echo "url=$STAGING_URL" >> "$GITHUB_OUTPUT"
+          echo "Staging URL: $STAGING_URL"
+
+      - name: Health check staging
+        run: |
+          chmod +x .github/scripts/*.sh
+          .github/scripts/health-check.sh "${{ steps.get-staging-url.outputs.url }}/health"
+
+  # ── Stage 4: Integration tests against staging ─────────────────
+  integration-tests:
+    name: Integration tests (staging)
+    runs-on: ubuntu-latest
+    needs: deploy-staging-cloudrun
+    if: ${{ !inputs.skip_staging }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Setup Python
+        run: uv python install 3.13
+
+      - name: Sync dependencies
+        run: uv sync --extra dev
+
+      - name: Run staging integration tests
+        env:
+          API_BASE_URL: ${{ needs.deploy-staging-cloudrun.outputs.staging_url }}
+        run: uv run pytest tests/test_staging_api.py -v
+
+  # ── Stage 5: Deploy to production ──────────────────────────────
+  deploy-prod-modal:
+    name: Deploy Modal to production
+    runs-on: ubuntu-latest
+    needs: [migrate, integration-tests]
+    if: |
+      always() &&
+      needs.migrate.result == 'success' &&
+      (needs.integration-tests.result == 'success' || needs.integration-tests.result == 'skipped')
     environment: production
 
     steps:
@@ -159,29 +318,25 @@ jobs:
       - name: Sync dependencies
         run: uv sync
 
-      - name: Sync Modal secrets from GitHub
+      - name: Sync secrets to production
         env:
           MODAL_TOKEN_ID: ${{ secrets.MODAL_TOKEN_ID }}
           MODAL_TOKEN_SECRET: ${{ secrets.MODAL_TOKEN_SECRET }}
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+          LOGFIRE_TOKEN: ${{ secrets.LOGFIRE_TOKEN }}
         run: |
-          echo "Syncing Modal secrets from GitHub..."
-          uv run modal secret create policyengine-db \
-            "DATABASE_URL=${{ secrets.SUPABASE_DB_URL }}" \
-            "SUPABASE_URL=${{ secrets.SUPABASE_URL }}" \
-            "SUPABASE_KEY=${{ secrets.SUPABASE_KEY }}" \
-            --force
-          uv run modal secret create policyengine-logfire \
-            "LOGFIRE_TOKEN=${{ secrets.LOGFIRE_TOKEN }}" \
-            --force
-          echo "Modal secrets synced"
+          chmod +x .github/scripts/*.sh
+          .github/scripts/modal-sync-secrets.sh main prod
 
-      - name: Deploy Modal functions
+      - name: Deploy Modal functions to production
         env:
           MODAL_TOKEN_ID: ${{ secrets.MODAL_TOKEN_ID }}
           MODAL_TOKEN_SECRET: ${{ secrets.MODAL_TOKEN_SECRET }}
         run: |
-          uv run modal deploy src/policyengine_api/modal_app.py
-          uv run modal deploy src/policyengine_api/agent_sandbox.py
+          uv run modal deploy --env=main src/policyengine_api/modal_app.py
+          uv run modal deploy --env=main src/policyengine_api/agent_sandbox.py
 
       - name: Validate Modal secrets
         env:
@@ -203,16 +358,24 @@ jobs:
           fi
           echo "Modal secrets validated"
 
-  deploy-cloudrun:
-    name: Deploy to Cloud Run
+  deploy-prod-cloudrun:
+    name: Deploy to Cloud Run production
     runs-on: ubuntu-latest
-    needs: [deploy-modal, build, infra]
+    needs: [deploy-prod-modal, build, infra]
+    if: |
+      always() &&
+      needs.deploy-prod-modal.result == 'success' &&
+      needs.build.result == 'success' &&
+      needs.infra.result == 'success'
     environment: production
 
     env:
       IMAGE_URL: ${{ vars.GCP_REGION }}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/${{ vars.PROJECT_NAME }}/${{ vars.PROJECT_NAME }}
 
     steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v2
         with:
@@ -228,7 +391,8 @@ jobs:
             --region=${{ vars.GCP_REGION }} \
             --image=$IMAGE_URL:${{ github.sha }} \
             --tag=canary \
-            --no-traffic
+            --no-traffic \
+            --update-env-vars=MODAL_ENVIRONMENT=main,LOGFIRE_ENVIRONMENT=prod
 
       - name: Smoke test canary
         run: |
@@ -236,7 +400,8 @@ jobs:
             --region=${{ vars.GCP_REGION }} \
             --format='value(status.traffic[tag=canary].url)')
           echo "Canary URL: $CANARY_URL"
-          curl -f --retry 3 --retry-delay 5 "$CANARY_URL/health"
+          chmod +x .github/scripts/*.sh
+          .github/scripts/health-check.sh "$CANARY_URL/health"
 
       - name: Shift traffic to new revision
         run: |
@@ -244,7 +409,7 @@ jobs:
             --region=${{ vars.GCP_REGION }} \
             --to-latest
 
-      - name: Get API URL
+      - name: Get production URL
         run: |
           API_URL=$(gcloud run services describe ${{ vars.API_SERVICE_NAME }} \
             --region=${{ vars.GCP_REGION }} \
