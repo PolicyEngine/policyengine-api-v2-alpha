@@ -21,7 +21,7 @@ class HouseholdJobStatus(str, Enum):
 class HouseholdJobBase(SQLModel):
     """Base household job fields."""
 
-    tax_benefit_model_name: str
+    country_id: str
     request_data: dict[str, Any] = Field(sa_column=Column(JSON))
     policy_id: UUID | None = Field(default=None, foreign_key="policies.id")
     dynamic_id: UUID | None = Field(default=None, foreign_key="dynamics.id")

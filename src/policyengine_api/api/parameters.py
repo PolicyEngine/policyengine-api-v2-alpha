@@ -23,6 +23,7 @@ from policyengine_api.models import (
     TaxBenefitModelVersion,
 )
 from policyengine_api.services.database import get_session
+from policyengine_api.services.model_resolver import resolve_model_name
 
 router = APIRouter(prefix="/parameters", tags=["parameters"])
 
@@ -32,7 +33,7 @@ def list_parameters(
     skip: int = 0,
     limit: int = 100,
     search: str | None = None,
-    tax_benefit_model_name: str | None = None,
+    country_id: CountryId | None = None,
     session: Session = Depends(get_session),
 ):
     """List available parameters with pagination and search.
@@ -42,18 +43,17 @@ def list_parameters(
 
     Args:
         search: Filter by parameter name, label, or description.
-        tax_benefit_model_name: Filter by country model.
-            Use "policyengine-uk" for UK parameters.
-            Use "policyengine-us" for US parameters.
+        country_id: Filter by country ("us" or "uk").
     """
     query = select(Parameter)
 
-    # Filter by tax benefit model name (country)
-    if tax_benefit_model_name:
+    # Filter by country
+    if country_id:
+        model_name = resolve_model_name(country_id)
         query = (
             query.join(TaxBenefitModelVersion)
             .join(TaxBenefitModel)
-            .where(TaxBenefitModel.name == tax_benefit_model_name)
+            .where(TaxBenefitModel.name == model_name)
         )
 
     if search:

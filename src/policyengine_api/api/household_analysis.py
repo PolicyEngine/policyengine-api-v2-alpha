@@ -32,9 +32,9 @@ from policyengine_api.models import (
     SimulationType,
 )
 from policyengine_api.services.database import get_session
+from policyengine_api.services.model_resolver import resolve_country_model
 
 from .analysis import (
-    _get_model_version,
     _get_or_create_report,
     _get_or_create_simulation,
 )
@@ -81,9 +81,9 @@ US_CONFIG = CountryConfig(
 )
 
 
-def get_country_config(tax_benefit_model_name: str) -> CountryConfig:
-    """Get country configuration from model name."""
-    if tax_benefit_model_name == "policyengine_uk":
+def get_country_config(country_id: str) -> CountryConfig:
+    """Get country configuration from country_id."""
+    if country_id == "uk":
         return UK_CONFIG
     return US_CONFIG
 
@@ -136,9 +136,9 @@ def calculate_us_household(
     )
 
 
-def get_calculator(tax_benefit_model_name: str) -> HouseholdCalculator:
+def get_calculator(country_id: str) -> HouseholdCalculator:
     """Get the appropriate calculator for a country."""
-    if tax_benefit_model_name == "policyengine_uk":
+    if country_id == "uk":
         return calculate_uk_household
     return calculate_us_household
 
@@ -331,7 +331,7 @@ def run_household_simulation(simulation_id: UUID, session: Session) -> None:
     mark_simulation_running(simulation, session)
 
     try:
-        calculator = get_calculator(household.tax_benefit_model_name)
+        calculator = get_calculator(household.country_id)
         result = calculator(household.household_data, household.year, policy_data)
         mark_simulation_completed(simulation, result, session)
     except Exception as e:
@@ -428,7 +428,7 @@ def _run_simulation_in_session(simulation_id: UUID, session: Session) -> None:
     session.commit()
 
     try:
-        calculator = get_calculator(household.tax_benefit_model_name)
+        calculator = get_calculator(household.country_id)
         result = calculator(household.household_data, household.year, policy_data)
 
         simulation.household_result = result
@@ -446,9 +446,13 @@ def _run_simulation_in_session(simulation_id: UUID, session: Session) -> None:
 
 
 def _trigger_household_impact(
-    report_id: str, tax_benefit_model_name: str, session: Session | None = None
+    report_id: str, country_id: str, session: Session | None = None
 ) -> None:
-    """Trigger household impact calculation (local or Modal based on settings)."""
+    """Trigger household impact calculation (local or Modal based on settings).
+
+    Args:
+        country_id: Country code ('us' or 'uk').
+    """
     from policyengine_api.config import settings
 
     traceparent = get_traceparent()
@@ -460,7 +464,7 @@ def _trigger_household_impact(
         # Use Modal
         import modal
 
-        if tax_benefit_model_name == "policyengine_uk":
+        if country_id == "uk":
             fn = modal.Function.from_name(
                 "policyengine",
                 "household_impact_uk",
@@ -603,7 +607,7 @@ def _compute_impact_if_comparison(
     if not household:
         return None
 
-    config = get_country_config(household.tax_benefit_model_name)
+    config = get_country_config(household.country_id)
     return compute_household_impact(baseline_result, reform_result, config)
 
 
@@ -658,7 +662,7 @@ def household_impact(
     household = validate_household_exists(request.household_id, session)
     validate_policy_exists(request.policy_id, session)
 
-    model_version = _get_model_version(household.tax_benefit_model_name, session)
+    _model, model_version = resolve_country_model(household.country_id, session)
 
     baseline_sim = _create_baseline_simulation(
         household, model_version.id, request.dynamic_id, session
@@ -671,16 +675,14 @@ def household_impact(
     report = _get_or_create_report(
         baseline_sim_id=baseline_sim.id,
         reform_sim_id=reform_sim.id if reform_sim else None,
-        label=f"Household impact: {household.tax_benefit_model_name}",
+        label=f"Household impact: {household.country_id}",
         report_type=report_type,
         session=session,
     )
 
     if report.status == ReportStatus.PENDING:
         with logfire.span("trigger_household_impact", job_id=str(report.id)):
-            _trigger_household_impact(
-                str(report.id), household.tax_benefit_model_name, session
-            )
+            _trigger_household_impact(str(report.id), household.country_id, session)
 
     return build_household_response(report, baseline_sim, reform_sim, session)
 
