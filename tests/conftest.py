@@ -31,6 +31,7 @@ def session_fixture():
     SQLModel.metadata.create_all(engine)
     with Session(engine) as session:
         yield session
+    engine.dispose()
 
 
 @pytest.fixture(name="client")
@@ -114,10 +115,12 @@ def simulation_fixture(session: Session):
 
 @pytest.fixture(name="mock_modal")
 def mock_modal_fixture():
-    """Mock modal.Function across all API modules that use it.
+    """Mock modal.Function in API modules that import modal at the top level.
 
-    Patches modal.Function in every module that imports it, so tests
-    don't need individual @patch decorators.
+    Only patches modules with top-level `import modal` (outputs,
+    change_aggregates). Other modules (analysis, household, etc.) import
+    modal locally inside functions and are only reached via integration
+    tests which are excluded from the unit test run.
 
     Usage:
         def test_something(mock_modal, client, simulation_id):
@@ -129,10 +132,6 @@ def mock_modal_fixture():
     modules_using_modal = [
         "policyengine_api.api.outputs",
         "policyengine_api.api.change_aggregates",
-        "policyengine_api.api.analysis",
-        "policyengine_api.api.household",
-        "policyengine_api.api.household_analysis",
-        "policyengine_api.api.agent",
     ]
 
     patches = []

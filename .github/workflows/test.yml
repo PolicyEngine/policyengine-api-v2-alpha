@@ -48,7 +48,7 @@ jobs:
         run: uv sync --extra dev
 
       - name: Run tests
-        run: uv run pytest -v -m "not integration" --cov=src/policyengine_api --cov-report=term-missing
+        run: uv run pytest -v -m "not integration and not staging" --cov=src/policyengine_api --cov-report=term-missing
 
   openapi-diff:
     name: OpenAPI schema diff

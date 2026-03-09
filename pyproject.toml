@@ -56,6 +56,9 @@ ignore = ["E501"]  # Tool descriptions need to be long
 testpaths = ["tests"]
 pythonpath = ["."]
 asyncio_mode = "auto"
+filterwarnings = [
+    "ignore::ResourceWarning",
+]
 markers = [
     "integration: tests that require external services (API keys, databases)",
     "staging: tests that run against a deployed staging URL",

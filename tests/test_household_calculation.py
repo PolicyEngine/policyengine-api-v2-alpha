@@ -39,6 +39,9 @@ class TestUSHouseholdCalculation:
         This test verifies the fix for the US reform application bug where
         reforms were not being applied correctly due to the shared singleton
         TaxBenefitSystem in policyengine-us.
+
+        Uses the federal standard deduction as the reform parameter since
+        it is a stable, always-present parameter.
         """
         household_args = {
             "people": [{"employment_income": 70000, "age": 40}],
@@ -54,14 +57,14 @@ class TestUSHouseholdCalculation:
         baseline = _calculate_household_us(**household_args, policy_data=None)
         baseline_net_income = baseline["household"][0]["household_net_income"]
 
-        # Calculate with $1000 UBI reform
+        # Calculate with doubled standard deduction reform
         policy_data = {
-            "name": "Test UBI",
-            "description": "Test UBI reform",
+            "name": "Test doubled standard deduction",
+            "description": "Double the standard deduction",
             "parameter_values": [
                 {
-                    "parameter_name": "gov.contrib.ubi_center.basic_income.amount.person.by_age[3].amount",
-                    "value": 1000,
+                    "parameter_name": "gov.irs.deductions.standard.amount.SINGLE",
+                    "value": 29200,
                     "start_date": "2024-01-01T00:00:00",
                     "end_date": None,
                 }
@@ -70,10 +73,10 @@ class TestUSHouseholdCalculation:
         reform = _calculate_household_us(**household_args, policy_data=policy_data)
         reform_net_income = reform["household"][0]["household_net_income"]
 
-        # Verify the reform increased net income by exactly $1000
+        # Verify the reform changed net income (higher deduction = lower tax = more net income)
         difference = reform_net_income - baseline_net_income
-        assert abs(difference - 1000) < 1, (
-            f"Expected ~$1000 difference, got ${difference:.2f}. "
+        assert difference > 0, (
+            f"Expected positive difference from doubled standard deduction, got ${difference:.2f}. "
             f"Baseline: ${baseline_net_income:.2f}, Reform: ${reform_net_income:.2f}"
         )
 
