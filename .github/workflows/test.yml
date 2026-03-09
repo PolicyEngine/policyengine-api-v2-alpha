@@ -4,6 +4,29 @@ on:
   pull_request:
 
 jobs:
+  lint:
+    name: Lint & format
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Setup Python
+        run: uv python install 3.13
+
+      - name: Sync dependencies
+        run: uv sync --extra dev
+
+      - name: Run ruff check
+        run: uv run ruff check .
+
+      - name: Run ruff format check
+        run: uv run ruff format --check .
+
   test:
     name: Run tests
     runs-on: ubuntu-latest
@@ -22,4 +45,57 @@ jobs:
         run: uv sync --extra dev
 
       - name: Run tests
-        run: uv run pytest -v -m "not integration"
+        run: uv run pytest -v -m "not integration" --cov=src/policyengine_api --cov-report=term-missing
+
+  openapi-diff:
+    name: OpenAPI schema diff
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout PR branch
+        uses: actions/checkout@v4
+        with:
+          path: pr
+
+      - name: Checkout main branch
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          path: main
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Setup Python
+        run: uv python install 3.13
+
+      - name: Generate main branch schema
+        working-directory: main
+        run: |
+          uv sync
+          uv run python -c "
+          import json
+          from policyengine_api.main import app
+          print(json.dumps(app.openapi(), indent=2))
+          " > /tmp/openapi-main.json
+
+      - name: Generate PR branch schema
+        working-directory: pr
+        run: |
+          uv sync
+          uv run python -c "
+          import json
+          from policyengine_api.main import app
+          print(json.dumps(app.openapi(), indent=2))
+          " > /tmp/openapi-pr.json
+
+      - name: Install oasdiff
+        run: |
+          curl -sSL https://raw.githubusercontent.com/Tufin/oasdiff/main/install.sh | sh
+
+      - name: Check for breaking changes
+        run: oasdiff breaking /tmp/openapi-main.json /tmp/openapi-pr.json --fail-on ERR
+
+      - name: Full diff summary
+        if: always()
+        run: oasdiff diff /tmp/openapi-main.json /tmp/openapi-pr.json --format text || true

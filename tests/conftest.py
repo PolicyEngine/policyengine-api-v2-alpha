@@ -1,5 +1,7 @@
 """Pytest fixtures for tests."""
 
+from unittest.mock import MagicMock, patch
+
 import pytest
 from fastapi.testclient import TestClient
 from fastapi_cache import FastAPICache
@@ -108,3 +110,39 @@ def simulation_fixture(session: Session):
     session.refresh(simulation)
 
     return str(simulation.id)
+
+
+@pytest.fixture(name="mock_modal")
+def mock_modal_fixture():
+    """Mock modal.Function across all API modules that use it.
+
+    Patches modal.Function in every module that imports it, so tests
+    don't need individual @patch decorators.
+
+    Usage:
+        def test_something(mock_modal, client, simulation_id):
+            response = client.post("/outputs/aggregates", json=[...])
+            mock_modal.spawn.assert_called_once()
+    """
+    mock_fn = MagicMock()
+
+    modules_using_modal = [
+        "policyengine_api.api.outputs",
+        "policyengine_api.api.change_aggregates",
+        "policyengine_api.api.analysis",
+        "policyengine_api.api.household",
+        "policyengine_api.api.household_analysis",
+        "policyengine_api.api.agent",
+    ]
+
+    patches = []
+    for module in modules_using_modal:
+        p = patch(f"{module}.modal.Function")
+        mock_class = p.start()
+        mock_class.from_name.return_value = mock_fn
+        patches.append(p)
+
+    yield mock_fn
+
+    for p in patches:
+        p.stop()
