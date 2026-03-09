@@ -12,8 +12,10 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel import Session, or_, select
 
-from policyengine_api.models import ParameterValue, ParameterValueRead
+from policyengine_api.config.constants import CountryId
+from policyengine_api.models import Parameter, ParameterValue, ParameterValueRead
 from policyengine_api.services.database import get_session
+from policyengine_api.services.model_resolver import resolve_version_id
 
 router = APIRouter(prefix="/parameter-values", tags=["parameter-values"])
 
@@ -23,6 +25,8 @@ def list_parameter_values(
     parameter_id: UUID | None = None,
     policy_id: UUID | None = None,
     current: bool = False,
+    country_id: CountryId | None = None,
+    tax_benefit_model_version_id: UUID | None = None,
     skip: int = 0,
     limit: int = 100,
     session: Session = Depends(get_session),
@@ -37,6 +41,10 @@ def list_parameter_values(
         policy_id: Filter by a specific policy reform.
         current: If true, only return values that are currently in effect
             (start_date <= now and (end_date is null or end_date > now)).
+        country_id: Filter to values belonging to parameters from this country.
+            Defaults to the latest model version.
+        tax_benefit_model_version_id: Filter to values from a specific model
+            version. Takes precedence over country_id.
     """
     query = select(ParameterValue)
 
@@ -45,6 +53,14 @@ def list_parameter_values(
 
     if policy_id:
         query = query.where(ParameterValue.policy_id == policy_id)
+
+    version_id = resolve_version_id(
+        country_id, tax_benefit_model_version_id, session
+    )
+    if version_id:
+        query = query.join(Parameter).where(
+            Parameter.tax_benefit_model_version_id == version_id
+        )
 
     if current:
         now = datetime.now(timezone.utc)

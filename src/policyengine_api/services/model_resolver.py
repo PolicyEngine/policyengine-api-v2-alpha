@@ -1,5 +1,7 @@
 """Shared resolver for country_id → tax-benefit model + latest version."""
 
+from uuid import UUID
+
 from fastapi import HTTPException
 from sqlmodel import Session, select
 
@@ -44,3 +46,31 @@ def resolve_country_model(
         )
 
     return model, version
+
+
+def resolve_version_id(
+    country_id: CountryId | None,
+    tax_benefit_model_version_id: UUID | None,
+    session: Session,
+) -> UUID | None:
+    """Resolve the model version ID from country_id or explicit version.
+
+    Priority:
+    1. If tax_benefit_model_version_id provided, validate and return it.
+    2. If country_id provided, return the latest version's ID.
+    3. If neither provided, return None (no filtering).
+    """
+    if tax_benefit_model_version_id:
+        version = session.get(TaxBenefitModelVersion, tax_benefit_model_version_id)
+        if not version:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Model version '{tax_benefit_model_version_id}' not found",
+            )
+        return version.id
+
+    if country_id:
+        _, version = resolve_country_model(country_id, session)
+        return version.id
+
+    return None
