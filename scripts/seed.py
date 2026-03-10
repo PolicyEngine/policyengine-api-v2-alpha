@@ -322,20 +322,20 @@ def run_seed(config: SeedConfig):
 
             if config.seed_us:
                 console.print("[bold]US Regions[/bold]")
-                us_created, us_skipped = seed_us_regions(
+                us_created, us_skipped, us_links = seed_us_regions(
                     session,
                     skip_places=config.skip_places,
                     skip_districts=config.skip_districts,
                 )
                 console.print(
-                    f"[green]✓[/green] US: {us_created} created, {us_skipped} skipped\n"
+                    f"[green]✓[/green] US: {us_created} created, {us_skipped} skipped, {us_links} dataset links\n"
                 )
 
             if config.seed_uk:
                 console.print("[bold]UK Regions[/bold]")
-                uk_created, uk_skipped = seed_uk_regions(session)
+                uk_created, uk_skipped, uk_links = seed_uk_regions(session)
                 console.print(
-                    f"[green]✓[/green] UK: {uk_created} created, {uk_skipped} skipped\n"
+                    f"[green]✓[/green] UK: {uk_created} created, {uk_skipped} skipped, {uk_links} dataset links\n"
                 )
 
     elapsed = time.time() - start
