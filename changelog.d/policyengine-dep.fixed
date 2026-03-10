@@ -1,1 +1,0 @@
-Switch policyengine dependency from git branch to PyPI release (>=3.2.0).
