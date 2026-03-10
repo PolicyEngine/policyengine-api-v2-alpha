@@ -1,3 +1,10 @@
+0.2.3 (2026-03-10)
+
+# Changed
+
+- Rename SUPABASE_SERVICE_KEY to SUPABASE_SECRET_KEY across codebase, aligning with Supabase's new key naming. Add secret key to Terraform, deploy.yml, and Modal secrets sync. (rename-secret-key)
+
+
 0.2.2 (2026-03-10)
 
 # Fixed
