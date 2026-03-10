@@ -28,6 +28,12 @@ variable "supabase_key" {
   sensitive   = true
 }
 
+variable "supabase_secret_key" {
+  description = "Supabase secret key (admin operations, bypasses RLS)"
+  type        = string
+  sensitive   = true
+}
+
 variable "supabase_db_url" {
   description = "Supabase PostgreSQL connection URL"
   type        = string

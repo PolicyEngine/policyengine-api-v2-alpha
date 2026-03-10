@@ -7,7 +7,7 @@ services:
     environment:
       SUPABASE_URL: http://supabase_kong_policyengine-api-v2-alpha:8000
       SUPABASE_KEY: ${SUPABASE_KEY}
-      SUPABASE_SERVICE_KEY: ${SUPABASE_SERVICE_KEY}
+      SUPABASE_SECRET_KEY: ${SUPABASE_SECRET_KEY}
       SUPABASE_DB_URL: postgresql://postgres:postgres@supabase_db_policyengine-api-v2-alpha:5432/postgres
       LOGFIRE_TOKEN: ${LOGFIRE_TOKEN}
       DEBUG: "false"
@@ -33,7 +33,7 @@ services:
     environment:
       SUPABASE_URL: http://supabase_kong_policyengine-api-v2-alpha:8000
       SUPABASE_KEY: ${SUPABASE_KEY}
-      SUPABASE_SERVICE_KEY: ${SUPABASE_SERVICE_KEY}
+      SUPABASE_SECRET_KEY: ${SUPABASE_SECRET_KEY}
       SUPABASE_DB_URL: postgresql://postgres:postgres@supabase_db_policyengine-api-v2-alpha:5432/postgres
       LOGFIRE_TOKEN: ${LOGFIRE_TOKEN}
     volumes:

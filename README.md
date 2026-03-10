@@ -207,7 +207,7 @@ Copy `.env.example` to `.env` and configure. All variables are documented in `.e
 |----------|-------------|----------|
 | `SUPABASE_URL` | Supabase API URL | Yes |
 | `SUPABASE_KEY` | Supabase anon/public key | Yes |
-| `SUPABASE_SERVICE_KEY` | Supabase service role key | Yes |
+| `SUPABASE_SECRET_KEY` | Supabase secret key | Yes |
 | `SUPABASE_DB_URL` | PostgreSQL connection string | Yes |
 | `STORAGE_BUCKET` | Supabase storage bucket name | Yes (default: `datasets`) |
 | `HUGGING_FACE_TOKEN` | HuggingFace token for dataset downloads | For seeding |

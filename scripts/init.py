@@ -24,7 +24,7 @@ from rich.panel import Panel
 from sqlmodel import create_engine
 
 from policyengine_api.config.settings import settings
-from policyengine_api.services.storage import get_service_role_client
+from policyengine_api.services.storage import get_secret_client
 
 console = Console()
 
@@ -36,7 +36,7 @@ def reset_storage_bucket():
     console.print("[bold blue]Resetting storage bucket...")
 
     try:
-        supabase = get_service_role_client()
+        supabase = get_secret_client()
         bucket_name = settings.storage_bucket
 
         # Try to delete the bucket (will fail if it doesn't exist)
@@ -67,7 +67,7 @@ def ensure_storage_bucket():
     console.print("[bold blue]Ensuring storage bucket exists...")
 
     try:
-        supabase = get_service_role_client()
+        supabase = get_secret_client()
         bucket_name = settings.storage_bucket
 
         # Try to get bucket info

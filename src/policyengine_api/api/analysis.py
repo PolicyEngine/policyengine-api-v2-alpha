@@ -724,7 +724,7 @@ def _download_dataset_local(filepath: str) -> str:
     if cache_path.exists():
         return str(cache_path)
 
-    client = create_client(settings.supabase_url, settings.supabase_service_key)
+    client = create_client(settings.supabase_url, settings.supabase_secret_key)
     data = client.storage.from_("datasets").download(filepath)
 
     cache_path.parent.mkdir(parents=True, exist_ok=True)

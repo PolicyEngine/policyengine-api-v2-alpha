@@ -18,7 +18,7 @@ class Settings(BaseSettings):
     # Supabase
     supabase_url: str = "http://localhost:54321"
     supabase_key: str = ""
-    supabase_service_key: str = ""
+    supabase_secret_key: str = ""
     supabase_db_url: str = ""
 
     # Worker
