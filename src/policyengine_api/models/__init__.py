@@ -52,6 +52,7 @@ from .output import (
     AggregateType,
 )
 from .parameter import Parameter, ParameterCreate, ParameterRead
+from .parameter_node import ParameterNode, ParameterNodeCreate, ParameterNodeRead
 from .parameter_value import (
     ParameterValue,
     ParameterValueCreate,
@@ -162,6 +163,9 @@ __all__ = [
     "Parameter",
     "ParameterCreate",
     "ParameterRead",
+    "ParameterNode",
+    "ParameterNodeCreate",
+    "ParameterNodeRead",
     "ParameterValue",
     "ParameterValueCreate",
     "ParameterValueRead",

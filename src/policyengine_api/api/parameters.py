@@ -17,6 +17,7 @@ from sqlmodel import Session, select
 from policyengine_api.config.constants import COUNTRY_MODEL_NAMES, CountryId
 from policyengine_api.models import (
     Parameter,
+    ParameterNode,
     ParameterRead,
     TaxBenefitModel,
     TaxBenefitModelVersion,
@@ -181,18 +182,31 @@ def get_parameter_children(
                 }
             children_map[child_path]["descendant_count"] += 1
 
+    # Fetch parameter nodes for node labels
+    # This gives us proper labels like "HMRC" instead of "hmrc"
+    node_paths = [
+        path for path, info in children_map.items() if info["descendant_count"] > 0
+    ]
+    node_labels: dict[str, str | None] = {}
+    if node_paths:
+        node_query = (
+            select(ParameterNode)
+            .join(TaxBenefitModelVersion)
+            .join(TaxBenefitModel)
+            .where(TaxBenefitModel.name == model_name)
+            .where(ParameterNode.name.in_(node_paths))
+        )
+        for node in session.exec(node_query).all():
+            node_labels[node.name] = node.label
+
     # Build response
     children = []
     for path in sorted(children_map):
         info = children_map[path]
         if info["descendant_count"] > 0:
             # Node: has children below it
-            direct_param = info["direct_param"]
-            label = (
-                direct_param.label
-                if direct_param and direct_param.label
-                else path.rsplit(".", 1)[-1]
-            )
+            # Use label from parameter_nodes table, or fallback to path segment
+            label = node_labels.get(path) or path.rsplit(".", 1)[-1]
             children.append(
                 ParameterChild(
                     path=path,
