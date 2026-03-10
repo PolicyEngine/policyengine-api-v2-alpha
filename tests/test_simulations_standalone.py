@@ -136,7 +136,7 @@ def test_create_economy_simulation_with_region(client, session):
     """Create an economy simulation using a region code."""
     model, version = create_us_model_and_version(session)
     dataset = create_dataset(session, model)
-    region = create_region(session, model, dataset, code="us", label="United States")
+    create_region(session, model, dataset, code="us", label="United States")
 
     payload = {
         "tax_benefit_model_name": "policyengine_us",
@@ -174,7 +174,7 @@ def test_create_economy_simulation_with_region_filter(client, session):
     """Create an economy simulation with a region that requires filtering."""
     model, version = create_us_model_and_version(session)
     dataset = create_dataset(session, model)
-    region = create_region(
+    create_region(
         session,
         model,
         dataset,

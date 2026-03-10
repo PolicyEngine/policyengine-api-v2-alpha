@@ -76,6 +76,12 @@ variable "api_max_instances" {
   default     = 10
 }
 
+variable "modal_environment" {
+  description = "Modal environment name (main, staging, testing)"
+  type        = string
+  default     = "main"
+}
+
 variable "modal_token_id" {
   description = "Modal.com token ID for serverless compute"
   type        = string

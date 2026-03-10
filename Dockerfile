@@ -17,13 +17,18 @@ RUN ln -s /usr/local/bin/bun /usr/local/bin/node && \
     bun install -g @anthropic-ai/claude-code
 ENV PATH="/root/.bun/bin:$PATH"
 
-# Copy project files
-COPY pyproject.toml README.md ./
+# Copy dependency files first (change rarely)
+COPY pyproject.toml uv.lock README.md ./
+
+# Create minimal package stub for editable install
+RUN mkdir -p src/policyengine_api && touch src/policyengine_api/__init__.py
+
+# Install dependencies (cached unless pyproject.toml or uv.lock change)
+RUN --mount=type=cache,target=/root/.cache/uv uv pip install --system -e .
+
+# Copy actual source code (changes frequently, but deps already cached)
 COPY src/ ./src/
 COPY --from=docs-builder /docs/out ./docs/out/
 
-# Install dependencies
-RUN uv pip install --system -e .
-
-# Run migrations and start server
+# Start server
 CMD uvicorn policyengine_api.main:app --host 0.0.0.0 --port ${API_PORT:-80} --proxy-headers --forwarded-allow-ips='*'

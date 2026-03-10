@@ -1,12 +1,11 @@
 """Tests for household impact comparison endpoint."""
 
 import pytest
-
-pytestmark = pytest.mark.integration
-
 from fastapi.testclient import TestClient
 
 from policyengine_api.main import app
+
+pytestmark = pytest.mark.integration
 
 client = TestClient(app)
 

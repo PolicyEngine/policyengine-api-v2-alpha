@@ -4,12 +4,9 @@ These tests require a running Supabase instance and seeded database.
 Run with: make integration-test
 """
 
-import pytest
-
-pytestmark = pytest.mark.integration
-
 from datetime import datetime, timezone
 
+import pytest
 from rich.console import Console
 from sqlmodel import Session, create_engine, select
 
@@ -27,6 +24,8 @@ from policyengine_api.models import (
     TaxBenefitModelVersion,
     Variable,
 )
+
+pytestmark = pytest.mark.integration
 
 console = Console()
 

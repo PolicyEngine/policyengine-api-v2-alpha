@@ -122,6 +122,32 @@ resource "google_cloud_run_v2_service" "api" {
         name  = "POLICYENGINE_API_URL"
         value = "https://v2.api.policyengine.org"
       }
+      env {
+        name  = "MODAL_ENVIRONMENT"
+        value = var.modal_environment
+      }
+
+      startup_probe {
+        http_get {
+          path = "/health"
+          port = 80
+        }
+        initial_delay_seconds = 0
+        timeout_seconds       = 3
+        period_seconds        = 3
+        failure_threshold     = 5
+      }
+
+      liveness_probe {
+        http_get {
+          path = "/health"
+          port = 80
+        }
+        initial_delay_seconds = 10
+        timeout_seconds       = 3
+        period_seconds        = 10
+        failure_threshold     = 3
+      }
     }
   }
 

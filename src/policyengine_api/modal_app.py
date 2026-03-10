@@ -22,7 +22,7 @@ base_image = (
     .pip_install("uv")
     .run_commands(
         "uv pip install --system --upgrade "
-        "git+https://github.com/PolicyEngine/policyengine.py.git@app-v2-migration "
+        "policyengine>=3.2.0 "
         "sqlmodel>=0.0.22 "
         "psycopg2-binary>=2.9.10 "
         "supabase>=2.10.0 "
