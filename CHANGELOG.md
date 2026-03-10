@@ -1,3 +1,10 @@
+0.2.4 (2026-03-10)
+
+# Fixed
+
+- Bump policyengine from 3.2.0 to 3.2.1, fixing missing `policyengine.countries` module needed for region seeding. (bump-policyengine-3.2.1)
+
+
 0.2.3 (2026-03-10)
 
 # Changed
