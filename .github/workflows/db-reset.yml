@@ -84,7 +84,7 @@ jobs:
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_POOLER_URL }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
-          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
           LOGFIRE_TOKEN: ${{ secrets.LOGFIRE_TOKEN }}
           LOGFIRE_ENVIRONMENT: prod
         run: |
@@ -97,7 +97,7 @@ jobs:
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_POOLER_URL }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
-          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
           STORAGE_BUCKET: ${{ vars.STORAGE_BUCKET }}
           LOGFIRE_TOKEN: ${{ secrets.LOGFIRE_TOKEN }}
           LOGFIRE_ENVIRONMENT: prod
@@ -112,7 +112,7 @@ jobs:
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_POOLER_URL }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
-          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
           HUGGING_FACE_TOKEN: ${{ secrets.HUGGING_FACE_TOKEN }}
           STORAGE_BUCKET: ${{ vars.STORAGE_BUCKET }}
           LOGFIRE_TOKEN: ${{ secrets.LOGFIRE_TOKEN }}

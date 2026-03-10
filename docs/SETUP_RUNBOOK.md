@@ -34,7 +34,7 @@ The defaults in `.env.example` work for local development with Supabase. You onl
 | Variable | Where to get it | Required? |
 |----------|----------------|-----------|
 | `SUPABASE_KEY` | Output of `supabase start` (anon key) | Yes |
-| `SUPABASE_SERVICE_KEY` | Output of `supabase start` (service_role key) | Yes |
+| `SUPABASE_SECRET_KEY` | Output of `supabase start` (secret key) | Yes |
 | `HUGGING_FACE_TOKEN` | [huggingface.co/settings/tokens](https://huggingface.co/settings/tokens) | For seeding datasets |
 | `ANTHROPIC_API_KEY` | [console.anthropic.com](https://console.anthropic.com) | For `/agent` endpoint only |
 | `LOGFIRE_TOKEN` | [logfire.pydantic.dev](https://logfire.pydantic.dev) | Optional (observability) |
@@ -45,7 +45,7 @@ The defaults in `.env.example` work for local development with Supabase. You onl
 supabase start
 ```
 
-This starts local Postgres (port 54322), PostgREST (port 54321), and storage. Copy the `anon key` and `service_role key` from the output into your `.env`.
+This starts local Postgres (port 54322), PostgREST (port 54321), and storage. Copy the `anon key` and `secret key` (formerly service_role key) from the output into your `.env`.
 
 ### Step 4: Initialize database
 

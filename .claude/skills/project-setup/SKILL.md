@@ -55,7 +55,7 @@ The `.env.example` file documents all variables. For local dev, only three need 
 | Variable | Source |
 |----------|--------|
 | `SUPABASE_KEY` | Output of `supabase start` (anon key) |
-| `SUPABASE_SERVICE_KEY` | Output of `supabase start` (service_role key) |
+| `SUPABASE_SECRET_KEY` | Output of `supabase start` (secret key) |
 | `HUGGING_FACE_TOKEN` | huggingface.co/settings/tokens (for seeding datasets) |
 
 ### Common Local Commands

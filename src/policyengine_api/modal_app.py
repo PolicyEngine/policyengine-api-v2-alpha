@@ -773,7 +773,7 @@ def simulate_economy_uk(simulation_id: str, traceparent: str | None = None) -> N
             database_url = get_database_url()
             supabase_url = os.environ["SUPABASE_URL"]
             supabase_key = os.environ.get(
-                "SUPABASE_SERVICE_KEY", os.environ["SUPABASE_KEY"]
+                "SUPABASE_SECRET_KEY", os.environ["SUPABASE_KEY"]
             )
             storage_bucket = os.environ.get("STORAGE_BUCKET", "datasets")
 
@@ -946,7 +946,7 @@ def simulate_economy_us(simulation_id: str, traceparent: str | None = None) -> N
             database_url = get_database_url()
             supabase_url = os.environ["SUPABASE_URL"]
             supabase_key = os.environ.get(
-                "SUPABASE_SERVICE_KEY", os.environ["SUPABASE_KEY"]
+                "SUPABASE_SECRET_KEY", os.environ["SUPABASE_KEY"]
             )
             storage_bucket = os.environ.get("STORAGE_BUCKET", "datasets")
 
@@ -1122,7 +1122,7 @@ def economy_comparison_uk(job_id: str, traceparent: str | None = None) -> None:
             database_url = get_database_url()
             supabase_url = os.environ["SUPABASE_URL"]
             supabase_key = os.environ.get(
-                "SUPABASE_SERVICE_KEY", os.environ["SUPABASE_KEY"]
+                "SUPABASE_SECRET_KEY", os.environ["SUPABASE_KEY"]
             )
             storage_bucket = os.environ.get("STORAGE_BUCKET", "datasets")
 
@@ -1805,7 +1805,7 @@ def economy_comparison_us(job_id: str, traceparent: str | None = None) -> None:
             database_url = get_database_url()
             supabase_url = os.environ["SUPABASE_URL"]
             supabase_key = os.environ.get(
-                "SUPABASE_SERVICE_KEY", os.environ["SUPABASE_KEY"]
+                "SUPABASE_SECRET_KEY", os.environ["SUPABASE_KEY"]
             )
             storage_bucket = os.environ.get("STORAGE_BUCKET", "datasets")
 
@@ -2757,7 +2757,7 @@ def compute_aggregate_uk(aggregate_id: str, traceparent: str | None = None) -> N
             database_url = get_database_url()
             supabase_url = os.environ["SUPABASE_URL"]
             supabase_key = os.environ.get(
-                "SUPABASE_SERVICE_KEY", os.environ["SUPABASE_KEY"]
+                "SUPABASE_SECRET_KEY", os.environ["SUPABASE_KEY"]
             )
             storage_bucket = os.environ.get("STORAGE_BUCKET", "datasets")
 
@@ -2913,7 +2913,7 @@ def compute_aggregate_us(aggregate_id: str, traceparent: str | None = None) -> N
             database_url = get_database_url()
             supabase_url = os.environ["SUPABASE_URL"]
             supabase_key = os.environ.get(
-                "SUPABASE_SERVICE_KEY", os.environ["SUPABASE_KEY"]
+                "SUPABASE_SECRET_KEY", os.environ["SUPABASE_KEY"]
             )
             storage_bucket = os.environ.get("STORAGE_BUCKET", "datasets")
 
@@ -3064,7 +3064,7 @@ def compute_change_aggregate_uk(
             database_url = get_database_url()
             supabase_url = os.environ["SUPABASE_URL"]
             supabase_key = os.environ.get(
-                "SUPABASE_SERVICE_KEY", os.environ["SUPABASE_KEY"]
+                "SUPABASE_SECRET_KEY", os.environ["SUPABASE_KEY"]
             )
             storage_bucket = os.environ.get("STORAGE_BUCKET", "datasets")
 
@@ -3269,7 +3269,7 @@ def compute_change_aggregate_us(
             database_url = get_database_url()
             supabase_url = os.environ["SUPABASE_URL"]
             supabase_key = os.environ.get(
-                "SUPABASE_SERVICE_KEY", os.environ["SUPABASE_KEY"]
+                "SUPABASE_SECRET_KEY", os.environ["SUPABASE_KEY"]
             )
             storage_bucket = os.environ.get("STORAGE_BUCKET", "datasets")
 

@@ -141,6 +141,7 @@ jobs:
         env:
           TF_VAR_supabase_url: ${{ secrets.SUPABASE_URL }}
           TF_VAR_supabase_key: ${{ secrets.SUPABASE_KEY }}
+          TF_VAR_supabase_secret_key: ${{ secrets.SUPABASE_SECRET_KEY }}
           TF_VAR_supabase_db_url: ${{ secrets.SUPABASE_DB_URL }}
           TF_VAR_logfire_token: ${{ secrets.LOGFIRE_TOKEN }}
           TF_VAR_logfire_environment: prod
@@ -208,6 +209,7 @@ jobs:
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+          SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
           LOGFIRE_TOKEN: ${{ secrets.LOGFIRE_TOKEN }}
         run: |
           chmod +x .github/scripts/*.sh
@@ -325,6 +327,7 @@ jobs:
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+          SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
           LOGFIRE_TOKEN: ${{ secrets.LOGFIRE_TOKEN }}
         run: |
           chmod +x .github/scripts/*.sh

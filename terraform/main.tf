@@ -83,6 +83,10 @@ resource "google_cloud_run_v2_service" "api" {
         value = var.supabase_key
       }
       env {
+        name  = "SUPABASE_SECRET_KEY"
+        value = var.supabase_secret_key
+      }
+      env {
         name  = "SUPABASE_DB_URL"
         value = var.supabase_db_url
       }

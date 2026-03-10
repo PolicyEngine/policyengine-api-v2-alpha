@@ -19,9 +19,9 @@ def get_supabase_client() -> Client:
     return create_client(settings.supabase_url, settings.supabase_key)
 
 
-def get_service_role_client() -> Client:
-    """Get Supabase client with service role key for admin operations."""
-    return create_client(settings.supabase_url, settings.supabase_service_key)
+def get_secret_client() -> Client:
+    """Get Supabase client with secret key for admin operations."""
+    return create_client(settings.supabase_url, settings.supabase_secret_key)
 
 
 def upload_dataset(file_path: str, object_name: str | None = None) -> str:
@@ -51,7 +51,7 @@ def upload_dataset(file_path: str, object_name: str | None = None) -> str:
 
 
 def upload_dataset_for_seeding(file_path: str, object_name: str | None = None) -> str:
-    """Upload dataset using service role key (for seeding operations).
+    """Upload dataset using secret key (for seeding operations).
 
     Args:
         file_path: Local path to dataset file
@@ -60,12 +60,12 @@ def upload_dataset_for_seeding(file_path: str, object_name: str | None = None) -
     Returns:
         Object name (key) in storage
     """
-    supabase = get_service_role_client()
+    supabase = get_secret_client()
 
     if object_name is None:
         object_name = Path(file_path).name
 
-    # Upload file using service role client
+    # Upload file using secret client
     with open(file_path, "rb") as f:
         supabase.storage.from_(settings.storage_bucket).upload(
             object_name,
