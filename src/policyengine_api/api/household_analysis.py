@@ -35,8 +35,10 @@ from policyengine_api.services.database import get_session
 from policyengine_api.services.model_resolver import resolve_country_model
 
 from .analysis import (
+    PolicyIdInput,
     _get_or_create_report,
     _get_or_create_simulation,
+    _resolve_policy_input,
 )
 
 
@@ -512,13 +514,24 @@ class HouseholdImpactRequest(BaseModel):
     """Request for household impact analysis."""
 
     household_id: UUID = Field(description="ID of the household to analyze")
-    policy_id: UUID | None = Field(
+    baseline_policy_id: PolicyIdInput = Field(
+        default="current_law",
+        description="Baseline policy. UUID for a specific policy, or 'current_law' for current law.",
+    )
+    reform_policy_id: PolicyIdInput = Field(
         default=None,
-        description="Reform policy ID. If None, runs single calculation under current law.",
+        description=(
+            "Reform policy. UUID for a specific policy, 'current_law' for current law, "
+            "or omit entirely for a single calculation (no comparison)."
+        ),
     )
     dynamic_id: UUID | None = Field(
         default=None,
         description="Optional behavioural response specification ID",
+    )
+    run: bool = Field(
+        default=True,
+        description="If false, create report and simulations with EXECUTION_DEFERRED status without triggering computation.",
     )
 
 
@@ -652,26 +665,35 @@ def household_impact(
 ) -> HouseholdImpactResponse:
     """Run household impact analysis.
 
-    If policy_id is None: single run under current law.
-    If policy_id is set: comparison (baseline vs reform).
+    If reform_policy_id is omitted (None): single run under baseline policy.
+    If reform_policy_id is set (UUID or "current_law"): comparison (baseline vs reform).
 
     This is an async operation. The endpoint returns immediately with a report_id
     and status="pending". Poll GET /analysis/household-impact/{report_id} until
     status="completed" to get results.
     """
     household = validate_household_exists(request.household_id, session)
-    validate_policy_exists(request.policy_id, session)
+
+    # Resolve policy sentinels to DB policy IDs
+    baseline_db_id = _resolve_policy_input(request.baseline_policy_id)
+    reform_db_id = _resolve_policy_input(request.reform_policy_id)
+    has_reform = request.reform_policy_id is not None
+
+    # Validate policies exist in DB
+    validate_policy_exists(baseline_db_id, session)
+    validate_policy_exists(reform_db_id, session)
 
     _model, model_version = resolve_country_model(household.country_id, session)
 
     baseline_sim = _create_baseline_simulation(
-        household, model_version.id, request.dynamic_id, session
+        household, model_version.id, request.dynamic_id, session,
+        policy_id=baseline_db_id,
     )
     reform_sim = _create_reform_simulation(
-        household, model_version.id, request.policy_id, request.dynamic_id, session
-    )
+        household, model_version.id, reform_db_id, request.dynamic_id, session
+    ) if has_reform else None
 
-    report_type = "household_comparison" if request.policy_id else "household_single"
+    report_type = "household_comparison" if has_reform else "household_single"
     report = _get_or_create_report(
         baseline_sim_id=baseline_sim.id,
         reform_sim_id=reform_sim.id if reform_sim else None,
@@ -680,9 +702,15 @@ def household_impact(
         session=session,
     )
 
-    if report.status == ReportStatus.PENDING:
-        with logfire.span("trigger_household_impact", job_id=str(report.id)):
-            _trigger_household_impact(str(report.id), household.country_id, session)
+    # Trigger computation or defer
+    if report.status in (ReportStatus.PENDING, ReportStatus.EXECUTION_DEFERRED):
+        if request.run:
+            with logfire.span("trigger_household_impact", job_id=str(report.id)):
+                _trigger_household_impact(str(report.id), household.country_id, session)
+        elif report.status == ReportStatus.PENDING:
+            report.status = ReportStatus.EXECUTION_DEFERRED
+            session.add(report)
+            session.commit()
 
     return build_household_response(report, baseline_sim, reform_sim, session)
 
@@ -724,12 +752,13 @@ def _create_baseline_simulation(
     model_version_id: UUID,
     dynamic_id: UUID | None,
     session: Session,
+    policy_id: UUID | None = None,
 ) -> Simulation:
-    """Create baseline simulation (current law, no policy)."""
+    """Create baseline simulation."""
     return _get_or_create_simulation(
         simulation_type=SimulationType.HOUSEHOLD,
         model_version_id=model_version_id,
-        policy_id=None,
+        policy_id=policy_id,
         dynamic_id=dynamic_id,
         session=session,
         household_id=household.id,

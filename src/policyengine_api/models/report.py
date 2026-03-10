@@ -9,6 +9,7 @@ class ReportStatus(str, Enum):
     """Report processing status."""
 
     PENDING = "pending"
+    EXECUTION_DEFERRED = "execution_deferred"
     RUNNING = "running"
     COMPLETED = "completed"
     FAILED = "failed"

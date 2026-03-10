@@ -16,7 +16,7 @@ WORKFLOW for full economic analysis:
 """
 
 import math
-from typing import Literal
+from typing import Literal, Union
 from uuid import UUID, uuid5
 
 import logfire
@@ -66,6 +66,22 @@ from policyengine_api.services.model_resolver import (
     resolve_country_model,
     resolve_model_name,
 )
+
+
+# Type for API policy inputs: UUID, "current_law", or None (omitted).
+PolicyIdInput = Union[UUID, Literal["current_law"], None]
+
+
+def _resolve_policy_input(value: PolicyIdInput) -> UUID | None:
+    """Convert API policy sentinel to DB policy_id.
+
+    - UUID → that policy ID
+    - "current_law" → None (current law has no policy record)
+    - None → None
+    """
+    if value is None or value == "current_law":
+        return None
+    return value
 
 
 def get_traceparent() -> str | None:
@@ -133,18 +149,12 @@ def list_analysis_options(
 class EconomicImpactRequest(BaseModel):
     """Request body for economic impact analysis.
 
-    Example with dataset_id:
-    {
-        "country_id": "uk",
-        "dataset_id": "uuid-from-datasets-endpoint",
-        "policy_id": "uuid-of-reform-policy"
-    }
-
     Example with region:
     {
         "country_id": "us",
         "region": "state/ca",
-        "policy_id": "uuid-of-reform-policy"
+        "baseline_policy_id": "current_law",
+        "reform_policy_id": "uuid-of-reform-policy"
     }
     """
 
@@ -159,9 +169,13 @@ class EconomicImpactRequest(BaseModel):
         default=None,
         description="Region code (e.g., 'state/ca', 'us'). Either dataset_id or region must be provided.",
     )
-    policy_id: UUID | None = Field(
-        default=None,
-        description="Reform policy ID to compare against baseline (current law)",
+    baseline_policy_id: PolicyIdInput = Field(
+        default="current_law",
+        description="Baseline policy. UUID for a specific policy, or 'current_law' for current law.",
+    )
+    reform_policy_id: PolicyIdInput = Field(
+        default="current_law",
+        description="Reform policy. UUID for a specific policy, or 'current_law' for current law.",
     )
     dynamic_id: UUID | None = Field(
         default=None, description="Optional behavioural response specification ID"
@@ -169,6 +183,10 @@ class EconomicImpactRequest(BaseModel):
     year: int | None = Field(
         default=None,
         description="Year for the analysis (e.g., 2026). Selects the dataset for that year. Uses latest available if omitted.",
+    )
+    run: bool = Field(
+        default=True,
+        description="If false, create report and simulations with EXECUTION_DEFERRED status without triggering computation.",
     )
 
     @model_validator(mode="after")
@@ -1244,11 +1262,15 @@ def economic_impact(
     # Get model version
     _model, model_version = resolve_country_model(request.country_id, session)
 
+    # Resolve policy sentinels to DB policy IDs
+    baseline_policy_db = _resolve_policy_input(request.baseline_policy_id)
+    reform_policy_db = _resolve_policy_input(request.reform_policy_id)
+
     # Get or create simulations using the resolved dataset
     baseline_sim = _get_or_create_simulation(
         simulation_type=SimulationType.ECONOMY,
         model_version_id=model_version.id,
-        policy_id=None,
+        policy_id=baseline_policy_db,
         dynamic_id=request.dynamic_id,
         session=session,
         dataset_id=dataset.id,
@@ -1262,7 +1284,7 @@ def economic_impact(
     reform_sim = _get_or_create_simulation(
         simulation_type=SimulationType.ECONOMY,
         model_version_id=model_version.id,
-        policy_id=request.policy_id,
+        policy_id=reform_policy_db,
         dynamic_id=request.dynamic_id,
         session=session,
         dataset_id=dataset.id,
@@ -1275,19 +1297,24 @@ def economic_impact(
 
     # Get or create report
     label = f"Economic impact: {request.country_id}"
-    if request.policy_id:
-        label += f" (policy {request.policy_id})"
+    if request.reform_policy_id and request.reform_policy_id != "current_law":
+        label += f" (policy {request.reform_policy_id})"
 
     report = _get_or_create_report(
         baseline_sim.id, reform_sim.id, label, "economy_comparison", session
     )
 
-    # Trigger computation if report is pending
-    if report.status == ReportStatus.PENDING:
-        with logfire.span("trigger_economy_comparison", job_id=str(report.id)):
-            _trigger_economy_comparison(
-                str(report.id), request.country_id, session
-            )
+    # Trigger computation or defer
+    if report.status in (ReportStatus.PENDING, ReportStatus.EXECUTION_DEFERRED):
+        if request.run:
+            with logfire.span("trigger_economy_comparison", job_id=str(report.id)):
+                _trigger_economy_comparison(
+                    str(report.id), request.country_id, session
+                )
+        elif report.status == ReportStatus.PENDING:
+            report.status = ReportStatus.EXECUTION_DEFERRED
+            session.add(report)
+            session.commit()
 
     return _build_response(report, baseline_sim, reform_sim, session, region)
 
@@ -1335,9 +1362,13 @@ class EconomyCustomRequest(BaseModel):
         default=None,
         description="Region code (e.g., 'state/ca', 'us').",
     )
-    policy_id: UUID | None = Field(
-        default=None,
-        description="Reform policy ID to compare against baseline (current law)",
+    baseline_policy_id: PolicyIdInput = Field(
+        default="current_law",
+        description="Baseline policy. UUID for a specific policy, or 'current_law' for current law.",
+    )
+    reform_policy_id: PolicyIdInput = Field(
+        default="current_law",
+        description="Reform policy. UUID for a specific policy, or 'current_law' for current law.",
     )
     dynamic_id: UUID | None = Field(
         default=None, description="Optional behavioural response specification ID"
@@ -1348,6 +1379,10 @@ class EconomyCustomRequest(BaseModel):
     )
     modules: list[str] = Field(
         description="List of module names to compute (see GET /analysis/options)"
+    )
+    run: bool = Field(
+        default=True,
+        description="If false, create report and simulations with EXECUTION_DEFERRED status without triggering computation.",
     )
 
     @model_validator(mode="after")
@@ -1414,9 +1449,11 @@ def economy_custom(
         country_id=request.country_id,
         dataset_id=request.dataset_id,
         region=request.region,
-        policy_id=request.policy_id,
+        baseline_policy_id=request.baseline_policy_id,
+        reform_policy_id=request.reform_policy_id,
         dynamic_id=request.dynamic_id,
         year=request.year,
+        run=request.run,
     )
 
     dataset, region_obj = _resolve_dataset_and_region(impact_request, session)
@@ -1433,12 +1470,16 @@ def economy_custom(
         else None
     )
 
+    # Resolve policy sentinels to DB policy IDs
+    baseline_policy_db = _resolve_policy_input(request.baseline_policy_id)
+    reform_policy_db = _resolve_policy_input(request.reform_policy_id)
+
     _model, model_version = resolve_country_model(request.country_id, session)
 
     baseline_sim = _get_or_create_simulation(
         simulation_type=SimulationType.ECONOMY,
         model_version_id=model_version.id,
-        policy_id=None,
+        policy_id=baseline_policy_db,
         dynamic_id=request.dynamic_id,
         session=session,
         dataset_id=dataset.id,
@@ -1452,7 +1493,7 @@ def economy_custom(
     reform_sim = _get_or_create_simulation(
         simulation_type=SimulationType.ECONOMY,
         model_version_id=model_version.id,
-        policy_id=request.policy_id,
+        policy_id=reform_policy_db,
         dynamic_id=request.dynamic_id,
         session=session,
         dataset_id=dataset.id,
@@ -1464,21 +1505,27 @@ def economy_custom(
     )
 
     label = f"Custom analysis: {request.country_id}"
-    if request.policy_id:
-        label += f" (policy {request.policy_id})"
+    if request.reform_policy_id and request.reform_policy_id != "current_law":
+        label += f" (policy {request.reform_policy_id})"
 
     report = _get_or_create_report(
         baseline_sim.id, reform_sim.id, label, "economy_comparison", session
     )
 
-    if report.status == ReportStatus.PENDING:
-        with logfire.span("trigger_economy_comparison", job_id=str(report.id)):
-            _trigger_economy_comparison(
-                str(report.id),
-                request.country_id,
-                session,
-                modules=request.modules,
-            )
+    # Trigger computation or defer
+    if report.status in (ReportStatus.PENDING, ReportStatus.EXECUTION_DEFERRED):
+        if request.run:
+            with logfire.span("trigger_economy_comparison", job_id=str(report.id)):
+                _trigger_economy_comparison(
+                    str(report.id),
+                    request.country_id,
+                    session,
+                    modules=request.modules,
+                )
+        elif report.status == ReportStatus.PENDING:
+            report.status = ReportStatus.EXECUTION_DEFERRED
+            session.add(report)
+            session.commit()
 
     full_response = _build_response(
         report, baseline_sim, reform_sim, session, region_obj
