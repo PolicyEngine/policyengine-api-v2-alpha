@@ -1832,7 +1832,7 @@ wheels = [
 
 [[package]]
 name = "policyengine"
-version = "3.2.0"
+version = "3.2.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "microdf-python" },
@@ -1842,14 +1842,14 @@ dependencies = [
     { name = "pydantic" },
     { name = "requests" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/74/cc/892402b564d76ebd38affb60d489f97074cef6354801cbe909d438cbfae9/policyengine-3.2.0.tar.gz", hash = "sha256:bfce91d378920ad07a56e0554738dbc3e46a68fbc015bb610a195cb596ca2c13", size = 195497, upload-time = "2026-02-24T17:34:10.2Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/4f/a4/5a83cc6de2fe452fee2758b5092a303930777495070733d968fc4e2acab1/policyengine-3.2.1.tar.gz", hash = "sha256:1e388aa9bbe86fb5908326348511f3a9675a8d745bff6e8ad35ecfa681abac61", size = 235077, upload-time = "2026-03-10T17:16:56.046Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/39/7d/ceea107483279b8fe84483fc83af7705f5c6dddb2470f74584034509f8e6/policyengine-3.2.0-py3-none-any.whl", hash = "sha256:d6b248e68a36b91ed2eda45ef35149a48668e32875f55227e2b9bd67ea4b9357", size = 75267, upload-time = "2026-02-24T17:34:07.489Z" },
+    { url = "https://files.pythonhosted.org/packages/68/d2/5e5af3b4cd55313141f6dcca6bec63e6372c7e5519e32a7d02e1264ec407/policyengine-3.2.1-py3-none-any.whl", hash = "sha256:7d656241f4f9c8d6afd8bc500c720678e5769d85bed18fa7e9de0692c4fc5dc1", size = 100885, upload-time = "2026-03-10T17:16:54.742Z" },
 ]
 
 [[package]]
 name = "policyengine-api-v2"
-version = "0.2.1"
+version = "0.2.3"
 source = { editable = "." }
 dependencies = [
     { name = "alembic" },
@@ -1900,7 +1900,7 @@ requires-dist = [
     { name = "httpx", marker = "extra == 'dev'", specifier = ">=0.27.2" },
     { name = "logfire", extras = ["fastapi", "httpx", "sqlalchemy"], specifier = ">=0.60.0" },
     { name = "modal", specifier = ">=0.68.0" },
-    { name = "policyengine", specifier = ">=3.2.0" },
+    { name = "policyengine", specifier = ">=3.2.1" },
     { name = "policyengine-uk", specifier = ">=2.75.1" },
     { name = "policyengine-us", specifier = ">=1.592.4" },
     { name = "psycopg2-binary", specifier = ">=2.9.10" },
