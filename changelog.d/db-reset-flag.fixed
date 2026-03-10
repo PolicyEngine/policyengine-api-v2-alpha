@@ -1,0 +1,1 @@
+Add missing --reset flag to db-reset workflow so init.py actually drops existing tables before recreating them.
