@@ -89,7 +89,7 @@ jobs:
           LOGFIRE_ENVIRONMENT: prod
         run: |
           echo "Resetting database tables..."
-          echo "yes" | uv run python scripts/init.py
+          echo "yes" | uv run python scripts/init.py --reset
 
       - name: Seed database (lite)
         if: ${{ github.event.inputs.mode == 'lite' }}
