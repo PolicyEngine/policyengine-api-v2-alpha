@@ -1,3 +1,10 @@
+0.2.2 (2026-03-10)
+
+# Fixed
+
+- Update policyengine-uk from 2.45.4 to 2.75.1, fixing dataset seeding crash (sim.dataset[year] API change). (bump-uk-version)
+
+
 0.2.1 (2026-03-10)
 
 # Fixed
