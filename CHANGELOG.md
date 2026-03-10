@@ -1,3 +1,10 @@
+0.2.1 (2026-03-10)
+
+# Fixed
+
+- Add missing --reset flag to db-reset workflow so init.py actually drops existing tables before recreating them. (db-reset-flag)
+
+
 0.2.0 (2026-03-10)
 
 # Added
