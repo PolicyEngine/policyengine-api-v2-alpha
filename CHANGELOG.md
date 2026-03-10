@@ -1,3 +1,10 @@
+0.2.5 (2026-03-10)
+
+# Fixed
+
+- Fix region seeding crash caused by unpacking 2 values from 3-tuple return of seed_us_regions and seed_uk_regions. (fix-seed-tuple-unpack)
+
+
 0.2.4 (2026-03-10)
 
 # Fixed
