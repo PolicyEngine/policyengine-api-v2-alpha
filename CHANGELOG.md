@@ -1,3 +1,10 @@
+0.2.6 (2026-03-11)
+
+# Fixed
+
+- Sync ANTHROPIC_API_KEY to Modal environments via deploy pipeline, fixing agent sandbox deploy failure. (sync-anthropic-key-modal)
+
+
 0.2.5 (2026-03-10)
 
 # Fixed
