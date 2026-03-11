@@ -1,3 +1,10 @@
+0.2.8 (2026-03-11)
+
+# Fixed
+
+- Fix staging and canary URL extraction in deploy workflow — gcloud format filter returned empty, replaced with JSON + jq parsing. (fix-tagged-url-extraction)
+
+
 0.2.7 (2026-03-11)
 
 # Fixed

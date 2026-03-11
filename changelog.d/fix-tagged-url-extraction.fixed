@@ -1,1 +1,0 @@
-Fix staging and canary URL extraction in deploy workflow — gcloud format filter returned empty, replaced with JSON + jq parsing.
