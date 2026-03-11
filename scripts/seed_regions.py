@@ -199,6 +199,11 @@ def seed_us_regions(
                     requires_filter=pe_region.requires_filter,
                     filter_field=pe_region.filter_field,
                     filter_value=pe_region.filter_value,
+                    filter_strategy=(
+                        pe_region.scoping_strategy.strategy_type
+                        if pe_region.scoping_strategy
+                        else None
+                    ),
                     parent_code=pe_region.parent_code,
                     state_code=pe_region.state_code,
                     state_name=pe_region.state_name,
@@ -292,6 +297,11 @@ def seed_uk_regions(session: Session) -> tuple[int, int, int]:
                     requires_filter=pe_region.requires_filter,
                     filter_field=pe_region.filter_field,
                     filter_value=pe_region.filter_value,
+                    filter_strategy=(
+                        pe_region.scoping_strategy.strategy_type
+                        if pe_region.scoping_strategy
+                        else None
+                    ),
                     parent_code=pe_region.parent_code,
                     state_code=None,
                     state_name=None,

@@ -32,6 +32,9 @@ from test_fixtures.fixtures_regions import (
     create_tax_benefit_model,
     create_tax_benefit_model_version,
 )
+from test_fixtures.fixtures_strategy_reconstruction import (
+    FILTER_STRATEGIES,
+)
 
 client = TestClient(app)
 
@@ -491,6 +494,126 @@ class TestGetDeterministicSimulationId:
 
         assert id1 == id2
 
+    def test__given_filter_strategy_none__then_backward_compatible_id(self):
+        """Passing filter_strategy=None should produce the same ID as omitting it."""
+        dataset_id = uuid4()
+        model_version_id = uuid4()
+
+        # Given — ID computed without filter_strategy param
+        id_without = _get_deterministic_simulation_id(
+            SimulationType.ECONOMY,
+            model_version_id,
+            None,
+            None,
+            dataset_id=dataset_id,
+            filter_field="country",
+            filter_value="ENGLAND",
+        )
+
+        # When — ID computed with filter_strategy=None
+        id_with_none = _get_deterministic_simulation_id(
+            SimulationType.ECONOMY,
+            model_version_id,
+            None,
+            None,
+            dataset_id=dataset_id,
+            filter_field="country",
+            filter_value="ENGLAND",
+            filter_strategy=None,
+        )
+
+        # Then
+        assert id_without == id_with_none
+
+    def test__given_different_filter_strategy__then_different_id(self):
+        dataset_id = uuid4()
+        model_version_id = uuid4()
+
+        # Given
+        id_row_filter = _get_deterministic_simulation_id(
+            SimulationType.ECONOMY,
+            model_version_id,
+            None,
+            None,
+            dataset_id=dataset_id,
+            filter_field="country",
+            filter_value="ENGLAND",
+            filter_strategy=FILTER_STRATEGIES["ROW_FILTER"],
+        )
+
+        # When
+        id_weight_replacement = _get_deterministic_simulation_id(
+            SimulationType.ECONOMY,
+            model_version_id,
+            None,
+            None,
+            dataset_id=dataset_id,
+            filter_field="country",
+            filter_value="ENGLAND",
+            filter_strategy=FILTER_STRATEGIES["WEIGHT_REPLACEMENT"],
+        )
+
+        # Then
+        assert id_row_filter != id_weight_replacement
+
+    def test__given_filter_strategy_set__then_different_from_none(self):
+        dataset_id = uuid4()
+        model_version_id = uuid4()
+
+        # Given
+        id_no_strategy = _get_deterministic_simulation_id(
+            SimulationType.ECONOMY,
+            model_version_id,
+            None,
+            None,
+            dataset_id=dataset_id,
+            filter_field="country",
+            filter_value="ENGLAND",
+            filter_strategy=None,
+        )
+
+        # When
+        id_with_strategy = _get_deterministic_simulation_id(
+            SimulationType.ECONOMY,
+            model_version_id,
+            None,
+            None,
+            dataset_id=dataset_id,
+            filter_field="country",
+            filter_value="ENGLAND",
+            filter_strategy=FILTER_STRATEGIES["ROW_FILTER"],
+        )
+
+        # Then
+        assert id_no_strategy != id_with_strategy
+
+    def test__given_same_filter_strategy__then_same_id(self):
+        dataset_id = uuid4()
+        model_version_id = uuid4()
+
+        id1 = _get_deterministic_simulation_id(
+            SimulationType.ECONOMY,
+            model_version_id,
+            None,
+            None,
+            dataset_id=dataset_id,
+            filter_field="country",
+            filter_value="ENGLAND",
+            filter_strategy=FILTER_STRATEGIES["ROW_FILTER"],
+        )
+        id2 = _get_deterministic_simulation_id(
+            SimulationType.ECONOMY,
+            model_version_id,
+            None,
+            None,
+            dataset_id=dataset_id,
+            filter_field="country",
+            filter_value="ENGLAND",
+            filter_strategy=FILTER_STRATEGIES["ROW_FILTER"],
+        )
+
+        assert id1 == id2
+
 
 # ---------------------------------------------------------------------------
 # _get_or_create_simulation
@@ -651,6 +774,241 @@ class TestGetOrCreateSimulation:
 
         assert simulation.filter_field is None
         assert simulation.filter_value is None
+
+    def test__given_filter_strategy__then_simulation_has_filter_strategy(
+        self, session: Session
+    ):
+        # Given
+        model = create_tax_benefit_model(session, name="policyengine-uk")
+        model_version = create_tax_benefit_model_version(session, model)
+        dataset = create_dataset(session, model, name="uk_enhanced_frs")
+
+        # When
+        simulation = _get_or_create_simulation(
+            simulation_type=SimulationType.ECONOMY,
+            dataset_id=dataset.id,
+            model_version_id=model_version.id,
+            policy_id=None,
+            dynamic_id=None,
+            session=session,
+            filter_field="country",
+            filter_value="ENGLAND",
+            filter_strategy=FILTER_STRATEGIES["ROW_FILTER"],
+        )
+
+        # Then
+        assert simulation.filter_strategy == FILTER_STRATEGIES["ROW_FILTER"]
+
+    def test__given_weight_replacement_strategy__then_simulation_stores_strategy(
+        self, session: Session
+    ):
+        # Given
+        model = create_tax_benefit_model(session, name="policyengine-uk")
+        model_version = create_tax_benefit_model_version(session, model)
+        dataset = create_dataset(session, model, name="uk_enhanced_frs")
+
+        # When
+        simulation = _get_or_create_simulation(
+            simulation_type=SimulationType.ECONOMY,
+            dataset_id=dataset.id,
+            model_version_id=model_version.id,
+            policy_id=None,
+            dynamic_id=None,
+            session=session,
+            filter_value="E14001551",
+            filter_strategy=FILTER_STRATEGIES["WEIGHT_REPLACEMENT"],
+        )
+
+        # Then
+        assert simulation.filter_strategy == FILTER_STRATEGIES["WEIGHT_REPLACEMENT"]
+
+    def test__given_different_filter_strategy__then_creates_separate_simulations(
+        self, session: Session
+    ):
+        # Given
+        model = create_tax_benefit_model(session, name="policyengine-uk")
+        model_version = create_tax_benefit_model_version(session, model)
+        dataset = create_dataset(session, model, name="uk_enhanced_frs")
+
+        # When
+        row_filter_sim = _get_or_create_simulation(
+            simulation_type=SimulationType.ECONOMY,
+            dataset_id=dataset.id,
+            model_version_id=model_version.id,
+            policy_id=None,
+            dynamic_id=None,
+            session=session,
+            filter_field="country",
+            filter_value="ENGLAND",
+            filter_strategy=FILTER_STRATEGIES["ROW_FILTER"],
+        )
+        weight_sim = _get_or_create_simulation(
+            simulation_type=SimulationType.ECONOMY,
+            dataset_id=dataset.id,
+            model_version_id=model_version.id,
+            policy_id=None,
+            dynamic_id=None,
+            session=session,
+            filter_field="country",
+            filter_value="ENGLAND",
+            filter_strategy=FILTER_STRATEGIES["WEIGHT_REPLACEMENT"],
+        )
+
+        # Then
+        assert row_filter_sim.id != weight_sim.id
+
+    def test__given_no_filter_strategy__then_simulation_has_null_filter_strategy(
+        self, session: Session
+    ):
+        # Given
+        model = create_tax_benefit_model(session, name="policyengine-uk")
+        model_version = create_tax_benefit_model_version(session, model)
+        dataset = create_dataset(session, model, name="uk_enhanced_frs")
+
+        # When
+        simulation = _get_or_create_simulation(
+            simulation_type=SimulationType.ECONOMY,
+            dataset_id=dataset.id,
+            model_version_id=model_version.id,
+            policy_id=None,
+            dynamic_id=None,
+            session=session,
+            filter_field="country",
+            filter_value="ENGLAND",
+        )
+
+        # Then
+        assert simulation.filter_strategy is None
+
+    def test__given_same_filter_strategy__then_reuses_simulation(
+        self, session: Session
+    ):
+        # Given
+        model = create_tax_benefit_model(session, name="policyengine-uk")
+        model_version = create_tax_benefit_model_version(session, model)
+        dataset = create_dataset(session, model, name="uk_enhanced_frs")
+
+        # When
+        first = _get_or_create_simulation(
+            simulation_type=SimulationType.ECONOMY,
+            dataset_id=dataset.id,
+            model_version_id=model_version.id,
+            policy_id=None,
+            dynamic_id=None,
+            session=session,
+            filter_field="country",
+            filter_value="ENGLAND",
+            filter_strategy=FILTER_STRATEGIES["ROW_FILTER"],
+        )
+        second = _get_or_create_simulation(
+            simulation_type=SimulationType.ECONOMY,
+            dataset_id=dataset.id,
+            model_version_id=model_version.id,
+            policy_id=None,
+            dynamic_id=None,
+            session=session,
+            filter_field="country",
+            filter_value="ENGLAND",
+            filter_strategy=FILTER_STRATEGIES["ROW_FILTER"],
+        )
+
+        # Then
+        assert first.id == second.id
+
+
+# ---------------------------------------------------------------------------
+# _resolve_dataset_and_region (filter_strategy)
+# ---------------------------------------------------------------------------
+
+
+class TestResolveDatasetAndRegionFilterStrategy:
+    """Tests for filter_strategy extraction in _resolve_dataset_and_region."""
+
+    def test__given_region_with_row_filter_strategy__then_region_has_filter_strategy(
+        self, session: Session
+    ):
+        # Given
+        model = create_tax_benefit_model(session, name="policyengine-uk")
+        dataset = create_dataset(session, model, name="uk_enhanced_frs")
+        create_region(
+            session,
+            model=model,
+            dataset=dataset,
+            code="country/england",
+            label="England",
+            region_type="country",
+            requires_filter=True,
+            filter_field="country",
+            filter_value="ENGLAND",
+            filter_strategy=FILTER_STRATEGIES["ROW_FILTER"],
+        )
+        request = EconomicImpactRequest(
+            tax_benefit_model_name="policyengine_uk",
+            region="country/england",
+        )
+
+        # When
+        _, resolved_region = _resolve_dataset_and_region(request, session)
+
+        # Then
+        assert resolved_region is not None
+        assert resolved_region.filter_strategy == FILTER_STRATEGIES["ROW_FILTER"]
+
+    def test__given_constituency_region__then_region_has_weight_replacement_strategy(
+        self, session: Session
+    ):
+        # Given
+        model = create_tax_benefit_model(session, name="policyengine-uk")
+        dataset = create_dataset(session, model, name="uk_enhanced_frs")
+        create_region(
+            session,
+            model=model,
+            dataset=dataset,
+            code="constituency/sheffield-central",
+            label="Sheffield Central",
+            region_type="constituency",
+            requires_filter=True,
+            filter_value="E14001551",
+            filter_strategy=FILTER_STRATEGIES["WEIGHT_REPLACEMENT"],
+        )
+        request = EconomicImpactRequest(
+            tax_benefit_model_name="policyengine_uk",
+            region="constituency/sheffield-central",
+        )
+
+        # When
+        _, resolved_region = _resolve_dataset_and_region(request, session)
+
+        # Then
+        assert resolved_region is not None
+        assert resolved_region.filter_strategy == FILTER_STRATEGIES["WEIGHT_REPLACEMENT"]
+
+    def test__given_national_region__then_filter_strategy_is_none(
+        self, session: Session
+    ):
+        # Given
+        model = create_tax_benefit_model(session, name="policyengine-uk")
+        dataset = create_dataset(session, model, name="uk_enhanced_frs")
+        create_region(
+            session,
+            model=model,
+            dataset=dataset,
+            code="uk",
+            label="United Kingdom",
+            region_type="national",
+            requires_filter=False,
+        )
+        request = EconomicImpactRequest(
+            tax_benefit_model_name="policyengine_uk",
+            region="uk",
+        )
+
+        # When
+        _, resolved_region = _resolve_dataset_and_region(request, session)
+
+        # Then
+        assert resolved_region is not None
+        assert resolved_region.filter_strategy is None
 
 
 # ---------------------------------------------------------------------------

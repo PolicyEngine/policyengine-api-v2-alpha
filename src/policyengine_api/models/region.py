@@ -37,6 +37,7 @@ class RegionBase(SQLModel):
     requires_filter: bool = False
     filter_field: str | None = None  # e.g., "state_code", "place_fips"
     filter_value: str | None = None  # e.g., "CA", "44000"
+    filter_strategy: str | None = None  # "row_filter" or "weight_replacement"
     parent_code: str | None = None  # e.g., "us", "state/ca"
     state_code: str | None = None  # For US regions
     state_name: str | None = None  # For US regions
