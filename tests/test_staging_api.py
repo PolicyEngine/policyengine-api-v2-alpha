@@ -17,7 +17,7 @@ BASE_URL = os.environ.get("API_BASE_URL", "http://localhost:8000")
 @pytest.fixture(scope="module")
 def api():
     """HTTP client for the staging API."""
-    with httpx.Client(base_url=BASE_URL, timeout=30.0) as client:
+    with httpx.Client(base_url=BASE_URL, timeout=30.0, follow_redirects=True) as client:
         yield client
 
 
