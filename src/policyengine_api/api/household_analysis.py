@@ -30,7 +30,10 @@ from policyengine_api.models import (
     Simulation,
     SimulationStatus,
     SimulationType,
+    TaxBenefitModel,
+    TaxBenefitModelVersion,
 )
+from policyengine_api.config.constants import MODEL_NAME_TO_COUNTRY
 from policyengine_api.services.database import get_session
 from policyengine_api.services.model_resolver import resolve_country_model
 
@@ -739,7 +742,25 @@ def get_household_impact(
     if report.reform_simulation_id:
         reform_sim = session.get(Simulation, report.reform_simulation_id)
 
+    # Auto-start deferred reports on first access
+    if report.status == ReportStatus.EXECUTION_DEFERRED:
+        country_id = _resolve_country_from_simulation(baseline_sim, session)
+        with logfire.span("auto_trigger_household_impact", job_id=str(report.id)):
+            _trigger_household_impact(str(report.id), country_id, session)
+        session.refresh(report)
+
     return build_household_response(report, baseline_sim, reform_sim, session)
+
+
+def _resolve_country_from_simulation(sim: Simulation, session: Session) -> str:
+    """Derive country_id from a simulation's model version."""
+    version = session.get(TaxBenefitModelVersion, sim.tax_benefit_model_version_id)
+    if not version:
+        raise HTTPException(status_code=500, detail="Model version not found")
+    model = session.get(TaxBenefitModel, version.model_id)
+    if not model:
+        raise HTTPException(status_code=500, detail="Tax-benefit model not found")
+    return MODEL_NAME_TO_COUNTRY[model.name]
 
 
 # =============================================================================
