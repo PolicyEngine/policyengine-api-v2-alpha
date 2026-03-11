@@ -1,3 +1,10 @@
+0.2.7 (2026-03-11)
+
+# Fixed
+
+- Increase Cloud Run startup probe timeout to 40 seconds (was 15s) to prevent deployment failures with heavier policyengine imports. (increase-startup-probe)
+
+
 0.2.6 (2026-03-11)
 
 # Fixed
