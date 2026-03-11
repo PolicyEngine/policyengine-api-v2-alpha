@@ -5,7 +5,6 @@ from enum import Enum
 from typing import TYPE_CHECKING
 from uuid import UUID, uuid4
 
-import sqlalchemy as sa
 from pydantic import model_validator
 from sqlmodel import Field, Relationship, SQLModel
 
@@ -34,9 +33,7 @@ class RegionBase(SQLModel):
 
     code: str  # e.g., "state/ca", "constituency/Sheffield Central"
     label: str  # e.g., "California", "Sheffield Central"
-    region_type: RegionType = Field(
-        sa_type=sa.Enum(RegionType, values_callable=lambda x: [e.value for e in x]),
-    )
+    region_type: RegionType  # e.g., RegionType.STATE, RegionType.CONSTITUENCY
     requires_filter: bool = False
     filter_field: str | None = None  # e.g., "state_code", "place_fips"
     filter_value: str | None = None  # e.g., "CA", "44000"
