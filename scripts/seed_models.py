@@ -356,9 +356,7 @@ def seed_model(
                 nodes_to_add.append(node)
                 seen_node_names.add(node.name)
 
-        console.print(
-            f"  Found {len(nodes_to_add)} parameter nodes (folder structure)"
-        )
+        console.print(f"  Found {len(nodes_to_add)} parameter nodes (folder structure)")
 
         with logfire.span("add_parameter_nodes", count=len(nodes_to_add)):
             node_rows = []
