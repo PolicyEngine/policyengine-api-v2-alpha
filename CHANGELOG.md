@@ -1,3 +1,10 @@
+0.3.1 (2026-03-11)
+
+# Fixed
+
+- Add Alembic merge migration to resolve multiple head revisions from parallel feature branches (#129)
+
+
 0.3.0 (2026-03-11)
 
 # Added

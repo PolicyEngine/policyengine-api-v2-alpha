@@ -981,7 +981,9 @@ class TestResolveDatasetAndRegionFilterStrategy:
 
         # Then
         assert resolved_region is not None
-        assert resolved_region.filter_strategy == FILTER_STRATEGIES["WEIGHT_REPLACEMENT"]
+        assert (
+            resolved_region.filter_strategy == FILTER_STRATEGIES["WEIGHT_REPLACEMENT"]
+        )
 
     def test__given_national_region__then_filter_strategy_is_none(
         self, session: Session
