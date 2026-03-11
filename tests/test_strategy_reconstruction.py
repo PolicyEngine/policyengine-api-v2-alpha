@@ -25,7 +25,6 @@ from test_fixtures.fixtures_strategy_reconstruction import (
     REGION_TYPES,
 )
 
-
 # ---------------------------------------------------------------------------
 # Mock strategy classes (match the real constructor signatures)
 # ---------------------------------------------------------------------------
@@ -277,9 +276,18 @@ class TestReconstructStrategyWeightReplacement:
         )
 
         # Then
-        assert result.weight_matrix_bucket == EXPECTED_CONSTITUENCY_CONFIG["weight_matrix_bucket"]
-        assert result.weight_matrix_key == EXPECTED_CONSTITUENCY_CONFIG["weight_matrix_key"]
-        assert result.lookup_csv_bucket == EXPECTED_CONSTITUENCY_CONFIG["lookup_csv_bucket"]
+        assert (
+            result.weight_matrix_bucket
+            == EXPECTED_CONSTITUENCY_CONFIG["weight_matrix_bucket"]
+        )
+        assert (
+            result.weight_matrix_key
+            == EXPECTED_CONSTITUENCY_CONFIG["weight_matrix_key"]
+        )
+        assert (
+            result.lookup_csv_bucket
+            == EXPECTED_CONSTITUENCY_CONFIG["lookup_csv_bucket"]
+        )
         assert result.lookup_csv_key == EXPECTED_CONSTITUENCY_CONFIG["lookup_csv_key"]
 
     def test__given_local_authority_weight_replacement__then_returns_weight_replacement_instance(
@@ -306,10 +314,21 @@ class TestReconstructStrategyWeightReplacement:
         )
 
         # Then
-        assert result.weight_matrix_bucket == EXPECTED_LOCAL_AUTHORITY_CONFIG["weight_matrix_bucket"]
-        assert result.weight_matrix_key == EXPECTED_LOCAL_AUTHORITY_CONFIG["weight_matrix_key"]
-        assert result.lookup_csv_bucket == EXPECTED_LOCAL_AUTHORITY_CONFIG["lookup_csv_bucket"]
-        assert result.lookup_csv_key == EXPECTED_LOCAL_AUTHORITY_CONFIG["lookup_csv_key"]
+        assert (
+            result.weight_matrix_bucket
+            == EXPECTED_LOCAL_AUTHORITY_CONFIG["weight_matrix_bucket"]
+        )
+        assert (
+            result.weight_matrix_key
+            == EXPECTED_LOCAL_AUTHORITY_CONFIG["weight_matrix_key"]
+        )
+        assert (
+            result.lookup_csv_bucket
+            == EXPECTED_LOCAL_AUTHORITY_CONFIG["lookup_csv_bucket"]
+        )
+        assert (
+            result.lookup_csv_key == EXPECTED_LOCAL_AUTHORITY_CONFIG["lookup_csv_key"]
+        )
 
 
 # ---------------------------------------------------------------------------

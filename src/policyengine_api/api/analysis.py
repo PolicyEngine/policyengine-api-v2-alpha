@@ -857,7 +857,9 @@ def _run_local_economy_comparison_uk(
     # Reconstruct scoping strategy from DB columns (if applicable)
     from policyengine_api.utils.strategy_reconstruction import reconstruct_strategy
 
-    baseline_region = session.get(Region, baseline_sim.region_id) if baseline_sim.region_id else None
+    baseline_region = (
+        session.get(Region, baseline_sim.region_id) if baseline_sim.region_id else None
+    )
     baseline_strategy = reconstruct_strategy(
         filter_strategy=baseline_sim.filter_strategy,
         filter_field=baseline_sim.filter_field,
@@ -865,7 +867,9 @@ def _run_local_economy_comparison_uk(
         region_type=baseline_region.region_type.value if baseline_region else None,
     )
 
-    reform_region = session.get(Region, reform_sim.region_id) if reform_sim.region_id else None
+    reform_region = (
+        session.get(Region, reform_sim.region_id) if reform_sim.region_id else None
+    )
     reform_strategy = reconstruct_strategy(
         filter_strategy=reform_sim.filter_strategy,
         filter_field=reform_sim.filter_field,
@@ -1038,7 +1042,9 @@ def _run_local_economy_comparison_us(
     # Reconstruct scoping strategy from DB columns (if applicable)
     from policyengine_api.utils.strategy_reconstruction import reconstruct_strategy
 
-    baseline_region = session.get(Region, baseline_sim.region_id) if baseline_sim.region_id else None
+    baseline_region = (
+        session.get(Region, baseline_sim.region_id) if baseline_sim.region_id else None
+    )
     baseline_strategy = reconstruct_strategy(
         filter_strategy=baseline_sim.filter_strategy,
         filter_field=baseline_sim.filter_field,
@@ -1046,7 +1052,9 @@ def _run_local_economy_comparison_us(
         region_type=baseline_region.region_type.value if baseline_region else None,
     )
 
-    reform_region = session.get(Region, reform_sim.region_id) if reform_sim.region_id else None
+    reform_region = (
+        session.get(Region, reform_sim.region_id) if reform_sim.region_id else None
+    )
     reform_strategy = reconstruct_strategy(
         filter_strategy=reform_sim.filter_strategy,
         filter_field=reform_sim.filter_field,
@@ -1249,7 +1257,9 @@ def economic_impact(
     # Extract filter parameters from region (if present)
     filter_field = region.filter_field if region and region.requires_filter else None
     filter_value = region.filter_value if region and region.requires_filter else None
-    filter_strategy = region.filter_strategy if region and region.requires_filter else None
+    filter_strategy = (
+        region.filter_strategy if region and region.requires_filter else None
+    )
 
     # Get model version
     model_version = _get_model_version(request.tax_benefit_model_name, session)
@@ -1446,7 +1456,9 @@ def economy_custom(
         region_obj.filter_value if region_obj and region_obj.requires_filter else None
     )
     filter_strategy = (
-        region_obj.filter_strategy if region_obj and region_obj.requires_filter else None
+        region_obj.filter_strategy
+        if region_obj and region_obj.requires_filter
+        else None
     )
 
     model_version = _get_model_version(request.tax_benefit_model_name, session)
