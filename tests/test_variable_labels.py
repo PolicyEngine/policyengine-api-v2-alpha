@@ -1,7 +1,13 @@
 """Tests for variable label field across all variable endpoints."""
 
-from test_fixtures.fixtures_variables import (  # noqa: F811
+from test_fixtures.fixtures_variables import (
     create_variable,
+)
+from test_fixtures.fixtures_variables import (
+    uk_model_version as uk_model_version,  # noqa: F811
+)
+from test_fixtures.fixtures_variables import (
+    us_model_version as us_model_version,  # noqa: F811
 )
 
 # ---------------------------------------------------------------------------
