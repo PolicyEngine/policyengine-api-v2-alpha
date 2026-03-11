@@ -1,7 +1,7 @@
 #!/bin/bash
 # Sync secrets from GitHub Actions to a Modal environment
 # Usage: ./modal-sync-secrets.sh <modal-environment> <logfire-environment>
-# Required env vars: SUPABASE_DB_URL, SUPABASE_URL, SUPABASE_KEY, SUPABASE_SECRET_KEY, LOGFIRE_TOKEN
+# Required env vars: SUPABASE_DB_URL, SUPABASE_URL, SUPABASE_KEY, SUPABASE_SECRET_KEY, LOGFIRE_TOKEN, ANTHROPIC_API_KEY
 set -euo pipefail
 
 MODAL_ENV="${1:?Modal environment required (staging or main)}"
@@ -21,6 +21,11 @@ uv run modal secret create policyengine-db \
 uv run modal secret create policyengine-logfire \
   "LOGFIRE_TOKEN=${LOGFIRE_TOKEN}" \
   "LOGFIRE_ENVIRONMENT=${LOGFIRE_ENV}" \
+  --env="$MODAL_ENV" \
+  --force
+
+uv run modal secret create anthropic-api-key \
+  "ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}" \
   --env="$MODAL_ENV" \
   --force
 
