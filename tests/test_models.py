@@ -142,6 +142,85 @@ def test_variable_with_null_default_value():
     assert variable.default_value is None
 
 
+def test_variable_with_adds():
+    """Test variable model with adds field."""
+    model_version_id = uuid4()
+    adds_components = ["employment_income", "self_employment_income", "pension_income"]
+    variable = Variable(
+        name="total_income",
+        entity="person",
+        data_type="float",
+        default_value=0.0,
+        adds=adds_components,
+        tax_benefit_model_version_id=model_version_id,
+    )
+    assert variable.adds == adds_components
+    assert variable.subtracts is None
+
+
+def test_variable_with_subtracts():
+    """Test variable model with subtracts field."""
+    model_version_id = uuid4()
+    subtracts_components = ["tax_deduction", "personal_allowance"]
+    variable = Variable(
+        name="adjusted_income",
+        entity="person",
+        data_type="float",
+        default_value=0.0,
+        subtracts=subtracts_components,
+        tax_benefit_model_version_id=model_version_id,
+    )
+    assert variable.subtracts == subtracts_components
+    assert variable.adds is None
+
+
+def test_variable_with_adds_and_subtracts():
+    """Test variable model with both adds and subtracts fields."""
+    model_version_id = uuid4()
+    adds_components = ["gross_income", "capital_gains"]
+    subtracts_components = ["standard_deduction"]
+    variable = Variable(
+        name="taxable_income",
+        entity="person",
+        data_type="float",
+        default_value=0.0,
+        adds=adds_components,
+        subtracts=subtracts_components,
+        tax_benefit_model_version_id=model_version_id,
+    )
+    assert variable.adds == adds_components
+    assert variable.subtracts == subtracts_components
+
+
+def test_variable_with_null_adds_and_subtracts():
+    """Test variable model defaults adds/subtracts to None."""
+    model_version_id = uuid4()
+    variable = Variable(
+        name="age",
+        entity="person",
+        data_type="int",
+        default_value=40,
+        tax_benefit_model_version_id=model_version_id,
+    )
+    assert variable.adds is None
+    assert variable.subtracts is None
+
+
+def test_variable_with_empty_adds():
+    """Test variable model with empty adds list."""
+    model_version_id = uuid4()
+    variable = Variable(
+        name="placeholder_variable",
+        entity="person",
+        data_type="float",
+        default_value=0.0,
+        adds=[],
+        tax_benefit_model_version_id=model_version_id,
+    )
+    assert variable.adds == []
+    assert variable.subtracts is None
+
+
 def test_household_creation():
     """Test household model creation."""
     household = Household(
