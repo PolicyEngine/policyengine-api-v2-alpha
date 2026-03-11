@@ -17,6 +17,7 @@ from sqlmodel import Session, select
 from policyengine_api.config.constants import COUNTRY_MODEL_NAMES, CountryId
 from policyengine_api.models import (
     Parameter,
+    ParameterNode,
     ParameterRead,
     TaxBenefitModel,
     TaxBenefitModelVersion,
@@ -144,14 +145,27 @@ def get_parameter_children(
     prefix = f"{parent_path}." if parent_path else ""
 
     # Fetch all parameters under this path
-    query = (
+    param_query = (
         select(Parameter)
         .join(TaxBenefitModelVersion)
         .join(TaxBenefitModel)
         .where(TaxBenefitModel.name == model_name)
         .where(Parameter.name.startswith(prefix))
     )
-    descendants = session.exec(query).all()
+    descendants = session.exec(param_query).all()
+
+    # Fetch all parameter nodes under this path for labels
+    node_query = (
+        select(ParameterNode)
+        .join(TaxBenefitModelVersion)
+        .join(TaxBenefitModel)
+        .where(TaxBenefitModel.name == model_name)
+        .where(ParameterNode.name.startswith(prefix))
+    )
+    nodes = session.exec(node_query).all()
+
+    # Build a map of node path -> label for quick lookup
+    node_labels: dict[str, str | None] = {node.name: node.label for node in nodes}
 
     # Group by direct child path
     children_map: dict[str, dict] = {}
@@ -187,12 +201,13 @@ def get_parameter_children(
         info = children_map[path]
         if info["descendant_count"] > 0:
             # Node: has children below it
+            # Priority: 1) parameter_nodes label, 2) direct_param label, 3) path segment
             direct_param = info["direct_param"]
-            label = (
-                direct_param.label
-                if direct_param and direct_param.label
-                else path.rsplit(".", 1)[-1]
-            )
+            label = node_labels.get(path)
+            if not label and direct_param and direct_param.label:
+                label = direct_param.label
+            if not label:
+                label = path.rsplit(".", 1)[-1]
             children.append(
                 ParameterChild(
                     path=path,
