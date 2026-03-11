@@ -1,3 +1,10 @@
+0.2.9 (2026-03-11)
+
+# Fixed
+
+- Enable follow_redirects in staging integration tests to handle FastAPI's trailing-slash 307 redirects. (fix-staging-tests-redirect)
+
+
 0.2.8 (2026-03-11)
 
 # Fixed

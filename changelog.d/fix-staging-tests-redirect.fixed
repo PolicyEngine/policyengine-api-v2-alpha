@@ -1,1 +1,0 @@
-Enable follow_redirects in staging integration tests to handle FastAPI's trailing-slash 307 redirects.
