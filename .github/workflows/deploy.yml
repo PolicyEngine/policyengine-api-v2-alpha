@@ -263,7 +263,7 @@ jobs:
         run: |
           STAGING_URL=$(gcloud run services describe ${{ vars.API_SERVICE_NAME }} \
             --region=${{ vars.GCP_REGION }} \
-            --format='value(status.traffic[tag=staging].url)')
+            --format=json | jq -r '.status.traffic[] | select(.tag=="staging") | .url')
           echo "url=$STAGING_URL" >> "$GITHUB_OUTPUT"
           echo "Staging URL: $STAGING_URL"
 
@@ -403,7 +403,7 @@ jobs:
         run: |
           CANARY_URL=$(gcloud run services describe ${{ vars.API_SERVICE_NAME }} \
             --region=${{ vars.GCP_REGION }} \
-            --format='value(status.traffic[tag=canary].url)')
+            --format=json | jq -r '.status.traffic[] | select(.tag=="canary") | .url')
           echo "Canary URL: $CANARY_URL"
           chmod +x .github/scripts/*.sh
           .github/scripts/health-check.sh "$CANARY_URL/health"
