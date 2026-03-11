@@ -1,3 +1,10 @@
+0.3.0 (2026-03-11)
+
+# Added
+
+- Add parameter_nodes table to store folder/category labels for parameter tree navigation (#124)
+
+
 0.2.9 (2026-03-11)
 
 # Fixed
