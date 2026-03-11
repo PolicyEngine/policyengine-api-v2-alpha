@@ -1,7 +1,7 @@
-"""Seed tax-benefit models with variables and parameters.
+"""Seed tax-benefit models with variables, parameters, and parameter nodes.
 
 This script seeds TaxBenefitModel, TaxBenefitModelVersion, Variables,
-Parameters, and ParameterValues from policyengine.py.
+Parameters, ParameterValues, and ParameterNodes from policyengine.py.
 
 Usage:
     python scripts/seed_models.py              # Seed UK and US models
@@ -55,10 +55,10 @@ def seed_model(
     variable_whitelist: set[str] | None = None,
     parameter_prefixes: set[str] | None = None,
 ) -> TaxBenefitModelVersion:
-    """Seed a tax-benefit model with its variables and parameters.
+    """Seed a tax-benefit model with its variables, parameters, and parameter nodes.
 
     Args:
-        model_version: The policyengine.py model version object
+        model_version: The policyengine.py model version object (with parameter_nodes)
         session: Database session
         skip_state_params: Skip US state-level parameters (gov.states.*)
         variable_whitelist: If provided, only seed variables whose name is in this set
@@ -336,6 +336,72 @@ def seed_model(
             console.print(
                 f"  [green]✓[/green] Added {len(pv_rows)} parameter values"
                 + (f" (skipped {skipped} invalid)" if skipped else "")
+            )
+
+        # Add parameter nodes (folder/category structure)
+        # Uses model_version.parameter_nodes exposed by policyengine.py
+        parameter_nodes = model_version.parameter_nodes
+
+        # Filter by prefix if specified (same as parameters)
+        if parameter_prefixes is not None:
+            parameter_nodes = [
+                n
+                for n in parameter_nodes
+                if any(n.name.startswith(prefix) for prefix in parameter_prefixes)
+            ]
+
+        # Deduplicate by name
+        seen_node_names = set()
+        nodes_to_add = []
+        for node in parameter_nodes:
+            if node.name not in seen_node_names:
+                nodes_to_add.append(node)
+                seen_node_names.add(node.name)
+
+        console.print(f"  Found {len(nodes_to_add)} parameter nodes (folder structure)")
+
+        with logfire.span("add_parameter_nodes", count=len(nodes_to_add)):
+            node_rows = []
+
+            with Progress(
+                SpinnerColumn(),
+                TextColumn("[progress.description]{task.description}"),
+                console=console,
+            ) as progress:
+                task = progress.add_task(
+                    f"Preparing {len(nodes_to_add)} parameter nodes",
+                    total=len(nodes_to_add),
+                )
+                for node in nodes_to_add:
+                    node_rows.append(
+                        {
+                            "id": uuid4(),
+                            "name": node.name,
+                            "label": node.label,
+                            "description": node.description or "",
+                            "tax_benefit_model_version_id": db_version.id,
+                            "created_at": datetime.now(timezone.utc),
+                        }
+                    )
+                    progress.advance(task)
+
+            console.print(f"  Inserting {len(node_rows)} parameter nodes...")
+            bulk_insert(
+                session,
+                "parameter_nodes",
+                [
+                    "id",
+                    "name",
+                    "label",
+                    "description",
+                    "tax_benefit_model_version_id",
+                    "created_at",
+                ],
+                node_rows,
+            )
+
+            console.print(
+                f"  [green]✓[/green] Added {len(nodes_to_add)} parameter nodes"
             )
 
         return db_version

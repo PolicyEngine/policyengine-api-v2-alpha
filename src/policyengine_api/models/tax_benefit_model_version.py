@@ -6,6 +6,7 @@ from sqlmodel import Field, Relationship, SQLModel
 
 if TYPE_CHECKING:
     from .parameter import Parameter
+    from .parameter_node import ParameterNode
     from .tax_benefit_model import TaxBenefitModel
     from .variable import Variable
 
@@ -32,6 +33,9 @@ class TaxBenefitModelVersion(TaxBenefitModelVersionBase, table=True):
         back_populates="tax_benefit_model_version"
     )
     parameters: list["Parameter"] = Relationship(
+        back_populates="tax_benefit_model_version"
+    )
+    parameter_nodes: list["ParameterNode"] = Relationship(
         back_populates="tax_benefit_model_version"
     )
 
