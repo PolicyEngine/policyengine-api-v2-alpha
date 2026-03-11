@@ -15,7 +15,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "67608331ee8a"
-down_revision: Union[str, Sequence[str], None] = "add_modelled_policies"
+down_revision: Union[str, Sequence[str], None] = "886921687770"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
