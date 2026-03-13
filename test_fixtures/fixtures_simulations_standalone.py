@@ -54,13 +54,13 @@ def create_uk_model_and_version(
 
 def create_household(
     session,
-    tax_benefit_model_name: str = "policyengine_us",
+    country_id: str = "us",
     year: int = 2024,
     label: str = "Test household",
 ) -> Household:
     """Create and persist a Household record."""
     household = Household(
-        tax_benefit_model_name=tax_benefit_model_name,
+        country_id=country_id,
         year=year,
         label=label,
         household_data={

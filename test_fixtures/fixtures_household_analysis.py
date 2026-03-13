@@ -310,12 +310,12 @@ def create_policy_with_parameter_value(
 
 def create_household_for_analysis(
     session: Session,
-    tax_benefit_model_name: str = "policyengine_uk",
+    country_id: str = "uk",
     year: int = 2024,
     label: str = "Test household for analysis",
 ) -> Household:
     """Create a household suitable for analysis testing."""
-    if tax_benefit_model_name == "policyengine_uk":
+    if country_id == "uk":
         household_data = {
             "people": [{"age": 30, "employment_income": 35000}],
             "benunit": {},
@@ -332,7 +332,7 @@ def create_household_for_analysis(
         }
 
     record = Household(
-        tax_benefit_model_name=tax_benefit_model_name,
+        country_id=country_id,
         year=year,
         label=label,
         household_data=household_data,

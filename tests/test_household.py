@@ -34,7 +34,7 @@ class TestUKHouseholdCalculate:
         response = client.post(
             "/household/calculate",
             json={
-                "tax_benefit_model_name": "policyengine_uk",
+                "country_id": "uk",
                 "people": [{"age": 30, "employment_income": 30000}],
                 "year": 2026,
             },
@@ -55,7 +55,7 @@ class TestUKHouseholdCalculate:
         response = client.post(
             "/household/calculate",
             json={
-                "tax_benefit_model_name": "policyengine_uk",
+                "country_id": "uk",
                 "people": [
                     {"age": 35, "employment_income": 50000},
                     {"age": 33, "employment_income": 25000},
@@ -75,7 +75,7 @@ class TestUKHouseholdCalculate:
         response = client.post(
             "/household/calculate",
             json={
-                "tax_benefit_model_name": "policyengine_uk",
+                "country_id": "uk",
                 "people": [{"age": 40, "employment_income": 45000}],
                 "household": [
                     {
@@ -96,7 +96,7 @@ class TestUKHouseholdCalculate:
         response = client.post(
             "/household/calculate",
             json={
-                "tax_benefit_model_name": "policyengine_uk",
+                "country_id": "uk",
                 "people": [{"age": 30, "employment_income": 50000}],
                 "year": 2026,
             },
@@ -118,7 +118,7 @@ class TestUSHouseholdCalculate:
         response = client.post(
             "/household/calculate",
             json={
-                "tax_benefit_model_name": "policyengine_us",
+                "country_id": "us",
                 "people": [{"age": 30, "employment_income": 60000}],
                 "year": 2024,
             },
@@ -140,7 +140,7 @@ class TestUSHouseholdCalculate:
         response = client.post(
             "/household/calculate",
             json={
-                "tax_benefit_model_name": "policyengine_us",
+                "country_id": "us",
                 "people": [
                     {"age": 35, "employment_income": 80000},
                     {"age": 33, "employment_income": 40000},
@@ -164,7 +164,7 @@ class TestMultiHousehold:
         response = client.post(
             "/household/calculate",
             json={
-                "tax_benefit_model_name": "policyengine_uk",
+                "country_id": "uk",
                 "people": [
                     # Person in household 0
                     {
@@ -207,7 +207,7 @@ class TestMultiHousehold:
         response = client.post(
             "/household/calculate",
             json={
-                "tax_benefit_model_name": "policyengine_us",
+                "country_id": "us",
                 "people": [
                     # Person in household 0
                     {
@@ -272,7 +272,7 @@ class TestValidation:
         response = client.post(
             "/household/calculate",
             json={
-                "tax_benefit_model_name": "invalid_model",
+                "country_id": "invalid_model",
                 "people": [{"age": 30}],
             },
         )
@@ -283,7 +283,7 @@ class TestValidation:
         response = client.post(
             "/household/calculate",
             json={
-                "tax_benefit_model_name": "policyengine_uk",
+                "country_id": "uk",
             },
         )
         assert response.status_code == 422
@@ -354,7 +354,7 @@ class TestUSPolicyReform:
         baseline_response = client.post(
             "/household/calculate",
             json={
-                "tax_benefit_model_name": "policyengine_us",
+                "country_id": "us",
                 "people": [{"age": 40, "employment_income": 70000}],
                 "tax_unit": [{"state_code": "CA"}],
                 "household": [{"state_fips": 6}],
@@ -371,7 +371,7 @@ class TestUSPolicyReform:
         reform_response = client.post(
             "/household/calculate",
             json={
-                "tax_benefit_model_name": "policyengine_us",
+                "country_id": "us",
                 "people": [{"age": 40, "employment_income": 70000}],
                 "tax_unit": [{"state_code": "CA"}],
                 "household": [{"state_fips": 6}],
@@ -453,7 +453,7 @@ class TestUKPolicyReform:
         baseline_response = client.post(
             "/household/calculate",
             json={
-                "tax_benefit_model_name": "policyengine_uk",
+                "country_id": "uk",
                 "people": [{"age": 30, "employment_income": 30000}],
                 "year": 2026,
             },
@@ -468,7 +468,7 @@ class TestUKPolicyReform:
         reform_response = client.post(
             "/household/calculate",
             json={
-                "tax_benefit_model_name": "policyengine_uk",
+                "country_id": "uk",
                 "people": [{"age": 30, "employment_income": 30000}],
                 "year": 2026,
                 "policy_id": policy_id,

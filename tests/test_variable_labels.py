@@ -109,7 +109,7 @@ class TestSearchVariablesByLabel:
             "/variables",
             params={
                 "search": "Employment",
-                "tax_benefit_model_name": "policyengine-us",
+                "country_id": "us",
             },
         )
         assert response.status_code == 200
@@ -135,7 +135,7 @@ class TestSearchVariablesByLabel:
             "/variables",
             params={
                 "search": "INCOME TAX",
-                "tax_benefit_model_name": "policyengine-us",
+                "country_id": "us",
             },
         )
         assert response.status_code == 200
@@ -159,7 +159,7 @@ class TestSearchVariablesByLabel:
             "/variables",
             params={
                 "search": "income",
-                "tax_benefit_model_name": "policyengine-us",
+                "country_id": "us",
             },
         )
         assert response.status_code == 200
@@ -308,14 +308,14 @@ class TestVariableLabelCountryIsolation:
             "/variables",
             params={
                 "search": "tax",
-                "tax_benefit_model_name": "policyengine-us",
+                "country_id": "us",
             },
         )
         uk_response = client.get(
             "/variables",
             params={
                 "search": "tax",
-                "tax_benefit_model_name": "policyengine-uk",
+                "country_id": "uk",
             },
         )
 

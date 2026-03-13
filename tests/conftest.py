@@ -73,7 +73,7 @@ def uk_tax_benefit_model_fixture(session: Session):
 def simulation_fixture(session: Session):
     """Create a test simulation with required dependencies."""
     # Create model
-    model = TaxBenefitModel(name="policyengine_uk", description="UK model")
+    model = TaxBenefitModel(name="policyengine-uk", description="UK model")
     session.add(model)
     session.commit()
     session.refresh(model)

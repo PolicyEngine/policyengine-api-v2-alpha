@@ -201,13 +201,13 @@ class TestGetCountryConfig:
     """Tests for get_country_config helper."""
 
     def test_uk_model_returns_uk_config(self):
-        config = get_country_config("policyengine_uk")
+        config = get_country_config("uk")
         assert config == UK_CONFIG
         assert config.name == "uk"
         assert "benunit" in config.entity_types
 
     def test_us_model_returns_us_config(self):
-        config = get_country_config("policyengine_us")
+        config = get_country_config("us")
         assert config == US_CONFIG
         assert config.name == "us"
         assert "tax_unit" in config.entity_types
@@ -223,13 +223,13 @@ class TestGetCalculator:
     def test_uk_model_returns_uk_calculator(self):
         from policyengine_api.api.household_analysis import calculate_uk_household
 
-        calc = get_calculator("policyengine_uk")
+        calc = get_calculator("uk")
         assert calc == calculate_uk_household
 
     def test_us_model_returns_us_calculator(self):
         from policyengine_api.api.household_analysis import calculate_us_household
 
-        calc = get_calculator("policyengine_us")
+        calc = get_calculator("us")
         assert calc == calculate_us_household
 
     def test_unknown_model_defaults_to_us(self):
@@ -297,7 +297,7 @@ class TestHouseholdImpactNotFound:
             "/analysis/household-impact",
             json={
                 "household_id": str(household.id),
-                "policy_id": str(uuid4()),
+                "reform_policy_id": str(uuid4()),
             },
         )
         assert response.status_code == 404
@@ -346,7 +346,7 @@ class TestHouseholdImpactRecordCreation:
             "/analysis/household-impact",
             json={
                 "household_id": str(household.id),
-                "policy_id": str(policy.id),
+                "reform_policy_id": str(policy.id),
             },
         )
         data = response.json()
@@ -386,7 +386,7 @@ class TestHouseholdImpactRecordCreation:
             "/analysis/household-impact",
             json={
                 "household_id": str(household.id),
-                "policy_id": str(policy.id),
+                "reform_policy_id": str(policy.id),
             },
         )
         data = response.json()
@@ -442,7 +442,7 @@ class TestHouseholdImpactDeduplication:
             "/analysis/household-impact",
             json={
                 "household_id": str(household.id),
-                "policy_id": str(policy1.id),
+                "reform_policy_id": str(policy1.id),
             },
         )
         data1 = response1.json()
@@ -452,7 +452,7 @@ class TestHouseholdImpactDeduplication:
             "/analysis/household-impact",
             json={
                 "household_id": str(household.id),
-                "policy_id": str(policy2.id),
+                "reform_policy_id": str(policy2.id),
             },
         )
         data2 = response2.json()
@@ -506,9 +506,7 @@ class TestUSHouseholdImpact:
     def test_us_household_creates_simulation(self, client, session):
         """US household creates simulation with correct model."""
         _, version = setup_us_model_and_version(session)
-        household = create_household_for_analysis(
-            session, tax_benefit_model_name="policyengine_us"
-        )
+        household = create_household_for_analysis(session, country_id="us")
 
         response = client.post(
             "/analysis/household-impact",

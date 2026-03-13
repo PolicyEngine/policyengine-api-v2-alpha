@@ -224,13 +224,13 @@ def test_variable_with_empty_adds():
 def test_household_creation():
     """Test household model creation."""
     household = Household(
-        tax_benefit_model_name="policyengine_us",
+        country_id="us",
         year=2024,
         label="Test household",
         household_data={"people": [{"age": 30}], "household": {}},
     )
     assert household.household_data == {"people": [{"age": 30}], "household": {}}
     assert household.label == "Test household"
-    assert household.tax_benefit_model_name == "policyengine_us"
+    assert household.country_id == "us"
     assert household.year == 2024
     assert household.id is not None

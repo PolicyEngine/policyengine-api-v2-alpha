@@ -139,7 +139,7 @@ def test_create_economy_simulation_with_region(client, session):
     create_region(session, model, dataset, code="us", label="United States")
 
     payload = {
-        "tax_benefit_model_name": "policyengine_us",
+        "country_id": "us",
         "region": "us",
     }
     response = client.post("/simulations/economy", json=payload)
@@ -158,7 +158,7 @@ def test_create_economy_simulation_with_dataset(client, session):
     dataset = create_dataset(session, model)
 
     payload = {
-        "tax_benefit_model_name": "policyengine_us",
+        "country_id": "us",
         "dataset_id": str(dataset.id),
     }
     response = client.post("/simulations/economy", json=payload)
@@ -187,7 +187,7 @@ def test_create_economy_simulation_with_region_filter(client, session):
     )
 
     payload = {
-        "tax_benefit_model_name": "policyengine_us",
+        "country_id": "us",
         "region": "state/ca",
     }
     response = client.post("/simulations/economy", json=payload)
@@ -204,7 +204,7 @@ def test_create_economy_simulation_invalid_region(client, session):
     model, version = create_us_model_and_version(session)
 
     payload = {
-        "tax_benefit_model_name": "policyengine_us",
+        "country_id": "us",
         "region": "nonexistent/region",
     }
     response = client.post("/simulations/economy", json=payload)
@@ -217,7 +217,7 @@ def test_create_economy_simulation_no_region_or_dataset(client, session):
     """Creating without region or dataset_id returns 422 (Pydantic validation)."""
     model, version = create_us_model_and_version(session)
 
-    payload = {"tax_benefit_model_name": "policyengine_us"}
+    payload = {"country_id": "us"}
     response = client.post("/simulations/economy", json=payload)
 
     assert response.status_code == 422
@@ -229,7 +229,7 @@ def test_create_economy_simulation_policy_not_found(client, session):
     dataset = create_dataset(session, model)
 
     payload = {
-        "tax_benefit_model_name": "policyengine_us",
+        "country_id": "us",
         "dataset_id": str(dataset.id),
         "policy_id": str(uuid4()),
     }
@@ -245,7 +245,7 @@ def test_economy_simulation_deduplication(client, session):
     dataset = create_dataset(session, model)
 
     payload = {
-        "tax_benefit_model_name": "policyengine_us",
+        "country_id": "us",
         "dataset_id": str(dataset.id),
     }
     response1 = client.post("/simulations/economy", json=payload)
