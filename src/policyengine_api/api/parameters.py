@@ -49,9 +49,7 @@ def list_parameters(
     """
     query = select(Parameter)
 
-    version_id = resolve_version_id(
-        country_id, tax_benefit_model_version_id, session
-    )
+    version_id = resolve_version_id(country_id, tax_benefit_model_version_id, session)
     if version_id:
         query = query.where(Parameter.tax_benefit_model_version_id == version_id)
 
@@ -140,9 +138,7 @@ def get_parameter_children(
     parameters (with full metadata). Use this to lazily load the parameter
     tree one level at a time.
     """
-    version_id = resolve_version_id(
-        country_id, tax_benefit_model_version_id, session
-    )
+    version_id = resolve_version_id(country_id, tax_benefit_model_version_id, session)
 
     prefix = f"{parent_path}." if parent_path else ""
 

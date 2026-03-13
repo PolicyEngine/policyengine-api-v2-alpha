@@ -54,9 +54,7 @@ def list_parameter_values(
     if policy_id:
         query = query.where(ParameterValue.policy_id == policy_id)
 
-    version_id = resolve_version_id(
-        country_id, tax_benefit_model_version_id, session
-    )
+    version_id = resolve_version_id(country_id, tax_benefit_model_version_id, session)
     if version_id:
         query = query.join(Parameter).where(
             Parameter.tax_benefit_model_version_id == version_id

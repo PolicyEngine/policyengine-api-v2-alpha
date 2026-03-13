@@ -47,9 +47,7 @@ def list_regions(
 
     if country_id:
         model_name = resolve_model_name(country_id)
-        query = query.join(TaxBenefitModel).where(
-            TaxBenefitModel.name == model_name
-        )
+        query = query.join(TaxBenefitModel).where(TaxBenefitModel.name == model_name)
     elif tax_benefit_model_id:
         query = query.where(Region.tax_benefit_model_id == tax_benefit_model_id)
 
@@ -94,9 +92,7 @@ def get_region_by_code(
 
     if country_id:
         model_name = resolve_model_name(country_id)
-        query = query.join(TaxBenefitModel).where(
-            TaxBenefitModel.name == model_name
-        )
+        query = query.join(TaxBenefitModel).where(TaxBenefitModel.name == model_name)
     elif tax_benefit_model_id:
         query = query.where(Region.tax_benefit_model_id == tax_benefit_model_id)
 

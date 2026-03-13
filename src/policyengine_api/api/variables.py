@@ -47,9 +47,7 @@ def list_variables(
     """
     query = select(Variable)
 
-    version_id = resolve_version_id(
-        country_id, tax_benefit_model_version_id, session
-    )
+    version_id = resolve_version_id(country_id, tax_benefit_model_version_id, session)
     if version_id:
         query = query.where(Variable.tax_benefit_model_version_id == version_id)
 

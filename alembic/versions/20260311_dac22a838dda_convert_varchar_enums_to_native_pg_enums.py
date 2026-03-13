@@ -5,14 +5,14 @@ Revises: f887cb5490bc
 Create Date: 2026-03-11 01:37:08.928795
 
 """
+
 from typing import Sequence, Union
 
 from alembic import op
 
-
 # revision identifiers, used by Alembic.
-revision: str = 'dac22a838dda'
-down_revision: Union[str, Sequence[str], None] = 'f887cb5490bc'
+revision: str = "dac22a838dda"
+down_revision: Union[str, Sequence[str], None] = "f887cb5490bc"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
@@ -63,7 +63,9 @@ def upgrade() -> None:
         ALTER COLUMN decile_type TYPE deciletype
         USING LOWER(decile_type)::deciletype
     """)
-    op.execute("ALTER TABLE intra_decile_impacts ALTER COLUMN decile_type SET DEFAULT 'income'::deciletype")
+    op.execute(
+        "ALTER TABLE intra_decile_impacts ALTER COLUMN decile_type SET DEFAULT 'income'::deciletype"
+    )
 
 
 def downgrade() -> None:

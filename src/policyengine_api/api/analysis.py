@@ -30,6 +30,7 @@ from policyengine_api.api.module_registry import (
     get_modules_for_country,
     validate_modules,
 )
+from policyengine_api.config.constants import MODEL_NAME_TO_COUNTRY, CountryId
 from policyengine_api.models import (
     BudgetSummary,
     BudgetSummaryRead,
@@ -60,13 +61,11 @@ from policyengine_api.models import (
     TaxBenefitModel,
     TaxBenefitModelVersion,
 )
-from policyengine_api.config.constants import MODEL_NAME_TO_COUNTRY, CountryId
 from policyengine_api.services.database import get_session
 from policyengine_api.services.model_resolver import (
     resolve_country_model,
     resolve_model_name,
 )
-
 
 # Type for API policy inputs: UUID, "current_law", or None (omitted).
 PolicyIdInput = Union[UUID, Literal["current_law"], None]
@@ -236,7 +235,6 @@ class EconomicImpactResponse(BaseModel):
     local_authority_impact: list[LocalAuthorityImpactRead] | None = None
     wealth_decile: list[DecileImpactRead] | None = None
     intra_wealth_decile: list[IntraDecileImpactRead] | None = None
-
 
 
 def _get_deterministic_simulation_id(
@@ -1308,9 +1306,7 @@ def economic_impact(
     if report.status in (ReportStatus.PENDING, ReportStatus.EXECUTION_DEFERRED):
         if request.run:
             with logfire.span("trigger_economy_comparison", job_id=str(report.id)):
-                _trigger_economy_comparison(
-                    str(report.id), request.country_id, session
-                )
+                _trigger_economy_comparison(str(report.id), request.country_id, session)
         elif report.status == ReportStatus.PENDING:
             report.status = ReportStatus.EXECUTION_DEFERRED
             session.add(report)
@@ -1365,6 +1361,7 @@ def _resolve_country_from_simulation(sim: Simulation, session: Session) -> str:
 # ---------------------------------------------------------------------------
 # POST /analysis/economy-custom — run selected economy modules
 # ---------------------------------------------------------------------------
+
 
 class EconomyCustomRequest(BaseModel):
     """Request body for custom economy analysis with selected modules."""
@@ -1654,9 +1651,7 @@ def rerun_report(
         (k for k, v in COUNTRY_MODEL_NAMES.items() if v == model.name), None
     )
     if not country_id:
-        raise HTTPException(
-            status_code=500, detail=f"Unknown model name: {model.name}"
-        )
+        raise HTTPException(status_code=500, detail=f"Unknown model name: {model.name}")
 
     # 4. Delete all result records for this report
     result_tables = [

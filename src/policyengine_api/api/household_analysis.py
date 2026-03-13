@@ -22,6 +22,7 @@ from opentelemetry.trace.propagation.tracecontext import TraceContextTextMapProp
 from pydantic import BaseModel, Field
 from sqlmodel import Session
 
+from policyengine_api.config.constants import MODEL_NAME_TO_COUNTRY
 from policyengine_api.models import (
     Household,
     Policy,
@@ -33,7 +34,6 @@ from policyengine_api.models import (
     TaxBenefitModel,
     TaxBenefitModelVersion,
 )
-from policyengine_api.config.constants import MODEL_NAME_TO_COUNTRY
 from policyengine_api.services.database import get_session
 from policyengine_api.services.model_resolver import resolve_country_model
 
@@ -689,12 +689,19 @@ def household_impact(
     _model, model_version = resolve_country_model(household.country_id, session)
 
     baseline_sim = _create_baseline_simulation(
-        household, model_version.id, request.dynamic_id, session,
+        household,
+        model_version.id,
+        request.dynamic_id,
+        session,
         policy_id=baseline_db_id,
     )
-    reform_sim = _create_reform_simulation(
-        household, model_version.id, reform_db_id, request.dynamic_id, session
-    ) if has_reform else None
+    reform_sim = (
+        _create_reform_simulation(
+            household, model_version.id, reform_db_id, request.dynamic_id, session
+        )
+        if has_reform
+        else None
+    )
 
     report_type = "household_comparison" if has_reform else "household_single"
     report = _get_or_create_report(

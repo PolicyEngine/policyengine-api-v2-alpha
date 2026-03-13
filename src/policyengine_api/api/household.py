@@ -14,13 +14,13 @@ from opentelemetry.trace.propagation.tracecontext import TraceContextTextMapProp
 from pydantic import BaseModel, Field
 from sqlmodel import Session
 
+from policyengine_api.config.constants import CountryId
 from policyengine_api.models import (
     Dynamic,
     HouseholdJob,
     HouseholdJobStatus,
     Policy,
 )
-from policyengine_api.config.constants import CountryId
 from policyengine_api.services.database import get_session
 
 

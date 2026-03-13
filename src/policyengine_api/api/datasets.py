@@ -36,9 +36,7 @@ def list_datasets(
 
     if country_id:
         model_name = resolve_model_name(country_id)
-        query = query.join(TaxBenefitModel).where(
-            TaxBenefitModel.name == model_name
-        )
+        query = query.join(TaxBenefitModel).where(TaxBenefitModel.name == model_name)
 
     datasets = session.exec(query).all()
     return datasets

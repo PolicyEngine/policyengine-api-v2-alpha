@@ -15,6 +15,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field, model_validator
 from sqlmodel import Session, select
 
+from policyengine_api.config.constants import CountryId
 from policyengine_api.models import (
     Dataset,
     Household,
@@ -27,7 +28,6 @@ from policyengine_api.models import (
     SimulationType,
     TaxBenefitModel,
 )
-from policyengine_api.config.constants import CountryId
 from policyengine_api.services.database import get_session
 from policyengine_api.services.model_resolver import (
     resolve_country_model,

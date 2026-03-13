@@ -31,7 +31,9 @@ class ReportBase(SQLModel):
     description: str | None = None
     report_type: ReportType | None = Field(
         default=None,
-        sa_type=sa.Enum(ReportType, values_callable=lambda x: [e.value for e in x], nullable=True),
+        sa_type=sa.Enum(
+            ReportType, values_callable=lambda x: [e.value for e in x], nullable=True
+        ),
     )
     user_id: UUID | None = Field(default=None, foreign_key="users.id")
     markdown: str | None = Field(default=None, sa_column=Column(Text))
