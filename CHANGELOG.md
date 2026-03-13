@@ -1,3 +1,14 @@
+0.4.0 (2026-03-13)
+
+# Added
+
+- Standardize all endpoints on `country_id` instead of `tax_benefit_model_name` (#109)
+- Default metadata endpoints (variables, parameters, datasets) to latest model version with optional version pinning (#109)
+- Dual policy IDs (`baseline_policy_id` / `reform_policy_id`) on reports and `EXECUTION_DEFERRED` report status (#109)
+- Auto-start `EXECUTION_DEFERRED` reports on GET endpoint access (#109)
+- Convert VARCHAR enum columns to native PostgreSQL enums with `values_callable` (#109)
+
+
 0.3.1 (2026-03-11)
 
 # Fixed
