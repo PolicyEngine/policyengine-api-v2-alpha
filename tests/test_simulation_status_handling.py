@@ -22,9 +22,7 @@ def _setup_household_simulation(session, status=SimulationStatus.PENDING):
     session.commit()
     session.refresh(model)
 
-    version = TaxBenefitModelVersion(
-        model_id=model.id, version="1.0", description="V1"
-    )
+    version = TaxBenefitModelVersion(model_id=model.id, version="1.0", description="V1")
     session.add(version)
     session.commit()
     session.refresh(version)

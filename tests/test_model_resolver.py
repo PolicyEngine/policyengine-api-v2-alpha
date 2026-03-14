@@ -19,7 +19,6 @@ from policyengine_api.services.model_resolver import (
     resolve_version_id,
 )
 
-
 # ---------------------------------------------------------------------------
 # resolve_model_name
 # ---------------------------------------------------------------------------
@@ -51,15 +50,11 @@ class TestResolveCountryModel:
         session.commit()
         session.refresh(model)
 
-        v1 = TaxBenefitModelVersion(
-            model_id=model.id, version="1.0", description="Old"
-        )
+        v1 = TaxBenefitModelVersion(model_id=model.id, version="1.0", description="Old")
         session.add(v1)
         session.commit()
 
-        v2 = TaxBenefitModelVersion(
-            model_id=model.id, version="2.0", description="New"
-        )
+        v2 = TaxBenefitModelVersion(model_id=model.id, version="2.0", description="New")
         session.add(v2)
         session.commit()
         session.refresh(v2)
