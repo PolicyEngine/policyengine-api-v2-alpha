@@ -7,7 +7,7 @@ from policyengine_api.models import Household
 # -----------------------------------------------------------------------------
 
 MOCK_US_HOUSEHOLD_CREATE = {
-    "tax_benefit_model_name": "policyengine_us",
+    "country_id": "us",
     "year": 2024,
     "label": "US test household",
     "people": [
@@ -20,7 +20,7 @@ MOCK_US_HOUSEHOLD_CREATE = {
 }
 
 MOCK_UK_HOUSEHOLD_CREATE = {
-    "tax_benefit_model_name": "policyengine_uk",
+    "country_id": "uk",
     "year": 2024,
     "label": "UK test household",
     "people": [
@@ -31,7 +31,7 @@ MOCK_UK_HOUSEHOLD_CREATE = {
 }
 
 MOCK_HOUSEHOLD_MINIMAL = {
-    "tax_benefit_model_name": "policyengine_us",
+    "country_id": "us",
     "year": 2024,
     "people": [{"age": 25}],
 }
@@ -44,7 +44,7 @@ MOCK_HOUSEHOLD_MINIMAL = {
 
 def create_household(
     session,
-    tax_benefit_model_name: str = "policyengine_us",
+    country_id: str = "us",
     year: int = 2024,
     label: str | None = "Test household",
     people: list | None = None,
@@ -55,7 +55,7 @@ def create_household(
     household_data.update(entity_groups)
 
     record = Household(
-        tax_benefit_model_name=tax_benefit_model_name,
+        country_id=country_id,
         year=year,
         label=label,
         household_data=household_data,

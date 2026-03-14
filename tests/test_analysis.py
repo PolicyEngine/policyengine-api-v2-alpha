@@ -53,7 +53,7 @@ class TestResolveDatasetAndRegion:
         model = create_tax_benefit_model(session, name="policyengine-uk")
         dataset = create_dataset(session, model, name="uk_enhanced_frs")
         request = EconomicImpactRequest(
-            tax_benefit_model_name="policyengine_uk",
+            country_id="uk",
             dataset_id=dataset.id,
         )
 
@@ -67,7 +67,7 @@ class TestResolveDatasetAndRegion:
         model = create_tax_benefit_model(session, name="policyengine-uk")
         dataset = create_dataset(session, model, name="uk_enhanced_frs")
         request = EconomicImpactRequest(
-            tax_benefit_model_name="policyengine_uk",
+            country_id="uk",
             dataset_id=dataset.id,
         )
 
@@ -94,7 +94,7 @@ class TestResolveDatasetAndRegion:
             requires_filter=False,
         )
         request = EconomicImpactRequest(
-            tax_benefit_model_name="policyengine_uk",
+            country_id="uk",
             dataset_id=dataset1.id,
             region="uk",
         )
@@ -126,7 +126,7 @@ class TestResolveDatasetAndRegion:
             filter_value="ENGLAND",
         )
         request = EconomicImpactRequest(
-            tax_benefit_model_name="policyengine_uk",
+            country_id="uk",
             region="country/england",
         )
 
@@ -154,7 +154,7 @@ class TestResolveDatasetAndRegion:
             filter_value="CA",
         )
         request = EconomicImpactRequest(
-            tax_benefit_model_name="policyengine_us",
+            country_id="us",
             region="state/ca",
         )
 
@@ -183,7 +183,7 @@ class TestResolveDatasetAndRegion:
             filter_value="ENGLAND",
         )
         request = EconomicImpactRequest(
-            tax_benefit_model_name="policyengine_uk",
+            country_id="uk",
             region="country/england",
         )
 
@@ -209,7 +209,7 @@ class TestResolveDatasetAndRegion:
             requires_filter=False,
         )
         request = EconomicImpactRequest(
-            tax_benefit_model_name="policyengine_uk",
+            country_id="uk",
             region="uk",
         )
 
@@ -235,7 +235,7 @@ class TestResolveDatasetAndRegion:
             requires_filter=False,
         )
         request = EconomicImpactRequest(
-            tax_benefit_model_name="policyengine_us",
+            country_id="us",
             region="us",
         )
 
@@ -263,7 +263,7 @@ class TestResolveDatasetAndRegion:
             requires_filter=False,
         )
         request = EconomicImpactRequest(
-            tax_benefit_model_name="policyengine_uk",
+            country_id="uk",
             region="uk",
         )
 
@@ -280,7 +280,7 @@ class TestResolveDatasetAndRegion:
         model = create_tax_benefit_model(session, name="policyengine-uk")
         create_dataset(session, model, name="uk_enhanced_frs")
         request = EconomicImpactRequest(
-            tax_benefit_model_name="policyengine_uk",
+            country_id="uk",
             region="nonexistent/region",
         )
 
@@ -302,7 +302,7 @@ class TestResolveDatasetAndRegion:
             region_type="national",
         )
         request = EconomicImpactRequest(
-            tax_benefit_model_name="policyengine_us",
+            country_id="us",
             region="uk",
         )
 
@@ -318,13 +318,13 @@ class TestResolveDatasetAndRegion:
 
         with pytest.raises(ValidationError, match="dataset_id or region"):
             EconomicImpactRequest(
-                tax_benefit_model_name="policyengine_uk",
+                country_id="uk",
             )
 
     def test__given_nonexistent_dataset_id__then_raises_404(self, session: Session):
         nonexistent_id = uuid4()
         request = EconomicImpactRequest(
-            tax_benefit_model_name="policyengine_uk",
+            country_id="uk",
             dataset_id=nonexistent_id,
         )
 
@@ -943,7 +943,7 @@ class TestResolveDatasetAndRegionFilterStrategy:
             filter_strategy=FILTER_STRATEGIES["ROW_FILTER"],
         )
         request = EconomicImpactRequest(
-            tax_benefit_model_name="policyengine_uk",
+            country_id="uk",
             region="country/england",
         )
 
@@ -972,7 +972,7 @@ class TestResolveDatasetAndRegionFilterStrategy:
             filter_strategy=FILTER_STRATEGIES["WEIGHT_REPLACEMENT"],
         )
         request = EconomicImpactRequest(
-            tax_benefit_model_name="policyengine_uk",
+            country_id="uk",
             region="constituency/sheffield-central",
         )
 
@@ -1001,7 +1001,7 @@ class TestResolveDatasetAndRegionFilterStrategy:
             requires_filter=False,
         )
         request = EconomicImpactRequest(
-            tax_benefit_model_name="policyengine_uk",
+            country_id="uk",
             region="uk",
         )
 
@@ -1021,11 +1021,11 @@ class TestResolveDatasetAndRegionFilterStrategy:
 class TestEconomicImpactValidation:
     """Tests for request validation (no database required)."""
 
-    def test_invalid_model_name(self):
+    def test_invalid_country_id(self):
         response = client.post(
             "/analysis/economic-impact",
             json={
-                "tax_benefit_model_name": "invalid_model",
+                "country_id": "invalid_model",
                 "dataset_id": "00000000-0000-0000-0000-000000000000",
             },
         )
@@ -1035,7 +1035,7 @@ class TestEconomicImpactValidation:
         response = client.post(
             "/analysis/economic-impact",
             json={
-                "tax_benefit_model_name": "policyengine_uk",
+                "country_id": "uk",
             },
         )
         assert response.status_code == 422
@@ -1044,7 +1044,7 @@ class TestEconomicImpactValidation:
         response = client.post(
             "/analysis/economic-impact",
             json={
-                "tax_benefit_model_name": "policyengine_uk",
+                "country_id": "uk",
                 "dataset_id": "not-a-uuid",
             },
         )
@@ -1059,7 +1059,7 @@ class TestEconomicImpactNotFound:
         response = client.post(
             "/analysis/economic-impact",
             json={
-                "tax_benefit_model_name": "policyengine_uk",
+                "country_id": "uk",
                 "dataset_id": "00000000-0000-0000-0000-000000000000",
             },
         )
@@ -1102,7 +1102,7 @@ class TestEconomicImpactIntegration:
         response = client.post(
             "/analysis/economic-impact",
             json={
-                "tax_benefit_model_name": "policyengine_uk",
+                "country_id": "uk",
                 "dataset_id": str(uk_dataset_id),
             },
         )
@@ -1126,7 +1126,7 @@ class TestEconomicImpactIntegration:
         response = client.post(
             "/analysis/economic-impact",
             json={
-                "tax_benefit_model_name": "policyengine_uk",
+                "country_id": "uk",
                 "dataset_id": str(uk_dataset_id),
             },
         )

@@ -218,7 +218,7 @@ class TestEconomyCustomEndpoint:
         response = client.post(
             "/analysis/economy-custom",
             json={
-                "tax_benefit_model_name": "policyengine_us",
+                "country_id": "us",
                 "region": "us",
                 "modules": ["nonexistent_module"],
             },
@@ -230,7 +230,7 @@ class TestEconomyCustomEndpoint:
         response = client.post(
             "/analysis/economy-custom",
             json={
-                "tax_benefit_model_name": "policyengine_us",
+                "country_id": "us",
                 "region": "us",
                 "modules": ["constituency"],
             },
@@ -242,7 +242,7 @@ class TestEconomyCustomEndpoint:
         response = client.post(
             "/analysis/economy-custom",
             json={
-                "tax_benefit_model_name": "policyengine_us",
+                "country_id": "us",
                 "region": "us",
                 "modules": ["nonexistent", "constituency"],
             },
@@ -256,7 +256,7 @@ class TestEconomyCustomEndpoint:
         response = client.post(
             "/analysis/economy-custom",
             json={
-                "tax_benefit_model_name": "policyengine_us",
+                "country_id": "us",
                 "region": "us",
                 "modules": [],
             },
@@ -272,7 +272,7 @@ class TestEconomyCustomEndpoint:
         response = client.post(
             "/analysis/economy-custom",
             json={
-                "tax_benefit_model_name": "policyengine_us",
+                "country_id": "us",
                 "region": "us",
                 "modules": ["decile", "poverty"],
             },
@@ -284,7 +284,7 @@ class TestEconomyCustomEndpoint:
         response = client.post(
             "/analysis/economy-custom",
             json={
-                "tax_benefit_model_name": "policyengine_us",
+                "country_id": "us",
                 "region": "us",
             },
         )
@@ -294,7 +294,7 @@ class TestEconomyCustomEndpoint:
         response = client.post(
             "/analysis/economy-custom",
             json={
-                "tax_benefit_model_name": "invalid_model",
+                "country_id": "invalid_model",
                 "region": "us",
                 "modules": ["decile"],
             },

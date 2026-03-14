@@ -8,13 +8,14 @@ Simulations are individual tax-benefit calculations. Use these endpoints to:
 For baseline-vs-reform comparisons, use the /analysis/ endpoints instead.
 """
 
-from typing import Any, List, Literal
+from typing import Any, List
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field, model_validator
 from sqlmodel import Session, select
 
+from policyengine_api.config.constants import CountryId
 from policyengine_api.models import (
     Dataset,
     Household,
@@ -28,10 +29,13 @@ from policyengine_api.models import (
     TaxBenefitModel,
 )
 from policyengine_api.services.database import get_session
+from policyengine_api.services.model_resolver import (
+    resolve_country_model,
+    resolve_model_name,
+)
 
 from .analysis import (
     RegionInfo,
-    _get_model_version,
     _get_or_create_simulation,
 )
 
@@ -71,8 +75,8 @@ class HouseholdSimulationResponse(BaseModel):
 class EconomySimulationRequest(BaseModel):
     """Request body for creating an economy simulation."""
 
-    tax_benefit_model_name: Literal["policyengine_uk", "policyengine_us"] = Field(
-        description="Which country model to use"
+    country_id: CountryId = Field(
+        description="Which country model to use ('us' or 'uk')"
     )
     region: str | None = Field(
         default=None,
@@ -122,7 +126,7 @@ class EconomySimulationResponse(BaseModel):
 
 
 def _resolve_economy_dataset(
-    tax_benefit_model_name: str,
+    country_id: str,
     region_code: str | None,
     dataset_id: UUID | None,
     session: Session,
@@ -135,7 +139,7 @@ def _resolve_economy_dataset(
     otherwise the latest available year is used.
     """
     if region_code:
-        model_name = tax_benefit_model_name.replace("_", "-")
+        model_name = resolve_model_name(country_id)
         region = session.exec(
             select(Region)
             .join(TaxBenefitModel)
@@ -145,7 +149,7 @@ def _resolve_economy_dataset(
         if not region:
             raise HTTPException(
                 status_code=404,
-                detail=f"Region '{region_code}' not found for model {model_name}",
+                detail=f"Region '{region_code}' not found for country {country_id}",
             )
 
         # Resolve dataset from join table
@@ -274,7 +278,7 @@ def create_household_simulation(
             )
 
     # Get model version
-    model_version = _get_model_version(household.tax_benefit_model_name, session)
+    _model, model_version = resolve_country_model(household.country_id, session)
 
     # Get or create simulation (deterministic UUID)
     simulation = _get_or_create_simulation(
@@ -328,7 +332,7 @@ def create_economy_simulation(
     """
     # Resolve dataset and region
     dataset, region = _resolve_economy_dataset(
-        request.tax_benefit_model_name,
+        request.country_id,
         request.region,
         request.dataset_id,
         session,
@@ -349,7 +353,7 @@ def create_economy_simulation(
     filter_value = region.filter_value if region and region.requires_filter else None
 
     # Get model version
-    model_version = _get_model_version(request.tax_benefit_model_name, session)
+    _model, model_version = resolve_country_model(request.country_id, session)
 
     # Get or create simulation (deterministic UUID)
     simulation = _get_or_create_simulation(

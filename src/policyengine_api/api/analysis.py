@@ -16,7 +16,7 @@ WORKFLOW for full economic analysis:
 """
 
 import math
-from typing import Literal
+from typing import Literal, Union
 from uuid import UUID, uuid5
 
 import logfire
@@ -30,6 +30,7 @@ from policyengine_api.api.module_registry import (
     get_modules_for_country,
     validate_modules,
 )
+from policyengine_api.config.constants import MODEL_NAME_TO_COUNTRY, CountryId
 from policyengine_api.models import (
     BudgetSummary,
     BudgetSummaryRead,
@@ -61,6 +62,26 @@ from policyengine_api.models import (
     TaxBenefitModelVersion,
 )
 from policyengine_api.services.database import get_session
+from policyengine_api.services.model_resolver import (
+    resolve_country_from_simulation,
+    resolve_country_model,
+    resolve_model_name,
+)
+
+# Type for API policy inputs: UUID, "current_law", or None (omitted).
+PolicyIdInput = Union[UUID, Literal["current_law"], None]
+
+
+def _resolve_policy_input(value: PolicyIdInput) -> UUID | None:
+    """Convert API policy sentinel to DB policy_id.
+
+    - UUID → that policy ID
+    - "current_law" → None (current law has no policy record)
+    - None → None
+    """
+    if value is None or value == "current_law":
+        return None
+    return value
 
 
 def get_traceparent() -> str | None:
@@ -128,23 +149,17 @@ def list_analysis_options(
 class EconomicImpactRequest(BaseModel):
     """Request body for economic impact analysis.
 
-    Example with dataset_id:
-    {
-        "tax_benefit_model_name": "policyengine_uk",
-        "dataset_id": "uuid-from-datasets-endpoint",
-        "policy_id": "uuid-of-reform-policy"
-    }
-
     Example with region:
     {
-        "tax_benefit_model_name": "policyengine_us",
+        "country_id": "us",
         "region": "state/ca",
-        "policy_id": "uuid-of-reform-policy"
+        "baseline_policy_id": "current_law",
+        "reform_policy_id": "uuid-of-reform-policy"
     }
     """
 
-    tax_benefit_model_name: Literal["policyengine_uk", "policyengine_us"] = Field(
-        description="Which country model to use"
+    country_id: CountryId = Field(
+        description="Which country model to use ('us' or 'uk')"
     )
     dataset_id: UUID | None = Field(
         default=None,
@@ -154,9 +169,13 @@ class EconomicImpactRequest(BaseModel):
         default=None,
         description="Region code (e.g., 'state/ca', 'us'). Either dataset_id or region must be provided.",
     )
-    policy_id: UUID | None = Field(
-        default=None,
-        description="Reform policy ID to compare against baseline (current law)",
+    baseline_policy_id: PolicyIdInput = Field(
+        default="current_law",
+        description="Baseline policy. UUID for a specific policy, or 'current_law' for current law.",
+    )
+    reform_policy_id: PolicyIdInput = Field(
+        default="current_law",
+        description="Reform policy. UUID for a specific policy, or 'current_law' for current law.",
     )
     dynamic_id: UUID | None = Field(
         default=None, description="Optional behavioural response specification ID"
@@ -164,6 +183,10 @@ class EconomicImpactRequest(BaseModel):
     year: int | None = Field(
         default=None,
         description="Year for the analysis (e.g., 2026). Selects the dataset for that year. Uses latest available if omitted.",
+    )
+    run: bool = Field(
+        default=True,
+        description="If false, create report and simulations with EXECUTION_DEFERRED status without triggering computation.",
     )
 
     @model_validator(mode="after")
@@ -213,33 +236,6 @@ class EconomicImpactResponse(BaseModel):
     local_authority_impact: list[LocalAuthorityImpactRead] | None = None
     wealth_decile: list[DecileImpactRead] | None = None
     intra_wealth_decile: list[IntraDecileImpactRead] | None = None
-
-
-def _get_model_version(
-    tax_benefit_model_name: str, session: Session
-) -> TaxBenefitModelVersion:
-    """Get the latest tax benefit model version."""
-    model_name = tax_benefit_model_name.replace("_", "-")
-
-    model = session.exec(
-        select(TaxBenefitModel).where(TaxBenefitModel.name == model_name)
-    ).first()
-    if not model:
-        raise HTTPException(
-            status_code=404, detail=f"Tax benefit model {model_name} not found"
-        )
-
-    version = session.exec(
-        select(TaxBenefitModelVersion)
-        .where(TaxBenefitModelVersion.model_id == model.id)
-        .order_by(TaxBenefitModelVersion.created_at.desc())
-    ).first()
-    if not version:
-        raise HTTPException(
-            status_code=404, detail=f"No version found for model {model_name}"
-        )
-
-    return version
 
 
 def _get_deterministic_simulation_id(
@@ -1114,13 +1110,14 @@ def _run_local_economy_comparison_us(
 
 def _trigger_economy_comparison(
     job_id: str,
-    tax_benefit_model_name: str,
+    country_id: str,
     session: Session | None = None,
     modules: list[str] | None = None,
 ) -> None:
     """Trigger economy comparison analysis (local or Modal).
 
     Args:
+        country_id: Country code ('us' or 'uk').
         modules: Optional list of module names to run. If None, runs all.
     """
     from policyengine_api.config import settings
@@ -1129,7 +1126,7 @@ def _trigger_economy_comparison(
 
     if not settings.agent_use_modal and session is not None:
         # Run locally
-        if tax_benefit_model_name == "policyengine_uk":
+        if country_id == "uk":
             _run_local_economy_comparison_uk(job_id, session, modules=modules)
         else:
             _run_local_economy_comparison_us(job_id, session, modules=modules)
@@ -1137,7 +1134,7 @@ def _trigger_economy_comparison(
         # Use Modal (modules param passed for future selective computation)
         import modal
 
-        if tax_benefit_model_name == "policyengine_uk":
+        if country_id == "uk":
             fn = modal.Function.from_name(
                 "policyengine",
                 "economy_comparison_uk",
@@ -1184,7 +1181,7 @@ def _resolve_dataset_and_region(
     """
     if request.region:
         # Look up region by code
-        model_name = request.tax_benefit_model_name.replace("_", "-")
+        model_name = resolve_model_name(request.country_id)
         region = session.exec(
             select(Region)
             .join(TaxBenefitModel)
@@ -1195,7 +1192,7 @@ def _resolve_dataset_and_region(
         if not region:
             raise HTTPException(
                 status_code=404,
-                detail=f"Region '{request.region}' not found for model {model_name}",
+                detail=f"Region '{request.region}' not found for country {request.country_id}",
             )
 
         # Resolve dataset from join table, filtered by year if provided
@@ -1262,13 +1259,17 @@ def economic_impact(
     )
 
     # Get model version
-    model_version = _get_model_version(request.tax_benefit_model_name, session)
+    _model, model_version = resolve_country_model(request.country_id, session)
+
+    # Resolve policy sentinels to DB policy IDs
+    baseline_policy_db = _resolve_policy_input(request.baseline_policy_id)
+    reform_policy_db = _resolve_policy_input(request.reform_policy_id)
 
     # Get or create simulations using the resolved dataset
     baseline_sim = _get_or_create_simulation(
         simulation_type=SimulationType.ECONOMY,
         model_version_id=model_version.id,
-        policy_id=None,
+        policy_id=baseline_policy_db,
         dynamic_id=request.dynamic_id,
         session=session,
         dataset_id=dataset.id,
@@ -1282,7 +1283,7 @@ def economic_impact(
     reform_sim = _get_or_create_simulation(
         simulation_type=SimulationType.ECONOMY,
         model_version_id=model_version.id,
-        policy_id=request.policy_id,
+        policy_id=reform_policy_db,
         dynamic_id=request.dynamic_id,
         session=session,
         dataset_id=dataset.id,
@@ -1294,20 +1295,23 @@ def economic_impact(
     )
 
     # Get or create report
-    label = f"Economic impact: {request.tax_benefit_model_name}"
-    if request.policy_id:
-        label += f" (policy {request.policy_id})"
+    label = f"Economic impact: {request.country_id}"
+    if request.reform_policy_id and request.reform_policy_id != "current_law":
+        label += f" (policy {request.reform_policy_id})"
 
     report = _get_or_create_report(
         baseline_sim.id, reform_sim.id, label, "economy_comparison", session
     )
 
-    # Trigger computation if report is pending
-    if report.status == ReportStatus.PENDING:
-        with logfire.span("trigger_economy_comparison", job_id=str(report.id)):
-            _trigger_economy_comparison(
-                str(report.id), request.tax_benefit_model_name, session
-            )
+    # Trigger computation or defer
+    if report.status in (ReportStatus.PENDING, ReportStatus.EXECUTION_DEFERRED):
+        if request.run:
+            with logfire.span("trigger_economy_comparison", job_id=str(report.id)):
+                _trigger_economy_comparison(str(report.id), request.country_id, session)
+        elif report.status == ReportStatus.PENDING:
+            report.status = ReportStatus.EXECUTION_DEFERRED
+            session.add(report)
+            session.commit()
 
     return _build_response(report, baseline_sim, reform_sim, session, region)
 
@@ -1331,6 +1335,16 @@ def get_economic_impact_status(
     if not baseline_sim or not reform_sim:
         raise HTTPException(status_code=500, detail="Simulation data missing")
 
+    # Auto-start deferred reports on first access
+    if report.status == ReportStatus.EXECUTION_DEFERRED:
+        report.status = ReportStatus.PENDING
+        session.add(report)
+        session.commit()
+        country_id = resolve_country_from_simulation(baseline_sim, session)
+        with logfire.span("auto_trigger_economy_comparison", job_id=str(report.id)):
+            _trigger_economy_comparison(str(report.id), country_id, session)
+        session.refresh(report)
+
     region = (
         session.get(Region, baseline_sim.region_id) if baseline_sim.region_id else None
     )
@@ -1341,17 +1355,12 @@ def get_economic_impact_status(
 # POST /analysis/economy-custom — run selected economy modules
 # ---------------------------------------------------------------------------
 
-_MODEL_TO_COUNTRY = {
-    "policyengine_uk": "uk",
-    "policyengine_us": "us",
-}
-
 
 class EconomyCustomRequest(BaseModel):
     """Request body for custom economy analysis with selected modules."""
 
-    tax_benefit_model_name: Literal["policyengine_uk", "policyengine_us"] = Field(
-        description="Which country model to use"
+    country_id: CountryId = Field(
+        description="Which country model to use ('us' or 'uk')"
     )
     dataset_id: UUID | None = Field(
         default=None,
@@ -1361,9 +1370,13 @@ class EconomyCustomRequest(BaseModel):
         default=None,
         description="Region code (e.g., 'state/ca', 'us').",
     )
-    policy_id: UUID | None = Field(
-        default=None,
-        description="Reform policy ID to compare against baseline (current law)",
+    baseline_policy_id: PolicyIdInput = Field(
+        default="current_law",
+        description="Baseline policy. UUID for a specific policy, or 'current_law' for current law.",
+    )
+    reform_policy_id: PolicyIdInput = Field(
+        default="current_law",
+        description="Reform policy. UUID for a specific policy, or 'current_law' for current law.",
     )
     dynamic_id: UUID | None = Field(
         default=None, description="Optional behavioural response specification ID"
@@ -1374,6 +1387,10 @@ class EconomyCustomRequest(BaseModel):
     )
     modules: list[str] = Field(
         description="List of module names to compute (see GET /analysis/options)"
+    )
+    run: bool = Field(
+        default=True,
+        description="If false, create report and simulations with EXECUTION_DEFERRED status without triggering computation.",
     )
 
     @model_validator(mode="after")
@@ -1430,21 +1447,21 @@ def economy_custom(
 
     See GET /analysis/options for available module names.
     """
-    country = _MODEL_TO_COUNTRY[request.tax_benefit_model_name]
-
     try:
-        validate_modules(request.modules, country)
+        validate_modules(request.modules, request.country_id)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc))
 
     # Reuse the same request model for dataset/region resolution
     impact_request = EconomicImpactRequest(
-        tax_benefit_model_name=request.tax_benefit_model_name,
+        country_id=request.country_id,
         dataset_id=request.dataset_id,
         region=request.region,
-        policy_id=request.policy_id,
+        baseline_policy_id=request.baseline_policy_id,
+        reform_policy_id=request.reform_policy_id,
         dynamic_id=request.dynamic_id,
         year=request.year,
+        run=request.run,
     )
 
     dataset, region_obj = _resolve_dataset_and_region(impact_request, session)
@@ -1461,12 +1478,16 @@ def economy_custom(
         else None
     )
 
-    model_version = _get_model_version(request.tax_benefit_model_name, session)
+    # Resolve policy sentinels to DB policy IDs
+    baseline_policy_db = _resolve_policy_input(request.baseline_policy_id)
+    reform_policy_db = _resolve_policy_input(request.reform_policy_id)
+
+    _model, model_version = resolve_country_model(request.country_id, session)
 
     baseline_sim = _get_or_create_simulation(
         simulation_type=SimulationType.ECONOMY,
         model_version_id=model_version.id,
-        policy_id=None,
+        policy_id=baseline_policy_db,
         dynamic_id=request.dynamic_id,
         session=session,
         dataset_id=dataset.id,
@@ -1480,7 +1501,7 @@ def economy_custom(
     reform_sim = _get_or_create_simulation(
         simulation_type=SimulationType.ECONOMY,
         model_version_id=model_version.id,
-        policy_id=request.policy_id,
+        policy_id=reform_policy_db,
         dynamic_id=request.dynamic_id,
         session=session,
         dataset_id=dataset.id,
@@ -1491,22 +1512,28 @@ def economy_custom(
         year=dataset.year,
     )
 
-    label = f"Custom analysis: {request.tax_benefit_model_name}"
-    if request.policy_id:
-        label += f" (policy {request.policy_id})"
+    label = f"Custom analysis: {request.country_id}"
+    if request.reform_policy_id and request.reform_policy_id != "current_law":
+        label += f" (policy {request.reform_policy_id})"
 
     report = _get_or_create_report(
         baseline_sim.id, reform_sim.id, label, "economy_comparison", session
     )
 
-    if report.status == ReportStatus.PENDING:
-        with logfire.span("trigger_economy_comparison", job_id=str(report.id)):
-            _trigger_economy_comparison(
-                str(report.id),
-                request.tax_benefit_model_name,
-                session,
-                modules=request.modules,
-            )
+    # Trigger computation or defer
+    if report.status in (ReportStatus.PENDING, ReportStatus.EXECUTION_DEFERRED):
+        if request.run:
+            with logfire.span("trigger_economy_comparison", job_id=str(report.id)):
+                _trigger_economy_comparison(
+                    str(report.id),
+                    request.country_id,
+                    session,
+                    modules=request.modules,
+                )
+        elif report.status == ReportStatus.PENDING:
+            report.status = ReportStatus.EXECUTION_DEFERRED
+            session.add(report)
+            session.commit()
 
     full_response = _build_response(
         report, baseline_sim, reform_sim, session, region_obj
@@ -1599,7 +1626,7 @@ def rerun_report(
     if not baseline_sim:
         raise HTTPException(status_code=400, detail="Report has no baseline simulation")
 
-    # 3. Derive tax_benefit_model_name from simulation → model version → model
+    # 3. Derive country_id from simulation → model version → model
     model_version = session.get(
         TaxBenefitModelVersion, baseline_sim.tax_benefit_model_version_id
     )
@@ -1610,7 +1637,10 @@ def rerun_report(
     if not model:
         raise HTTPException(status_code=500, detail="Tax-benefit model not found")
 
-    tax_benefit_model_name = model.name.replace("-", "_")
+    # Reverse-lookup: model.name is "policyengine-us" → country_id is "us"
+    country_id = MODEL_NAME_TO_COUNTRY.get(model.name)
+    if not country_id:
+        raise HTTPException(status_code=500, detail=f"Unknown model name: {model.name}")
 
     # 4. Delete all result records for this report
     result_tables = [
@@ -1648,10 +1678,10 @@ def rerun_report(
 
     if is_economy:
         with logfire.span("rerun_economy_comparison", job_id=str(report.id)):
-            _trigger_economy_comparison(str(report.id), tax_benefit_model_name, session)
+            _trigger_economy_comparison(str(report.id), country_id, session)
     elif is_household:
         with logfire.span("rerun_household_impact", job_id=str(report.id)):
-            _trigger_household_impact(str(report.id), tax_benefit_model_name, session)
+            _trigger_household_impact(str(report.id), country_id, session)
     else:
         raise HTTPException(
             status_code=400,

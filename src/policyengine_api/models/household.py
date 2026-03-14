@@ -1,17 +1,19 @@
 """Stored household definition model."""
 
 from datetime import datetime, timezone
-from typing import Any, Literal
+from typing import Any
 from uuid import UUID, uuid4
 
 from sqlalchemy import JSON
 from sqlmodel import Column, Field, SQLModel
 
+from policyengine_api.config.constants import CountryId
+
 
 class HouseholdBase(SQLModel):
     """Base household fields."""
 
-    tax_benefit_model_name: str
+    country_id: str
     year: int
     label: str | None = None
     household_data: dict[str, Any] = Field(sa_column=Column(JSON, nullable=False))
@@ -34,7 +36,7 @@ class HouseholdCreate(SQLModel):
     people as an array, entity groups as optional dicts.
     """
 
-    tax_benefit_model_name: Literal["policyengine_us", "policyengine_uk"]
+    country_id: CountryId
     year: int
     label: str | None = None
     people: list[dict[str, Any]]

@@ -19,6 +19,7 @@ from datetime import datetime, timezone
 from enum import Enum
 from uuid import UUID, uuid4
 
+import sqlalchemy as sa
 from sqlmodel import Field, SQLModel
 
 
@@ -35,7 +36,10 @@ class IntraDecileImpactBase(SQLModel):
     baseline_simulation_id: UUID = Field(foreign_key="simulations.id")
     reform_simulation_id: UUID = Field(foreign_key="simulations.id")
     report_id: UUID | None = Field(default=None, foreign_key="reports.id")
-    decile_type: DecileType = Field(default=DecileType.INCOME)
+    decile_type: DecileType = Field(
+        default=DecileType.INCOME,
+        sa_type=sa.Enum(DecileType, values_callable=lambda x: [e.value for e in x]),
+    )
     decile: int = Field(ge=0, le=10)
     lose_more_than_5pct: float | None = Field(default=None, ge=0.0, le=1.0)
     lose_less_than_5pct: float | None = Field(default=None, ge=0.0, le=1.0)

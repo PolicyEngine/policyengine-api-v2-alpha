@@ -10,3 +10,6 @@ COUNTRY_MODEL_NAMES: dict[str, str] = {
     "uk": "policyengine-uk",
     "us": "policyengine-us",
 }
+
+# Reverse mapping: model name → country ID
+MODEL_NAME_TO_COUNTRY: dict[str, str] = {v: k for k, v in COUNTRY_MODEL_NAMES.items()}

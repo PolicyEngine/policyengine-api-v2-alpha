@@ -2,6 +2,7 @@ from datetime import datetime, timezone
 from enum import Enum
 from uuid import UUID, uuid4
 
+import sqlalchemy as sa
 from sqlmodel import Column, Field, SQLModel, Text
 
 
@@ -9,6 +10,7 @@ class ReportStatus(str, Enum):
     """Report processing status."""
 
     PENDING = "pending"
+    EXECUTION_DEFERRED = "execution_deferred"
     RUNNING = "running"
     COMPLETED = "completed"
     FAILED = "failed"
@@ -27,7 +29,12 @@ class ReportBase(SQLModel):
 
     label: str
     description: str | None = None
-    report_type: ReportType | None = None
+    report_type: ReportType | None = Field(
+        default=None,
+        sa_type=sa.Enum(
+            ReportType, values_callable=lambda x: [e.value for e in x], nullable=True
+        ),
+    )
     user_id: UUID | None = Field(default=None, foreign_key="users.id")
     markdown: str | None = Field(default=None, sa_column=Column(Text))
     status: ReportStatus = ReportStatus.PENDING

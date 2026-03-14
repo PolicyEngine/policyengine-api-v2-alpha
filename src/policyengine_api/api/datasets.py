@@ -11,15 +11,17 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel import Session, select
 
+from policyengine_api.config.constants import CountryId
 from policyengine_api.models import Dataset, DatasetRead, TaxBenefitModel
 from policyengine_api.services.database import get_session
+from policyengine_api.services.model_resolver import resolve_model_name
 
 router = APIRouter(prefix="/datasets", tags=["datasets"])
 
 
 @router.get("/", response_model=List[DatasetRead])
 def list_datasets(
-    tax_benefit_model_name: str | None = None,
+    country_id: CountryId | None = None,
     session: Session = Depends(get_session),
 ):
     """List available datasets.
@@ -28,16 +30,13 @@ def list_datasets(
     Each dataset represents population microdata for a specific country and year.
 
     Args:
-        tax_benefit_model_name: Filter by country model.
-            Use "policyengine-uk" for UK datasets.
-            Use "policyengine-us" for US datasets.
+        country_id: Filter by country ("us" or "uk").
     """
     query = select(Dataset)
 
-    if tax_benefit_model_name:
-        query = query.join(TaxBenefitModel).where(
-            TaxBenefitModel.name == tax_benefit_model_name
-        )
+    if country_id:
+        model_name = resolve_model_name(country_id)
+        query = query.join(TaxBenefitModel).where(TaxBenefitModel.name == model_name)
 
     datasets = session.exec(query).all()
     return datasets

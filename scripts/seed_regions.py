@@ -33,6 +33,7 @@ from policyengine_api.models import (  # noqa: E402
     RegionDatasetLink,
     TaxBenefitModel,
 )
+from policyengine_api.models.region import RegionType  # noqa: E402
 
 
 def _group_us_datasets(
@@ -195,7 +196,7 @@ def seed_us_regions(
                 db_region = Region(
                     code=pe_region.code,
                     label=pe_region.label,
-                    region_type=pe_region.region_type,
+                    region_type=RegionType(pe_region.region_type),
                     requires_filter=pe_region.requires_filter,
                     filter_field=pe_region.filter_field,
                     filter_value=pe_region.filter_value,
@@ -293,7 +294,7 @@ def seed_uk_regions(session: Session) -> tuple[int, int, int]:
                 db_region = Region(
                     code=pe_region.code,
                     label=pe_region.label,
-                    region_type=pe_region.region_type,
+                    region_type=RegionType(pe_region.region_type),
                     requires_filter=pe_region.requires_filter,
                     filter_field=pe_region.filter_field,
                     filter_value=pe_region.filter_value,

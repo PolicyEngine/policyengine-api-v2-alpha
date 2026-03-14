@@ -45,7 +45,7 @@ def _to_read(record: Household) -> HouseholdRead:
     data = record.household_data
     return HouseholdRead(
         id=record.id,
-        tax_benefit_model_name=record.tax_benefit_model_name,
+        country_id=record.country_id,
         year=record.year,
         label=record.label,
         people=data["people"],
@@ -69,7 +69,7 @@ def create_household(body: HouseholdCreate, session: Session = Depends(get_sessi
     or /household/impact to run simulations.
     """
     record = Household(
-        tax_benefit_model_name=body.tax_benefit_model_name,
+        country_id=body.country_id,
         year=body.year,
         label=body.label,
         household_data=_pack_household_data(body),
@@ -82,15 +82,15 @@ def create_household(body: HouseholdCreate, session: Session = Depends(get_sessi
 
 @router.get("/", response_model=list[HouseholdRead])
 def list_households(
-    tax_benefit_model_name: str | None = None,
+    country_id: str | None = None,
     limit: int = Query(default=50, le=200),
     offset: int = Query(default=0, ge=0),
     session: Session = Depends(get_session),
 ):
     """List stored households with optional filtering."""
     query = select(Household)
-    if tax_benefit_model_name is not None:
-        query = query.where(Household.tax_benefit_model_name == tax_benefit_model_name)
+    if country_id is not None:
+        query = query.where(Household.country_id == country_id)
     query = query.offset(offset).limit(limit)
     records = session.exec(query).all()
     return [_to_read(r) for r in records]

@@ -22,7 +22,7 @@ def test_create_us_household(client):
     assert "id" in data
     assert "created_at" in data
     assert "updated_at" in data
-    assert data["tax_benefit_model_name"] == "policyengine_us"
+    assert data["country_id"] == "us"
     assert data["year"] == 2024
     assert data["label"] == "US test household"
 
@@ -44,7 +44,7 @@ def test_create_uk_household(client):
     response = client.post("/households", json=MOCK_UK_HOUSEHOLD_CREATE)
     assert response.status_code == 201
     data = response.json()
-    assert data["tax_benefit_model_name"] == "policyengine_uk"
+    assert data["country_id"] == "uk"
     assert data["benunit"] == {"is_married": False}
     assert data["household"] == {"region": "LONDON"}
 
@@ -59,9 +59,9 @@ def test_create_household_minimal(client):
     assert data["benunit"] is None
 
 
-def test_create_household_invalid_model_name(client):
-    """Reject invalid tax_benefit_model_name."""
-    payload = {**MOCK_HOUSEHOLD_MINIMAL, "tax_benefit_model_name": "invalid"}
+def test_create_household_invalid_country_id(client):
+    """Reject invalid country_id."""
+    payload = {**MOCK_HOUSEHOLD_MINIMAL, "country_id": "invalid"}
     response = client.post("/households", json=payload)
     assert response.status_code == 422
 
@@ -78,7 +78,7 @@ def test_get_household(client, session):
     assert response.status_code == 200
     data = response.json()
     assert data["id"] == str(record.id)
-    assert data["tax_benefit_model_name"] == "policyengine_us"
+    assert data["country_id"] == "us"
 
 
 def test_get_household_not_found(client):
@@ -111,16 +111,14 @@ def test_list_households_with_data(client, session):
     assert len(data) == 2
 
 
-def test_list_households_filter_by_model_name(client, session):
-    """Filter households by tax_benefit_model_name."""
-    create_household(session, tax_benefit_model_name="policyengine_us")
-    create_household(session, tax_benefit_model_name="policyengine_uk")
-    response = client.get(
-        "/households", params={"tax_benefit_model_name": "policyengine_uk"}
-    )
+def test_list_households_filter_by_country_id(client, session):
+    """Filter households by country_id."""
+    create_household(session, country_id="us")
+    create_household(session, country_id="uk")
+    response = client.get("/households", params={"country_id": "uk"})
     data = response.json()
     assert len(data) == 1
-    assert data[0]["tax_benefit_model_name"] == "policyengine_uk"
+    assert data[0]["country_id"] == "uk"
 
 
 def test_list_households_limit_and_offset(client, session):

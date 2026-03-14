@@ -5,7 +5,7 @@ Poll the status endpoint until the job is complete.
 """
 
 import math
-from typing import Any, Literal
+from typing import Any
 from uuid import UUID
 
 import logfire
@@ -14,6 +14,7 @@ from opentelemetry.trace.propagation.tracecontext import TraceContextTextMapProp
 from pydantic import BaseModel, Field
 from sqlmodel import Session
 
+from policyengine_api.config.constants import CountryId
 from policyengine_api.models import (
     Dynamic,
     HouseholdJob,
@@ -61,7 +62,7 @@ class HouseholdCalculateRequest(BaseModel):
 
     Example US request (single household, simple):
     {
-        "tax_benefit_model_name": "policyengine_us",
+        "country_id": "us",
         "people": [{"employment_income": 70000, "age": 40}],
         "tax_unit": [{"state_code": "CA"}],
         "household": [{"state_fips": 6}],
@@ -70,7 +71,7 @@ class HouseholdCalculateRequest(BaseModel):
 
     Example US request (multiple households):
     {
-        "tax_benefit_model_name": "policyengine_us",
+        "country_id": "us",
         "people": [
             {"person_id": 0, "person_household_id": 0, "person_tax_unit_id": 0, "age": 40, "employment_income": 70000},
             {"person_id": 1, "person_household_id": 1, "person_tax_unit_id": 1, "age": 30, "employment_income": 50000}
@@ -88,15 +89,15 @@ class HouseholdCalculateRequest(BaseModel):
 
     Example UK request:
     {
-        "tax_benefit_model_name": "policyengine_uk",
+        "country_id": "uk",
         "people": [{"employment_income": 50000, "age": 30}],
         "household": [{}],
         "year": 2026
     }
     """
 
-    tax_benefit_model_name: Literal["policyengine_uk", "policyengine_us"] = Field(
-        description="Which country model to use"
+    country_id: CountryId = Field(
+        description="Which country model to use ('us' or 'uk')"
     )
     people: list[dict[str, Any]] = Field(
         description="List of people with flat variable values. Include person_id and person_{entity}_id fields to link to entities."
@@ -173,7 +174,7 @@ class HouseholdImpactRequest(BaseModel):
 
     Example:
     {
-        "tax_benefit_model_name": "policyengine_us",
+        "country_id": "us",
         "people": [{"employment_income": 70000, "age": 40}],
         "tax_unit": [{"state_code": "CA"}],
         "household": [{"state_fips": 6}],
@@ -182,8 +183,8 @@ class HouseholdImpactRequest(BaseModel):
     }
     """
 
-    tax_benefit_model_name: Literal["policyengine_uk", "policyengine_us"] = Field(
-        description="Which country model to use"
+    country_id: CountryId = Field(
+        description="Which country model to use ('us' or 'uk')"
     )
     people: list[dict[str, Any]] = Field(
         description="List of people with flat variable values. Include person_id and person_{entity}_id fields to link to entities."
@@ -726,7 +727,7 @@ def _trigger_modal_household(
 
     if not settings.agent_use_modal and session is not None:
         # Run locally
-        if request.tax_benefit_model_name == "policyengine_uk":
+        if request.country_id == "uk":
             _run_local_household_uk(
                 job_id=job_id,
                 people=request.people,
@@ -755,7 +756,7 @@ def _trigger_modal_household(
 
         traceparent = get_traceparent()
 
-        if request.tax_benefit_model_name == "policyengine_uk":
+        if request.country_id == "uk":
             fn = modal.Function.from_name(
                 "policyengine",
                 "simulate_household_uk",
@@ -864,7 +865,7 @@ def calculate_household(
     """
     with logfire.span(
         "create_household_job",
-        model=request.tax_benefit_model_name,
+        model=request.country_id,
         num_people=len(request.people),
         year=request.year,
         has_policy=request.policy_id is not None,
@@ -876,7 +877,7 @@ def calculate_household(
 
         # Create job record
         job = HouseholdJob(
-            tax_benefit_model_name=request.tax_benefit_model_name,
+            country_id=request.country_id,
             request_data={
                 "people": request.people,
                 "benunit": request.benunit,
@@ -995,7 +996,7 @@ def calculate_household_impact_comparison(
     """
     with logfire.span(
         "create_household_impact_job",
-        model=request.tax_benefit_model_name,
+        model=request.country_id,
         num_people=len(request.people),
         year=request.year,
         has_policy=request.policy_id is not None,
@@ -1006,7 +1007,7 @@ def calculate_household_impact_comparison(
 
         # Create baseline job (no policy)
         baseline_job = HouseholdJob(
-            tax_benefit_model_name=request.tax_benefit_model_name,
+            country_id=request.country_id,
             request_data={
                 "people": request.people,
                 "benunit": request.benunit,
@@ -1026,7 +1027,7 @@ def calculate_household_impact_comparison(
 
         # Create reform job (with policy)
         reform_job = HouseholdJob(
-            tax_benefit_model_name=request.tax_benefit_model_name,
+            country_id=request.country_id,
             request_data={
                 "people": request.people,
                 "benunit": request.benunit,
@@ -1055,7 +1056,7 @@ def calculate_household_impact_comparison(
 
         # Trigger Modal functions for both
         baseline_request = HouseholdCalculateRequest(
-            tax_benefit_model_name=request.tax_benefit_model_name,
+            country_id=request.country_id,
             people=request.people,
             benunit=request.benunit,
             marital_unit=request.marital_unit,
@@ -1068,7 +1069,7 @@ def calculate_household_impact_comparison(
             dynamic_id=request.dynamic_id,
         )
         reform_request = HouseholdCalculateRequest(
-            tax_benefit_model_name=request.tax_benefit_model_name,
+            country_id=request.country_id,
             people=request.people,
             benunit=request.benunit,
             marital_unit=request.marital_unit,
