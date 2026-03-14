@@ -63,6 +63,7 @@ from policyengine_api.models import (
 )
 from policyengine_api.services.database import get_session
 from policyengine_api.services.model_resolver import (
+    resolve_country_from_simulation,
     resolve_country_model,
     resolve_model_name,
 )
@@ -1336,7 +1337,10 @@ def get_economic_impact_status(
 
     # Auto-start deferred reports on first access
     if report.status == ReportStatus.EXECUTION_DEFERRED:
-        country_id = _resolve_country_from_simulation(baseline_sim, session)
+        report.status = ReportStatus.PENDING
+        session.add(report)
+        session.commit()
+        country_id = resolve_country_from_simulation(baseline_sim, session)
         with logfire.span("auto_trigger_economy_comparison", job_id=str(report.id)):
             _trigger_economy_comparison(str(report.id), country_id, session)
         session.refresh(report)
@@ -1345,17 +1349,6 @@ def get_economic_impact_status(
         session.get(Region, baseline_sim.region_id) if baseline_sim.region_id else None
     )
     return _build_response(report, baseline_sim, reform_sim, session, region)
-
-
-def _resolve_country_from_simulation(sim: Simulation, session: Session) -> str:
-    """Derive country_id from a simulation's model version."""
-    version = session.get(TaxBenefitModelVersion, sim.tax_benefit_model_version_id)
-    if not version:
-        raise HTTPException(status_code=500, detail="Model version not found")
-    model = session.get(TaxBenefitModel, version.model_id)
-    if not model:
-        raise HTTPException(status_code=500, detail="Tax-benefit model not found")
-    return MODEL_NAME_TO_COUNTRY[model.name]
 
 
 # ---------------------------------------------------------------------------
@@ -1645,11 +1638,7 @@ def rerun_report(
         raise HTTPException(status_code=500, detail="Tax-benefit model not found")
 
     # Reverse-lookup: model.name is "policyengine-us" → country_id is "us"
-    from policyengine_api.config.constants import COUNTRY_MODEL_NAMES
-
-    country_id = next(
-        (k for k, v in COUNTRY_MODEL_NAMES.items() if v == model.name), None
-    )
+    country_id = MODEL_NAME_TO_COUNTRY.get(model.name)
     if not country_id:
         raise HTTPException(status_code=500, detail=f"Unknown model name: {model.name}")
 
