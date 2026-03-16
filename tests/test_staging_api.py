@@ -31,7 +31,7 @@ def test_list_models(api):
     r = api.get("/tax-benefit-models")
     assert r.status_code == 200
     models = r.json()
-    assert len(models) >= 1  # At least one country model seeded
+    assert len(models) >= 2  # UK and US
 
 
 def test_list_variables(api):
