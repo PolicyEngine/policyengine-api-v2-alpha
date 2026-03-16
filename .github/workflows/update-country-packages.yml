@@ -1,0 +1,36 @@
+name: Update country packages
+
+on:
+  schedule:
+    - cron: "0 9 * * 1-5" # Weekdays at 9am UTC
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  update:
+    name: Update ${{ matrix.package }}
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        package: [policyengine, policyengine-us, policyengine-uk]
+      fail-fast: false
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Setup Python
+        run: uv python install 3.13
+
+      - name: Check for update and open PR
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          chmod +x .github/scripts/update-package.sh
+          .github/scripts/update-package.sh ${{ matrix.package }}
