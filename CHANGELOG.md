@@ -1,3 +1,10 @@
+0.3.3 (2026-03-16)
+
+# Fixed
+
+- Merge Alembic heads to resolve multiple head revisions blocking CI/CD migrations (#134)
+
+
 0.3.2 (2026-03-16)
 
 # Changed
