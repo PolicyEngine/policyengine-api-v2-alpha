@@ -1,1 +1,0 @@
-Split CI/CD database migrations into separate staging and production jobs with environment-scoped Supabase secrets

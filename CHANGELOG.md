@@ -1,3 +1,10 @@
+0.3.2 (2026-03-16)
+
+# Changed
+
+- Split CI/CD database migrations into separate staging and production jobs with environment-scoped Supabase secrets (#133)
+
+
 0.4.0 (2026-03-13)
 
 # Added
