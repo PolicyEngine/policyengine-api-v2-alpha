@@ -52,8 +52,33 @@ jobs:
         run: uv run pytest -v -m "not integration and not staging"
 
   # ── Stage 2: Build + Migrate + Infra (parallel) ───────────────
-  migrate:
-    name: Migrate database
+  migrate-staging:
+    name: Migrate staging database
+    runs-on: ubuntu-latest
+    needs: test
+    if: ${{ !inputs.skip_staging }}
+    environment: staging
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Setup Python
+        run: uv python install 3.13
+
+      - name: Sync dependencies
+        run: uv sync
+
+      - name: Run database migrations
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: uv run alembic upgrade head
+
+  migrate-production:
+    name: Migrate production database
     runs-on: ubuntu-latest
     needs: test
     environment: production
@@ -185,7 +210,7 @@ jobs:
   deploy-staging-modal:
     name: Deploy Modal to staging
     runs-on: ubuntu-latest
-    needs: [migrate, setup-modal-environments]
+    needs: [migrate-staging, setup-modal-environments]
     if: ${{ !inputs.skip_staging }}
     environment: staging
 
@@ -256,7 +281,7 @@ jobs:
             --image=$IMAGE_URL:${{ github.sha }} \
             --tag=staging \
             --no-traffic \
-            --update-env-vars=MODAL_ENVIRONMENT=staging,LOGFIRE_ENVIRONMENT=staging
+            --update-env-vars=MODAL_ENVIRONMENT=staging,LOGFIRE_ENVIRONMENT=staging,SUPABASE_URL=${{ secrets.SUPABASE_URL }},SUPABASE_KEY=${{ secrets.SUPABASE_KEY }},SUPABASE_SECRET_KEY=${{ secrets.SUPABASE_SECRET_KEY }},SUPABASE_DB_URL=${{ secrets.SUPABASE_DB_URL }}
 
       - name: Get staging URL
         id: get-staging-url
@@ -301,10 +326,10 @@ jobs:
   deploy-prod-modal:
     name: Deploy Modal to production
     runs-on: ubuntu-latest
-    needs: [migrate, integration-tests]
+    needs: [migrate-production, integration-tests]
     if: |
       always() &&
-      needs.migrate.result == 'success' &&
+      needs.migrate-production.result == 'success' &&
       (needs.integration-tests.result == 'success' || needs.integration-tests.result == 'skipped')
     environment: production
 
