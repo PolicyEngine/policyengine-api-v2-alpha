@@ -1,3 +1,10 @@
+0.3.4 (2026-03-16)
+
+# Changed
+
+- Support staging and production targets in db-reset workflow with environment-scoped secrets (#137)
+
+
 0.3.3 (2026-03-16)
 
 # Fixed
