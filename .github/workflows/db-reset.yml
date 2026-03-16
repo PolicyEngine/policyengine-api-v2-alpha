@@ -1,8 +1,15 @@
-name: Reset production database
+name: Reset database
 
 on:
   workflow_dispatch:
     inputs:
+      target:
+        description: "Target database"
+        required: true
+        type: choice
+        options:
+          - staging
+          - production
       mode:
         description: "Seeding mode"
         required: true
@@ -12,7 +19,7 @@ on:
           - lite
           - full
       confirm:
-        description: "Type 'reset-prod' to confirm"
+        description: "Type 'reset-staging' or 'reset-prod' to confirm"
         required: true
         type: string
   pull_request:
@@ -20,11 +27,15 @@ on:
       - ".github/workflows/db-reset.yml"
 
 jobs:
-  # Validation job - runs on PR to test connectivity (no environment = no approval needed)
+  # Validation job - runs on PR to test connectivity against both environments
   validate:
-    name: Validate database connectivity
+    name: Validate ${{ matrix.environment }} database connectivity
     runs-on: ubuntu-latest
     if: github.event_name == 'pull_request'
+    environment: ${{ matrix.environment }}
+    strategy:
+      matrix:
+        environment: [staging, production]
 
     steps:
       - name: Checkout code
@@ -41,31 +52,37 @@ jobs:
 
       - name: Test database connectivity
         env:
-          SUPABASE_DB_URL: ${{ secrets.SUPABASE_POOLER_URL }}
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
         run: |
-          echo "Testing database connectivity..."
+          echo "Testing ${{ matrix.environment }} database connectivity..."
           uv run python -c "
           from policyengine_api.config.settings import settings
           from sqlmodel import create_engine, text
           engine = create_engine(settings.database_url, echo=False)
           with engine.connect() as conn:
               result = conn.execute(text('SELECT 1'))
-              print('✅ Database connection successful')
+              print('✅ ${{ matrix.environment }} database connection successful')
           "
 
   # Reset job - only runs on manual trigger with confirmation
   reset-db:
-    name: Reset and reseed database
+    name: Reset and reseed ${{ inputs.target }} database
     runs-on: ubuntu-latest
     if: github.event_name == 'workflow_dispatch'
-    environment: production
+    environment: ${{ inputs.target }}
 
     steps:
       - name: Verify confirmation
-        if: ${{ github.event.inputs.confirm != 'reset-prod' }}
         run: |
-          echo "❌ Confirmation failed. You must type 'reset-prod' to proceed."
-          exit 1
+          EXPECTED="reset-staging"
+          if [ "${{ inputs.target }}" = "production" ]; then
+            EXPECTED="reset-prod"
+          fi
+          if [ "${{ inputs.confirm }}" != "$EXPECTED" ]; then
+            echo "❌ Confirmation failed. You must type '$EXPECTED' to proceed."
+            exit 1
+          fi
+          echo "✅ Confirmation verified for ${{ inputs.target }}"
 
       - name: Checkout code
         uses: actions/checkout@v4
@@ -81,48 +98,49 @@ jobs:
 
       - name: Reset database (init)
         env:
-          SUPABASE_DB_URL: ${{ secrets.SUPABASE_POOLER_URL }}
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
           SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
           LOGFIRE_TOKEN: ${{ secrets.LOGFIRE_TOKEN }}
-          LOGFIRE_ENVIRONMENT: prod
+          LOGFIRE_ENVIRONMENT: ${{ inputs.target }}
         run: |
-          echo "Resetting database tables..."
+          echo "Resetting ${{ inputs.target }} database tables..."
           echo "yes" | uv run python scripts/init.py --reset
 
       - name: Seed database (lite)
-        if: ${{ github.event.inputs.mode == 'lite' }}
+        if: ${{ inputs.mode == 'lite' }}
         env:
-          SUPABASE_DB_URL: ${{ secrets.SUPABASE_POOLER_URL }}
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
           SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
           STORAGE_BUCKET: ${{ vars.STORAGE_BUCKET }}
           LOGFIRE_TOKEN: ${{ secrets.LOGFIRE_TOKEN }}
-          LOGFIRE_ENVIRONMENT: prod
+          LOGFIRE_ENVIRONMENT: ${{ inputs.target }}
           HUGGING_FACE_TOKEN: ${{ secrets.HUGGING_FACE_TOKEN }}
         run: |
-          echo "Seeding database (lite mode - fewer params, includes datasets)..."
+          echo "Seeding ${{ inputs.target }} database (lite mode)..."
           uv run python scripts/seed.py --lite
 
       - name: Seed database (full)
-        if: ${{ github.event.inputs.mode == 'full' }}
+        if: ${{ inputs.mode == 'full' }}
         env:
-          SUPABASE_DB_URL: ${{ secrets.SUPABASE_POOLER_URL }}
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
           SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
           HUGGING_FACE_TOKEN: ${{ secrets.HUGGING_FACE_TOKEN }}
           STORAGE_BUCKET: ${{ vars.STORAGE_BUCKET }}
           LOGFIRE_TOKEN: ${{ secrets.LOGFIRE_TOKEN }}
-          LOGFIRE_ENVIRONMENT: prod
+          LOGFIRE_ENVIRONMENT: ${{ inputs.target }}
         run: |
-          echo "Seeding database (full mode - includes datasets)..."
+          echo "Seeding ${{ inputs.target }} database (full mode)..."
           uv run python scripts/seed.py
 
       - name: Summary
         run: |
           echo "✅ Database reset complete!"
-          echo "Mode: ${{ github.event.inputs.mode }}"
+          echo "Target: ${{ inputs.target }}"
+          echo "Mode: ${{ inputs.mode }}"
           echo "Triggered by: ${{ github.actor }}"
