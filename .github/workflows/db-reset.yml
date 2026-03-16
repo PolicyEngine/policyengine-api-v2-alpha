@@ -41,7 +41,7 @@ jobs:
 
       - name: Test database connectivity
         env:
-          SUPABASE_DB_URL: ${{ secrets.SUPABASE_POOLER_URL }}
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
         run: |
           echo "Testing database connectivity..."
           uv run python -c "
@@ -81,7 +81,7 @@ jobs:
 
       - name: Reset database (init)
         env:
-          SUPABASE_DB_URL: ${{ secrets.SUPABASE_POOLER_URL }}
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
           SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
@@ -94,7 +94,7 @@ jobs:
       - name: Seed database (lite)
         if: ${{ github.event.inputs.mode == 'lite' }}
         env:
-          SUPABASE_DB_URL: ${{ secrets.SUPABASE_POOLER_URL }}
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
           SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
@@ -109,7 +109,7 @@ jobs:
       - name: Seed database (full)
         if: ${{ github.event.inputs.mode == 'full' }}
         env:
-          SUPABASE_DB_URL: ${{ secrets.SUPABASE_POOLER_URL }}
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
           SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
