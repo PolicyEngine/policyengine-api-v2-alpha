@@ -1,6 +1,7 @@
 """Shared utilities for seed scripts."""
 
 import io
+import json
 import logging
 import sys
 import warnings
@@ -61,6 +62,8 @@ def bulk_insert(session: Session, table: str, columns: list[str], rows: list[dic
                     val.replace("\\", "\\\\").replace("\t", "\\t").replace("\n", "\\n")
                 )
                 values.append(val)
+            elif isinstance(val, (list, dict)):
+                values.append(json.dumps(val))
             else:
                 values.append(str(val))
         output.write("\t".join(values) + "\n")

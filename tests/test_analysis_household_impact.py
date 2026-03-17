@@ -3,6 +3,8 @@
 from datetime import date
 from uuid import UUID, uuid4
 
+import pytest
+
 from policyengine_api.api.household_analysis import (
     UK_CONFIG,
     US_CONFIG,
@@ -314,6 +316,7 @@ class TestHouseholdImpactNotFound:
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.integration
 class TestHouseholdImpactRecordCreation:
     """Tests for correct record creation."""
 
@@ -404,6 +407,7 @@ class TestHouseholdImpactRecordCreation:
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.integration
 class TestHouseholdImpactDeduplication:
     """Tests for simulation/report deduplication."""
 
@@ -470,6 +474,7 @@ class TestHouseholdImpactDeduplication:
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.integration
 class TestGetHouseholdImpact:
     """Tests for GET /analysis/household-impact/{report_id}."""
 
@@ -500,6 +505,7 @@ class TestGetHouseholdImpact:
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.integration
 class TestUSHouseholdImpact:
     """Tests specific to US households."""
 
