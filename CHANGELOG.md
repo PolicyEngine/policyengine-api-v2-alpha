@@ -1,3 +1,10 @@
+0.4.0 (2026-03-17)
+
+# Added
+
+- Automated GitHub Actions workflow to check for country package updates and open PRs. (#135)
+
+
 0.3.4 (2026-03-16)
 
 # Changed
