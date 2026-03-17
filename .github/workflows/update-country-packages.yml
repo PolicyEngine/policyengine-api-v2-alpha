@@ -2,7 +2,7 @@ name: Update country packages
 
 on:
   schedule:
-    - cron: "0 9 * * 1-5" # Weekdays at 9am UTC
+    - cron: "*/30 * * * *" # Every 30 minutes
   workflow_dispatch:
 
 permissions:
