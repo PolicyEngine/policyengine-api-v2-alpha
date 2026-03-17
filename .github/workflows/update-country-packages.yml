@@ -15,7 +15,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        package: [policyengine, policyengine-us, policyengine-uk]
+        package: [policyengine-us, policyengine-uk]
       fail-fast: false
 
     steps:

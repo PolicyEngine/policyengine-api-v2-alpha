@@ -1832,7 +1832,7 @@ wheels = [
 
 [[package]]
 name = "policyengine"
-version = "3.2.1"
+version = "3.2.3"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "microdf-python" },
@@ -1842,9 +1842,9 @@ dependencies = [
     { name = "pydantic" },
     { name = "requests" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/4f/a4/5a83cc6de2fe452fee2758b5092a303930777495070733d968fc4e2acab1/policyengine-3.2.1.tar.gz", hash = "sha256:1e388aa9bbe86fb5908326348511f3a9675a8d745bff6e8ad35ecfa681abac61", size = 235077, upload-time = "2026-03-10T17:16:56.046Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/f6/73/0617495f360e3ae7e2e146f4bc19434aaa72a469a34043cc8b4ef1066a5e/policyengine-3.2.3.tar.gz", hash = "sha256:cdbc0b1eb60726b2c8ba58838f7950bf0a2ddb5aad960f099e8f70e5ad819d39", size = 243693, upload-time = "2026-03-17T22:02:05.64Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/68/d2/5e5af3b4cd55313141f6dcca6bec63e6372c7e5519e32a7d02e1264ec407/policyengine-3.2.1-py3-none-any.whl", hash = "sha256:7d656241f4f9c8d6afd8bc500c720678e5769d85bed18fa7e9de0692c4fc5dc1", size = 100885, upload-time = "2026-03-10T17:16:54.742Z" },
+    { url = "https://files.pythonhosted.org/packages/95/66/5616d6df1c88500dd21b9f4f2593bf3e37a74b1b62d06d7056093ccf9768/policyengine-3.2.3-py3-none-any.whl", hash = "sha256:2fdf9f65513f9c8c3235f315617b4cbc6cd7dc2169bd3102e133b83a8133e790", size = 105831, upload-time = "2026-03-17T22:02:04.499Z" },
 ]
 
 [[package]]
@@ -1900,7 +1900,7 @@ requires-dist = [
     { name = "httpx", marker = "extra == 'dev'", specifier = ">=0.27.2" },
     { name = "logfire", extras = ["fastapi", "httpx", "sqlalchemy"], specifier = ">=0.60.0" },
     { name = "modal", specifier = ">=0.68.0" },
-    { name = "policyengine", specifier = "==3.2.1" },
+    { name = "policyengine", specifier = ">=3.2.3" },
     { name = "policyengine-uk", specifier = "==2.75.1" },
     { name = "policyengine-us", specifier = "==1.592.4" },
     { name = "psycopg2-binary", specifier = ">=2.9.10" },
