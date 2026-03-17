@@ -1,3 +1,10 @@
+0.4.1 (2026-03-17)
+
+# Fixed
+
+- Serialize lists and dicts as JSON in bulk_insert for Postgres COPY compatibility (fix-seed-json)
+
+
 0.4.0 (2026-03-17)
 
 # Added
