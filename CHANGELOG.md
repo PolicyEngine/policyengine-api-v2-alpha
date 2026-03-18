@@ -1,3 +1,10 @@
+0.4.2 (2026-03-18)
+
+# Fixed
+
+- Use GitHub App token in country package auto-updater so PRs trigger CI tests. (#144)
+
+
 0.4.1 (2026-03-17)
 
 # Fixed
