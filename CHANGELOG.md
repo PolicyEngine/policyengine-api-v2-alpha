@@ -1,3 +1,10 @@
+0.4.3 (2026-03-18)
+
+# Fixed
+
+- Auto-updater PRs now include a changelog fragment. (#147)
+
+
 0.4.2 (2026-03-18)
 
 # Fixed
