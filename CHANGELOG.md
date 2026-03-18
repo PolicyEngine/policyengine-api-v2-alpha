@@ -1,3 +1,10 @@
+0.4.4 (2026-03-18)
+
+# Fixed
+
+- Versioning workflow now creates GitHub Releases by using App token to trigger Phase 2. (#149)
+
+
 0.4.3 (2026-03-18)
 
 # Fixed
