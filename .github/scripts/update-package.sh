@@ -58,10 +58,14 @@ if git diff --quiet uv.lock pyproject.toml; then
   exit 0
 fi
 
-# 7. Create branch, commit, push, open PR
+# 7. Create branch, add changelog fragment, commit, push, open PR
 BRANCH="auto/update-${PACKAGE}-${LATEST}"
 git checkout -b "$BRANCH"
-git add uv.lock pyproject.toml
+
+FRAGMENT="changelog.d/${PACKAGE}-${LATEST}.changed.md"
+echo "Update ${PACKAGE} to ${LATEST}." > "$FRAGMENT"
+
+git add uv.lock pyproject.toml "$FRAGMENT"
 git commit -m "chore(deps): update ${PACKAGE} to ${LATEST}"
 git push -u origin "$BRANCH"
 
