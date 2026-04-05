@@ -897,10 +897,10 @@ def _run_local_economy_comparison_uk(
     pe_reform_sim.ensure()
 
     # Run computation modules
-    from policyengine_api.api.computation_modules import UK_MODULE_DISPATCH, run_modules
+    from policyengine_api.api.computation_modules import run_modules
 
     run_modules(
-        dispatch=UK_MODULE_DISPATCH,
+        country_id="uk",
         modules=modules,
         pe_baseline_sim=pe_baseline_sim,
         pe_reform_sim=pe_reform_sim,
@@ -908,7 +908,6 @@ def _run_local_economy_comparison_uk(
         reform_sim_id=reform_sim.id,
         report_id=report.id,
         session=session,
-        country_id="uk",
     )
 
     # Mark completed
@@ -1082,10 +1081,10 @@ def _run_local_economy_comparison_us(
     pe_reform_sim.ensure()
 
     # Run computation modules
-    from policyengine_api.api.computation_modules import US_MODULE_DISPATCH, run_modules
+    from policyengine_api.api.computation_modules import run_modules
 
     run_modules(
-        dispatch=US_MODULE_DISPATCH,
+        country_id="us",
         modules=modules,
         pe_baseline_sim=pe_baseline_sim,
         pe_reform_sim=pe_reform_sim,
@@ -1093,7 +1092,6 @@ def _run_local_economy_comparison_us(
         reform_sim_id=reform_sim.id,
         report_id=report.id,
         session=session,
-        country_id="us",
     )
 
     # Mark completed
