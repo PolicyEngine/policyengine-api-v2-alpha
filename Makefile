@@ -143,7 +143,7 @@ db-reseed-prod:
 	fi
 
 modal-deploy:
-	@echo "Deploying Modal functions..."
+	@echo "Deploying versioned Modal simulation app..."
 	@set -a && . .env.prod && set +a && \
 	uv run modal secret create policyengine-db \
 		"DATABASE_URL=$$SUPABASE_POOLER_URL" \
@@ -151,11 +151,13 @@ modal-deploy:
 		"SUPABASE_KEY=$$SUPABASE_KEY" \
 		"STORAGE_BUCKET=$$STORAGE_BUCKET" \
 		--force
-	uv run modal deploy src/policyengine_api/modal_app.py
+	@export POLICYENGINE_US_VERSION=$$(grep -A1 'name = "policyengine-us"' uv.lock | grep version | head -1 | sed 's/.*"\(.*\)".*/\1/') && \
+	export POLICYENGINE_UK_VERSION=$$(grep -A1 'name = "policyengine-uk"' uv.lock | grep version | head -1 | sed 's/.*"\(.*\)".*/\1/') && \
+	.github/scripts/modal-deploy-versioned.sh main
 
 modal-serve:
 	@echo "Running Modal functions locally..."
-	uv run modal serve src/policyengine_api/modal_app.py
+	uv run modal serve src/policyengine_api/modal/deploy.py
 
 docs:
 	@echo "Building docs site..."

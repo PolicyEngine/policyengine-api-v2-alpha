@@ -1,71 +1,20 @@
-"""Modal.com serverless functions for PolicyEngine compute.
+"""Modal functions for PolicyEngine compute.
 
-This module defines Modal functions for running simulations and analyses
-with sub-1s cold starts via memory snapshot restore. The heavy policyengine
-imports happen at image build time, not runtime.
+All functions register on the versioned app from modal/app.py.
+Images, secrets, and shared utilities are imported from sibling modules.
+Function bodies are unchanged from the original modal_app.py.
 
-Function naming follows the API hierarchy:
-- simulate_household_*: Single household calculation (/simulate/household)
-- simulate_economy_*: Single economy simulation (/simulate/economy)
-- economy_comparison_*: Full economy comparison analysis (/analysis/compare/economy)
-
-Deploy with: modal deploy src/policyengine_api/modal_app.py
+Deploy entry point: src/policyengine_api/modal/deploy.py
 """
 
-import modal
-
-# Base image with common dependencies using uv for fast installs
-# Cache bust: 2026-01-12-v7-service-role-key-fix
-base_image = (
-    modal.Image.debian_slim(python_version="3.13")
-    .apt_install("libhdf5-dev", "git")
-    .pip_install("uv")
-    .run_commands(
-        "uv pip install --system --upgrade "
-        "policyengine>=3.2.0 "
-        "sqlmodel>=0.0.22 "
-        "psycopg2-binary>=2.9.10 "
-        "supabase>=2.10.0 "
-        "rich>=13.9.4 "
-        "logfire[httpx]>=3.0.0 "
-        "pydantic-settings>=2.0.0 "
-        "tables>=3.10.0"  # pytables - required for HDF5 dataset operations
-    )
-    # Include the policyengine_api models package (copy=True allows subsequent build steps)
-    .add_local_python_source("policyengine_api", copy=True)
+from policyengine_api.modal.app import app, db_secrets, logfire_secrets  # noqa: F401
+from policyengine_api.modal.images import base_image, uk_image, us_image  # noqa: F401
+from policyengine_api.modal.shared import (  # noqa: F401
+    configure_logfire,
+    download_dataset,
+    get_database_url,
+    get_db_session,
 )
-
-
-def _import_uk():
-    """Import UK model at build time to snapshot in memory."""
-    from policyengine.tax_benefit_models.uk import uk_latest  # noqa: F401
-
-    print("UK model loaded and snapshotted")
-
-
-def _import_us():
-    """Import US model at build time to snapshot in memory."""
-    from policyengine.tax_benefit_models.us import us_latest  # noqa: F401
-
-    print("US model loaded and snapshotted")
-
-
-# UK image - uses run_function to snapshot imported modules in memory
-uk_image = base_image.run_commands(
-    "uv pip install --system policyengine-uk>=2.0.0"
-).run_function(_import_uk)
-
-# US image - uses run_function to snapshot imported modules in memory
-us_image = base_image.run_commands(
-    "uv pip install --system policyengine-us>=1.0.0"
-).run_function(_import_us)
-
-app = modal.App("policyengine")
-
-
-# Secrets for database and observability
-db_secrets = modal.Secret.from_name("policyengine-db")
-logfire_secrets = modal.Secret.from_name("policyengine-logfire")
 
 # Required environment variables from each secret
 REQUIRED_DB_VARS = ["DATABASE_URL", "SUPABASE_URL", "SUPABASE_KEY"]
@@ -118,91 +67,6 @@ def validate_secrets() -> dict:
         "message": "All required secrets are configured",
         "present": present,
     }
-
-
-def configure_logfire(service_name: str, traceparent: str | None = None):
-    """Configure logfire with optional trace context propagation.
-
-    Args:
-        service_name: Service name for spans (e.g. "policyengine-modal-uk")
-        traceparent: W3C traceparent header for distributed tracing
-    """
-    import os
-
-    import logfire
-
-    token = os.environ.get("LOGFIRE_TOKEN", "")
-    if not token:
-        return
-
-    logfire.configure(
-        service_name=service_name,
-        token=token,
-        environment=os.environ.get("LOGFIRE_ENVIRONMENT", "production"),
-        console=False,
-    )
-
-    # If traceparent provided, attach to the current context
-    if traceparent:
-        from opentelemetry import context
-        from opentelemetry.trace.propagation.tracecontext import (
-            TraceContextTextMapPropagator,
-        )
-
-        propagator = TraceContextTextMapPropagator()
-        ctx = propagator.extract(carrier={"traceparent": traceparent})
-        context.attach(ctx)
-
-
-def get_database_url() -> str:
-    """Get and validate database URL from environment."""
-    import os
-
-    url = os.environ.get("DATABASE_URL", "")
-    if not url:
-        raise ValueError(
-            "DATABASE_URL environment variable is not set. "
-            "The Modal secret 'policyengine-db' must include DATABASE_URL=postgresql://... "
-            "Run: modal run policyengine::validate_secrets to debug."
-        )
-    if not url.startswith(("postgresql://", "postgres://")):
-        raise ValueError(
-            f"DATABASE_URL must start with postgresql:// or postgres://, got: {url[:50]}..."
-        )
-    return url
-
-
-def get_db_session(database_url: str):
-    """Create database session."""
-    from sqlmodel import Session, create_engine
-
-    engine = create_engine(database_url)
-    return Session(engine)
-
-
-def download_dataset(
-    filepath: str, supabase_url: str, supabase_key: str, storage_bucket: str
-) -> str:
-    """Download dataset from Supabase storage."""
-    from pathlib import Path
-
-    from supabase import create_client
-
-    cache_dir = Path("/tmp/policyengine_dataset_cache")
-    cache_dir.mkdir(parents=True, exist_ok=True)
-    cache_path = cache_dir / filepath
-
-    if cache_path.exists():
-        return str(cache_path)
-
-    client = create_client(supabase_url, supabase_key)
-    data = client.storage.from_(storage_bucket).download(filepath)
-
-    cache_path.parent.mkdir(parents=True, exist_ok=True)
-    with open(cache_path, "wb") as f:
-        f.write(data)
-
-    return str(cache_path)
 
 
 @app.function(

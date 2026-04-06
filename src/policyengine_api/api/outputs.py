@@ -8,11 +8,9 @@ from typing import List
 from uuid import UUID
 
 import logfire
-import modal
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from sqlmodel import Session, select
 
-from policyengine_api.config import settings
 from policyengine_api.models import (
     AggregateOutput,
     AggregateOutputCreate,
@@ -70,18 +68,12 @@ def _trigger_aggregate_computation(
 
     traceparent = _get_traceparent()
 
-    if "uk" in model.name.lower():
-        fn = modal.Function.from_name(
-            "policyengine",
-            "compute_aggregate_uk",
-            environment_name=settings.modal_environment,
-        )
-    else:
-        fn = modal.Function.from_name(
-            "policyengine",
-            "compute_aggregate_us",
-            environment_name=settings.modal_environment,
-        )
+    from policyengine_api.config.constants import country_id_from_model_name
+    from policyengine_api.version_resolver import resolve_modal_function
+
+    country = country_id_from_model_name(model.name)
+    func_name = f"compute_aggregate_{country}"
+    fn = resolve_modal_function(func_name, country)
 
     fn.spawn(aggregate_id=aggregate_id, traceparent=traceparent)
     logfire.info(

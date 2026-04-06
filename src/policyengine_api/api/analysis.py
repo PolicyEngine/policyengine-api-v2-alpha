@@ -30,7 +30,10 @@ from policyengine_api.api.module_registry import (
     get_modules_for_country,
     validate_modules,
 )
-from policyengine_api.config.constants import MODEL_NAME_TO_COUNTRY, CountryId
+from policyengine_api.config.constants import (
+    CountryId,
+    country_id_from_model_name,
+)
 from policyengine_api.models import (
     BudgetSummary,
     BudgetSummaryRead,
@@ -1132,20 +1135,10 @@ def _trigger_economy_comparison(
             _run_local_economy_comparison_us(job_id, session, modules=modules)
     else:
         # Use Modal (modules param passed for future selective computation)
-        import modal
+        from policyengine_api.version_resolver import resolve_modal_function
 
-        if country_id == "uk":
-            fn = modal.Function.from_name(
-                "policyengine",
-                "economy_comparison_uk",
-                environment_name=settings.modal_environment,
-            )
-        else:
-            fn = modal.Function.from_name(
-                "policyengine",
-                "economy_comparison_us",
-                environment_name=settings.modal_environment,
-            )
+        func_name = f"economy_comparison_{country_id}"
+        fn = resolve_modal_function(func_name, country_id)
 
         try:
             fn.spawn(job_id=job_id, traceparent=traceparent)
@@ -1638,8 +1631,9 @@ def rerun_report(
         raise HTTPException(status_code=500, detail="Tax-benefit model not found")
 
     # Reverse-lookup: model.name is "policyengine-us" → country_id is "us"
-    country_id = MODEL_NAME_TO_COUNTRY.get(model.name)
-    if not country_id:
+    try:
+        country_id = country_id_from_model_name(model.name)
+    except ValueError:
         raise HTTPException(status_code=500, detail=f"Unknown model name: {model.name}")
 
     # 4. Delete all result records for this report

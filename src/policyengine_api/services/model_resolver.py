@@ -7,8 +7,8 @@ from sqlmodel import Session, select
 
 from policyengine_api.config.constants import (
     COUNTRY_MODEL_NAMES,
-    MODEL_NAME_TO_COUNTRY,
     CountryId,
+    country_id_from_model_name,
 )
 from policyengine_api.models.simulation import Simulation
 from policyengine_api.models.tax_benefit_model import TaxBenefitModel
@@ -95,10 +95,10 @@ def resolve_country_from_simulation(sim: Simulation, session: Session) -> str:
     model = session.get(TaxBenefitModel, version.model_id)
     if not model:
         raise HTTPException(status_code=500, detail="Tax-benefit model not found")
-    country_id = MODEL_NAME_TO_COUNTRY.get(model.name)
-    if not country_id:
+    try:
+        return country_id_from_model_name(model.name)
+    except ValueError:
         raise HTTPException(
             status_code=500,
-            detail=f"Unknown model name: '{model.name}'. Expected: {list(MODEL_NAME_TO_COUNTRY.keys())}",
+            detail=f"Unknown model name: '{model.name}'. Expected format: 'policyengine-{{country_id}}'",
         )
-    return country_id

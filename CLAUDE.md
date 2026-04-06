@@ -15,10 +15,25 @@ See [docs/DESIGN.md](docs/DESIGN.md) for the full design including future endpoi
 ## How it works
 
 1. Client submits request to FastAPI (Cloud Run)
-2. API creates job record in Supabase and triggers Modal.com function
-3. Modal runs calculation with pre-loaded PolicyEngine models (sub-1s cold start)
-4. Modal writes results directly to Supabase
-5. Client polls API until job status = "completed"
+2. API resolves the country package version → versioned Modal app name via Modal Dicts
+3. API creates job record in Supabase and spawns a function on the versioned Modal app
+4. Modal runs calculation with pre-loaded PolicyEngine models (sub-1s cold start)
+5. Modal writes results directly to Supabase
+6. Client polls API until job status = "completed"
+
+## Versioned Modal deployments
+
+Each deploy creates a versioned Modal app named `policyengine-v2-us{X}-uk{Y}` (e.g., `policyengine-v2-us1-592-4-uk2-75-1`). Old versions remain deployed and accessible. Cloud Run routes to the correct version via Modal Dict registries (`simulation-api-us-versions`, `simulation-api-uk-versions`).
+
+**Key files:**
+- `src/policyengine_api/modal/app.py` — Versioned app definition (dynamic name from env vars)
+- `src/policyengine_api/modal/images.py` — Country images with exact version pins (`==`)
+- `src/policyengine_api/modal/deploy.py` — Entry point for `modal deploy`
+- `src/policyengine_api/version_resolver.py` — Resolves country+version to Modal app name
+- `scripts/update_version_registry.py` — Updates Modal Dicts after deploy
+- `.github/scripts/modal-deploy-versioned.sh` — Deploy script (generates app name, deploys, updates registry)
+
+**Deploy:** `POLICYENGINE_US_VERSION=X POLICYENGINE_UK_VERSION=Y .github/scripts/modal-deploy-versioned.sh <environment>`
 
 ## Modal functions
 
@@ -58,7 +73,8 @@ make modal-deploy     # deploy Modal.com serverless functions
 - `src/policyengine_api/api/` - FastAPI routers
 - `src/policyengine_api/models/` - SQLModel database models
 - `src/policyengine_api/services/` - database and storage services
-- `src/policyengine_api/modal_app.py` - Modal.com serverless functions
+- `src/policyengine_api/modal/` - Versioned Modal.com serverless functions
+- `src/policyengine_api/version_resolver.py` - Version → Modal app name resolution
 - `supabase/migrations/` - SQL migrations
 - `terraform/` - GCP Cloud Run infrastructure
 - `docs/` - Next.js docs site + DESIGN.md
