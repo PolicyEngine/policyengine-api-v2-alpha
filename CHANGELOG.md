@@ -1,3 +1,18 @@
+0.5.0 (2026-04-06)
+
+# Added
+
+- Versioned Modal deployments: each deploy creates a named app (`policyengine-v2-us{X}-uk{Y}`) with exact country package version pins, allowing multiple versions to coexist. Cloud Run routes to the correct version via Modal Dict registries. (#201)
+
+# Changed
+
+- Refactored monolithic `modal_app.py` into `modal/` package with separate modules for app definition, images, shared utilities, and functions. (#201)
+
+# Removed
+
+- Deleted monolithic `modal_app.py` (3,450 lines), replaced by `modal/` package. (#201)
+
+
 0.4.4 (2026-03-18)
 
 # Fixed
