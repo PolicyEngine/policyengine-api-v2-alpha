@@ -115,12 +115,10 @@ def simulation_fixture(session: Session):
 
 @pytest.fixture(name="mock_modal")
 def mock_modal_fixture():
-    """Mock modal.Function in API modules that import modal at the top level.
+    """Mock the version resolver so Modal functions are never called in tests.
 
-    Only patches modules with top-level `import modal` (outputs,
-    change_aggregates). Other modules (analysis, household, etc.) import
-    modal locally inside functions and are only reached via integration
-    tests which are excluded from the unit test run.
+    All route files use resolve_modal_function() from version_resolver.py,
+    so patching that single function intercepts all Modal calls.
 
     Usage:
         def test_something(mock_modal, client, simulation_id):
@@ -129,19 +127,12 @@ def mock_modal_fixture():
     """
     mock_fn = MagicMock()
 
-    modules_using_modal = [
-        "policyengine_api.api.outputs",
-        "policyengine_api.api.change_aggregates",
-    ]
-
-    patches = []
-    for module in modules_using_modal:
-        p = patch(f"{module}.modal.Function")
-        mock_class = p.start()
-        mock_class.from_name.return_value = mock_fn
-        patches.append(p)
+    p = patch(
+        "policyengine_api.version_resolver.resolve_modal_function",
+        return_value=mock_fn,
+    )
+    p.start()
 
     yield mock_fn
 
-    for p in patches:
-        p.stop()
+    p.stop()
