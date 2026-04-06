@@ -70,24 +70,11 @@ def resolve_modal_function(
     """
     from policyengine_api.config import settings
 
-    try:
-        app_name = _resolve_app_name(
-            country, version, settings.modal_environment
-        )
-        return modal.Function.from_name(
-            app_name,
-            function_name,
-            environment_name=settings.modal_environment,
-        )
-    except (KeyError, modal.exception.NotFoundError):
-        logger.warning(
-            "Version registry lookup failed for %s/%s, "
-            "falling back to legacy app 'policyengine'",
-            country,
-            version,
-        )
-        return modal.Function.from_name(
-            "policyengine",
-            function_name,
-            environment_name=settings.modal_environment,
-        )
+    app_name = _resolve_app_name(
+        country, version, settings.modal_environment
+    )
+    return modal.Function.from_name(
+        app_name,
+        function_name,
+        environment_name=settings.modal_environment,
+    )

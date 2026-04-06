@@ -97,11 +97,11 @@ class TestResolveAppName:
 
 
 class TestResolveModalFunction:
-    """Tests for resolve_modal_function (public API with fallback)."""
+    """Tests for resolve_modal_function (public API)."""
 
     @patch("policyengine_api.version_resolver.modal.Function.from_name")
-    def test_fallback_on_key_error(self, mock_from_name):
-        """KeyError from Dict lookup falls back to legacy app."""
+    def test_raises_on_missing_version(self, mock_from_name):
+        """KeyError from Dict lookup propagates to caller."""
         mock_dict = MagicMock()
         mock_dict.__getitem__ = MagicMock(side_effect=KeyError("latest"))
 
@@ -110,14 +110,8 @@ class TestResolveModalFunction:
                 "policyengine_api.config.settings"
             ) as mock_settings:
                 mock_settings.modal_environment = "main"
-                resolve_modal_function("simulate_household_us", "us")
-
-        # Should fall back to "policyengine" (legacy)
-        mock_from_name.assert_called_with(
-            "policyengine",
-            "simulate_household_us",
-            environment_name="main",
-        )
+                with pytest.raises(KeyError):
+                    resolve_modal_function("simulate_household_us", "us")
 
     @patch("policyengine_api.version_resolver.modal.Function.from_name")
     def test_successful_resolution(self, mock_from_name):
