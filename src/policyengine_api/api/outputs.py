@@ -70,9 +70,10 @@ def _trigger_aggregate_computation(
 
     traceparent = _get_traceparent()
 
+    from policyengine_api.config.constants import country_id_from_model_name
     from policyengine_api.version_resolver import resolve_modal_function
 
-    country = "uk" if "uk" in model.name.lower() else "us"
+    country = country_id_from_model_name(model.name)
     func_name = f"compute_aggregate_{country}"
     fn = resolve_modal_function(func_name, country)
 

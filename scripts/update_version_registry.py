@@ -21,13 +21,41 @@ import argparse
 import modal
 
 
+def _upsert_entry(
+    version_dict: modal.Dict,
+    dict_name: str,
+    key: str,
+    value: str,
+) -> None:
+    """Insert or update a single Dict entry, logging the change."""
+    try:
+        previous = version_dict[key]
+        if previous != value:
+            print(f"  {dict_name}[{key}]: {previous} -> {value}")
+        else:
+            print(f"  {dict_name}[{key}]: {value} (unchanged)")
+    except KeyError:
+        print(f"  {dict_name}[{key}]: (new) -> {value}")
+
+    version_dict[key] = value
+
+
+def _update_latest(
+    version_dict: modal.Dict,
+    dict_name: str,
+    version: str,
+) -> None:
+    """Update the 'latest' pointer, logging the change."""
+    _upsert_entry(version_dict, dict_name, "latest", version)
+
+
 def update_version_dict(
     dict_name: str,
     environment: str,
     version: str,
     app_name: str,
 ) -> None:
-    """Update a version dict entry, showing previous value if overwriting.
+    """Update a version dict: set version → app_name and latest → version.
 
     Args:
         dict_name: Name of the Modal Dict (e.g., "simulation-api-us-versions")
@@ -41,26 +69,8 @@ def update_version_dict(
         create_if_missing=True,
     )
 
-    # Check for existing entry
-    try:
-        previous_app = version_dict[version]
-        if previous_app != app_name:
-            print(f"  {dict_name}[{version}]: {previous_app} -> {app_name}")
-        else:
-            print(f"  {dict_name}[{version}]: {app_name} (unchanged)")
-    except KeyError:
-        print(f"  {dict_name}[{version}]: (new) -> {app_name}")
-
-    # Update entry
-    version_dict[version] = app_name
-
-    # Update latest pointer
-    previous_latest = version_dict.get("latest")
-    version_dict["latest"] = version
-    if previous_latest != version:
-        print(f"  {dict_name}[latest]: {previous_latest} -> {version}")
-    else:
-        print(f"  {dict_name}[latest]: {version} (unchanged)")
+    _upsert_entry(version_dict, dict_name, version, app_name)
+    _update_latest(version_dict, dict_name, version)
 
 
 def main():

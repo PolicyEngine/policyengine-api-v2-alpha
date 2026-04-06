@@ -30,7 +30,10 @@ from policyengine_api.api.module_registry import (
     get_modules_for_country,
     validate_modules,
 )
-from policyengine_api.config.constants import MODEL_NAME_TO_COUNTRY, CountryId
+from policyengine_api.config.constants import (
+    CountryId,
+    country_id_from_model_name,
+)
 from policyengine_api.models import (
     BudgetSummary,
     BudgetSummaryRead,
@@ -1628,8 +1631,9 @@ def rerun_report(
         raise HTTPException(status_code=500, detail="Tax-benefit model not found")
 
     # Reverse-lookup: model.name is "policyengine-us" → country_id is "us"
-    country_id = MODEL_NAME_TO_COUNTRY.get(model.name)
-    if not country_id:
+    try:
+        country_id = country_id_from_model_name(model.name)
+    except ValueError:
         raise HTTPException(status_code=500, detail=f"Unknown model name: {model.name}")
 
     # 4. Delete all result records for this report
