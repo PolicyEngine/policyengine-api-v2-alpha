@@ -1,7 +1,7 @@
 """
 Update Modal version registries after deployment.
 
-Each deployment creates a versioned app (e.g., policyengine-us1-592-4-uk2-75-1).
+Each deployment creates a versioned app (e.g., policyengine-v2-us1-592-4-uk2-75-1).
 This script updates the version dicts to map package versions to app names.
 
 The dicts allow Cloud Run to route requests for specific versions to the
@@ -10,7 +10,7 @@ remain accessible via their version numbers.
 
 Usage:
     uv run python scripts/update_version_registry.py \
-        --app-name policyengine-us1-592-4-uk2-75-1 \
+        --app-name policyengine-v2-us1-592-4-uk2-75-1 \
         --us-version 1.592.4 \
         --uk-version 2.75.1 \
         --environment staging
@@ -70,7 +70,7 @@ def main():
     parser.add_argument(
         "--app-name",
         required=True,
-        help="Versioned app name (e.g., policyengine-us1-592-4-uk2-75-1)",
+        help="Versioned app name (e.g., policyengine-v2-us1-592-4-uk2-75-1)",
     )
     parser.add_argument(
         "--us-version",

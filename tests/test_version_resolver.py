@@ -27,26 +27,26 @@ class TestResolveAppName:
         mock_dict.__getitem__ = MagicMock(
             side_effect=lambda key: {
                 "latest": "1.592.4",
-                "1.592.4": "policyengine-us1-592-4-uk2-75-1",
+                "1.592.4": "policyengine-v2-us1-592-4-uk2-75-1",
             }[key]
         )
 
         with patch("modal.Dict.from_name", return_value=mock_dict):
             result = _resolve_app_name("us", None, "main")
 
-        assert result == "policyengine-us1-592-4-uk2-75-1"
+        assert result == "policyengine-v2-us1-592-4-uk2-75-1"
 
     def test_resolves_specific_version(self):
         """Specific version string resolves directly to app name."""
         mock_dict = MagicMock()
         mock_dict.__getitem__ = MagicMock(
-            return_value="policyengine-us1-459-0-uk2-65-9"
+            return_value="policyengine-v2-us1-459-0-uk2-65-9"
         )
 
         with patch("modal.Dict.from_name", return_value=mock_dict):
             result = _resolve_app_name("us", "1.459.0", "staging")
 
-        assert result == "policyengine-us1-459-0-uk2-65-9"
+        assert result == "policyengine-v2-us1-459-0-uk2-65-9"
         mock_dict.__getitem__.assert_called_once_with("1.459.0")
 
     def test_routes_to_correct_dict_for_us(self):
@@ -126,7 +126,7 @@ class TestResolveModalFunction:
         mock_dict.__getitem__ = MagicMock(
             side_effect=lambda key: {
                 "latest": "1.592.4",
-                "1.592.4": "policyengine-us1-592-4-uk2-75-1",
+                "1.592.4": "policyengine-v2-us1-592-4-uk2-75-1",
             }[key]
         )
 
@@ -138,7 +138,7 @@ class TestResolveModalFunction:
                 resolve_modal_function("economy_comparison_uk", "uk")
 
         mock_from_name.assert_called_with(
-            "policyengine-us1-592-4-uk2-75-1",
+            "policyengine-v2-us1-592-4-uk2-75-1",
             "economy_comparison_uk",
             environment_name="main",
         )

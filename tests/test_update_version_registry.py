@@ -19,11 +19,11 @@ class TestUpdateVersionDict:
                 "simulation-api-us-versions",
                 "staging",
                 "1.592.4",
-                "policyengine-us1-592-4-uk2-75-1",
+                "policyengine-v2-us1-592-4-uk2-75-1",
             )
 
         mock_dict.__setitem__.assert_any_call(
-            "1.592.4", "policyengine-us1-592-4-uk2-75-1"
+            "1.592.4", "policyengine-v2-us1-592-4-uk2-75-1"
         )
         mock_dict.__setitem__.assert_any_call("latest", "1.592.4")
 

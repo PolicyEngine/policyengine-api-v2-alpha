@@ -24,11 +24,11 @@ def get_app_name(us_version: str, uk_version: str) -> str:
     compatibility.
 
     Example: get_app_name("1.592.4", "2.75.1")
-             -> "policyengine-us1-592-4-uk2-75-1"
+             -> "policyengine-v2-us1-592-4-uk2-75-1"
     """
     us_safe = us_version.replace(".", "-")
     uk_safe = uk_version.replace(".", "-")
-    return f"policyengine-us{us_safe}-uk{uk_safe}"
+    return f"policyengine-v2-us{us_safe}-uk{uk_safe}"
 
 
 APP_NAME = os.environ.get(

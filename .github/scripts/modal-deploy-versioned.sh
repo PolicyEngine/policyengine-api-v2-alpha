@@ -18,7 +18,7 @@ MODAL_ENV="${1:?Modal environment required (staging or main)}"
 # Generate versioned app name (dots replaced with dashes)
 US_VERSION_SAFE="${POLICYENGINE_US_VERSION//./-}"
 UK_VERSION_SAFE="${POLICYENGINE_UK_VERSION//./-}"
-APP_NAME="policyengine-us${US_VERSION_SAFE}-uk${UK_VERSION_SAFE}"
+APP_NAME="policyengine-v2-us${US_VERSION_SAFE}-uk${UK_VERSION_SAFE}"
 
 echo "========================================"
 echo "Deploying versioned Modal simulation app"

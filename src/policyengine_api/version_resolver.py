@@ -34,7 +34,7 @@ def _resolve_app_name(
         environment: Modal environment name ("staging" or "main")
 
     Returns:
-        The versioned Modal app name (e.g. "policyengine-us1-592-4-uk2-75-1")
+        The versioned Modal app name (e.g. "policyengine-v2-us1-592-4-uk2-75-1")
 
     Raises:
         KeyError: If version not found in registry

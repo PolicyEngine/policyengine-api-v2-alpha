@@ -59,7 +59,7 @@ echo ""
 
 APP_NAME=$(uv run python -c "from policyengine_api.modal.app import get_app_name; print(get_app_name('$US_VERSION', '$UK_VERSION'))" 2>&1)
 
-if [[ "$APP_NAME" =~ ^policyengine-us[0-9]+-[0-9]+-[0-9]+-uk[0-9]+-[0-9]+-[0-9]+$ ]]; then
+if [[ "$APP_NAME" =~ ^policyengine-v2-us[0-9]+-[0-9]+-[0-9]+-uk[0-9]+-[0-9]+-[0-9]+$ ]]; then
     pass "App name format correct: $APP_NAME"
 else
     fail "App name format" "Got '$APP_NAME'"

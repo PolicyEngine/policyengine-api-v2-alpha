@@ -407,7 +407,7 @@ jobs:
         run: |
           US_SAFE="${POLICYENGINE_US_VERSION//./-}"
           UK_SAFE="${POLICYENGINE_UK_VERSION//./-}"
-          APP_NAME="policyengine-us${US_SAFE}-uk${UK_SAFE}"
+          APP_NAME="policyengine-v2-us${US_SAFE}-uk${UK_SAFE}"
           echo "Validating Modal secrets on ${APP_NAME}..."
           result=$(uv run python -c "
           import modal

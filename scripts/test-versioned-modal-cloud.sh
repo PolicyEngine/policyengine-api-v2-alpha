@@ -34,7 +34,7 @@ US_VERSION=$(grep -A1 'name = "policyengine-us"' uv.lock | grep version | head -
 UK_VERSION=$(grep -A1 'name = "policyengine-uk"' uv.lock | grep version | head -1 | sed 's/.*"\(.*\)".*/\1/')
 US_SAFE="${US_VERSION//./-}"
 UK_SAFE="${UK_VERSION//./-}"
-APP_NAME="policyengine-us${US_SAFE}-uk${UK_SAFE}"
+APP_NAME="policyengine-v2-us${US_SAFE}-uk${UK_SAFE}"
 
 echo ""
 echo "=========================================="
@@ -172,7 +172,7 @@ echo ""
 
 FAKE_US="$US_VERSION.1"
 FAKE_US_SAFE="${FAKE_US//./-}"
-FAKE_APP="policyengine-us${FAKE_US_SAFE}-uk${UK_SAFE}"
+FAKE_APP="policyengine-v2-us${FAKE_US_SAFE}-uk${UK_SAFE}"
 
 # Update just the Dict (don't actually deploy a fake app — just test the registry)
 uv run python -c "

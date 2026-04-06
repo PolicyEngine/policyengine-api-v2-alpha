@@ -11,15 +11,15 @@ class TestGetAppName:
 
     def test_standard_versions(self):
         result = get_app_name("1.592.4", "2.75.1")
-        assert result == "policyengine-us1-592-4-uk2-75-1"
+        assert result == "policyengine-v2-us1-592-4-uk2-75-1"
 
     def test_dots_replaced_with_dashes(self):
         result = get_app_name("1.0.0", "2.0.0")
-        assert "." not in result.split("policyengine-")[1]
+        assert "." not in result.split("policyengine-v2-")[1]
 
     def test_long_versions(self):
         result = get_app_name("1.1234.56", "2.789.0")
-        assert result == "policyengine-us1-1234-56-uk2-789-0"
+        assert result == "policyengine-v2-us1-1234-56-uk2-789-0"
 
 
 class TestAppNameEnvOverride:
@@ -37,4 +37,4 @@ class TestAppNameEnvOverride:
             result = os.environ.get(
                 "MODAL_APP_NAME", get_app_name("1.592.4", "2.75.1")
             )
-            assert result == "policyengine-us1-592-4-uk2-75-1"
+            assert result == "policyengine-v2-us1-592-4-uk2-75-1"
