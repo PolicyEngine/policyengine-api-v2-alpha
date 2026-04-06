@@ -164,13 +164,8 @@ class TestResolveCountryFromSimulation:
         sim = self._create_simulation(session, "policyengine-uk")
         assert resolve_country_from_simulation(sim, session) == "uk"
 
-    def test_new_country_returns_country_id(self, session):
-        """Forward-compatible: any policyengine-{country} name works."""
+    def test_unknown_model_name_raises_500(self, session):
         sim = self._create_simulation(session, "policyengine-fr")
-        assert resolve_country_from_simulation(sim, session) == "fr"
-
-    def test_bad_model_name_raises_500(self, session):
-        sim = self._create_simulation(session, "some-other-model")
         with pytest.raises(HTTPException) as exc_info:
             resolve_country_from_simulation(sim, session)
         assert exc_info.value.status_code == 500
