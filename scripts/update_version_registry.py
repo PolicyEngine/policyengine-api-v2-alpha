@@ -99,9 +99,7 @@ def main():
     )
     args = parser.parse_args()
 
-    print(
-        f"Updating version registries in Modal environment: {args.environment}"
-    )
+    print(f"Updating version registries in Modal environment: {args.environment}")
     print(f"  App name: {args.app_name}")
     print(f"  US version: {args.us_version}")
     print(f"  UK version: {args.uk_version}")

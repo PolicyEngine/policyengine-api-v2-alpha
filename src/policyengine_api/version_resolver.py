@@ -23,9 +23,7 @@ logger = logging.getLogger(__name__)
 
 
 @functools.lru_cache(maxsize=32)
-def _resolve_app_name(
-    country: str, version: str | None, environment: str
-) -> str:
+def _resolve_app_name(country: str, version: str | None, environment: str) -> str:
     """Look up the Modal app name for a given country+version from Modal Dicts.
 
     Args:
@@ -40,9 +38,7 @@ def _resolve_app_name(
         KeyError: If version not found in registry
     """
     dict_name = f"simulation-api-{country.lower()}-versions"
-    version_dict = modal.Dict.from_name(
-        dict_name, environment_name=environment
-    )
+    version_dict = modal.Dict.from_name(dict_name, environment_name=environment)
 
     if version is None:
         resolved_version = version_dict["latest"]
@@ -70,9 +66,7 @@ def resolve_modal_function(
     """
     from policyengine_api.config import settings
 
-    app_name = _resolve_app_name(
-        country, version, settings.modal_environment
-    )
+    app_name = _resolve_app_name(country, version, settings.modal_environment)
     return modal.Function.from_name(
         app_name,
         function_name,

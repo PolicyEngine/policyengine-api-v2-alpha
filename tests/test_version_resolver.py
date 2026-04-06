@@ -106,9 +106,7 @@ class TestResolveModalFunction:
         mock_dict.__getitem__ = MagicMock(side_effect=KeyError("latest"))
 
         with patch("modal.Dict.from_name", return_value=mock_dict):
-            with patch(
-                "policyengine_api.config.settings"
-            ) as mock_settings:
+            with patch("policyengine_api.config.settings") as mock_settings:
                 mock_settings.modal_environment = "main"
                 with pytest.raises(KeyError):
                     resolve_modal_function("simulate_household_us", "us")
@@ -125,9 +123,7 @@ class TestResolveModalFunction:
         )
 
         with patch("modal.Dict.from_name", return_value=mock_dict):
-            with patch(
-                "policyengine_api.config.settings"
-            ) as mock_settings:
+            with patch("policyengine_api.config.settings") as mock_settings:
                 mock_settings.modal_environment = "main"
                 resolve_modal_function("economy_comparison_uk", "uk")
 

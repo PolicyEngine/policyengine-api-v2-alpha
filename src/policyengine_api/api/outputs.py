@@ -8,11 +8,9 @@ from typing import List
 from uuid import UUID
 
 import logfire
-import modal
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from sqlmodel import Session, select
 
-from policyengine_api.config import settings
 from policyengine_api.models import (
     AggregateOutput,
     AggregateOutputCreate,

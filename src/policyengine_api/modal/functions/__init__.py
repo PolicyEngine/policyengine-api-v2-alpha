@@ -69,7 +69,6 @@ def validate_secrets() -> dict:
     }
 
 
-
 @app.function(
     image=uk_image,
     secrets=[db_secrets, logfire_secrets],

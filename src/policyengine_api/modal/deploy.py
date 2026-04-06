@@ -7,7 +7,6 @@ The import order matters: app must be defined before functions
 register their @app.function decorators.
 """
 
-from policyengine_api.modal.app import app  # noqa: F401
-
 # Import functions module to register all @app.function decorators
 import policyengine_api.modal.functions  # noqa: F401, E402
+from policyengine_api.modal.app import app  # noqa: F401

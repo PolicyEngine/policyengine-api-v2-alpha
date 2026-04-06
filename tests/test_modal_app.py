@@ -25,16 +25,12 @@ class TestGetAppName:
 class TestAppNameEnvOverride:
     def test_env_override_takes_precedence(self):
         with patch.dict(os.environ, {"MODAL_APP_NAME": "custom-app"}):
-            result = os.environ.get(
-                "MODAL_APP_NAME", get_app_name("1.0.0", "2.0.0")
-            )
+            result = os.environ.get("MODAL_APP_NAME", get_app_name("1.0.0", "2.0.0"))
             assert result == "custom-app"
 
     def test_fallback_to_generated_name(self):
         env = os.environ.copy()
         env.pop("MODAL_APP_NAME", None)
         with patch.dict(os.environ, env, clear=True):
-            result = os.environ.get(
-                "MODAL_APP_NAME", get_app_name("1.592.4", "2.75.1")
-            )
+            result = os.environ.get("MODAL_APP_NAME", get_app_name("1.592.4", "2.75.1"))
             assert result == "policyengine-v2-us1-592-4-uk2-75-1"

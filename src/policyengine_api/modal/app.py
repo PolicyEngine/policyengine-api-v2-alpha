@@ -31,9 +31,7 @@ def get_app_name(us_version: str, uk_version: str) -> str:
     return f"policyengine-v2-us{us_safe}-uk{uk_safe}"
 
 
-APP_NAME = os.environ.get(
-    "MODAL_APP_NAME", get_app_name(US_VERSION, UK_VERSION)
-)
+APP_NAME = os.environ.get("MODAL_APP_NAME", get_app_name(US_VERSION, UK_VERSION))
 
 app = modal.App(APP_NAME)
 
