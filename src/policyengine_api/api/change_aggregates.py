@@ -71,18 +71,11 @@ def _trigger_change_aggregate_computation(
 
     traceparent = _get_traceparent()
 
-    if "uk" in model.name.lower():
-        fn = modal.Function.from_name(
-            "policyengine",
-            "compute_change_aggregate_uk",
-            environment_name=settings.modal_environment,
-        )
-    else:
-        fn = modal.Function.from_name(
-            "policyengine",
-            "compute_change_aggregate_us",
-            environment_name=settings.modal_environment,
-        )
+    from policyengine_api.version_resolver import resolve_modal_function
+
+    country = "uk" if "uk" in model.name.lower() else "us"
+    func_name = f"compute_change_aggregate_{country}"
+    fn = resolve_modal_function(func_name, country)
 
     fn.spawn(change_aggregate_id=change_aggregate_id, traceparent=traceparent)
     logfire.info(

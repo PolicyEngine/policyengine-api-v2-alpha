@@ -752,16 +752,15 @@ def _trigger_modal_household(
             )
     else:
         # Use Modal
-        import modal
+        from policyengine_api.version_resolver import resolve_modal_function
 
         traceparent = get_traceparent()
 
+        country = request.country_id
+        func_name = f"simulate_household_{country}"
+        fn = resolve_modal_function(func_name, country)
+
         if request.country_id == "uk":
-            fn = modal.Function.from_name(
-                "policyengine",
-                "simulate_household_uk",
-                environment_name=settings.modal_environment,
-            )
             fn.spawn(
                 job_id=job_id,
                 people=request.people,
@@ -773,11 +772,6 @@ def _trigger_modal_household(
                 traceparent=traceparent,
             )
         else:
-            fn = modal.Function.from_name(
-                "policyengine",
-                "simulate_household_us",
-                environment_name=settings.modal_environment,
-            )
             fn.spawn(
                 job_id=job_id,
                 people=request.people,

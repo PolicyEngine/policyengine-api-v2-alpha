@@ -478,20 +478,10 @@ def _trigger_household_impact(
         _run_local_household_impact(report_id, session)
     else:
         # Use Modal
-        import modal
+        from policyengine_api.version_resolver import resolve_modal_function
 
-        if country_id == "uk":
-            fn = modal.Function.from_name(
-                "policyengine",
-                "household_impact_uk",
-                environment_name=settings.modal_environment,
-            )
-        else:
-            fn = modal.Function.from_name(
-                "policyengine",
-                "household_impact_us",
-                environment_name=settings.modal_environment,
-            )
+        func_name = f"household_impact_{country_id}"
+        fn = resolve_modal_function(func_name, country_id)
 
         try:
             fn.spawn(report_id=report_id, traceparent=traceparent)
