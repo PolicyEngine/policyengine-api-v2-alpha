@@ -241,12 +241,27 @@ jobs:
           chmod +x .github/scripts/*.sh
           .github/scripts/modal-sync-secrets.sh staging staging
 
-      - name: Deploy Modal functions to staging
+      - name: Extract package versions
+        id: versions
+        run: |
+          chmod +x .github/scripts/modal-extract-versions.sh
+          .github/scripts/modal-extract-versions.sh .
+
+      - name: Deploy versioned Modal simulation app to staging
+        env:
+          MODAL_TOKEN_ID: ${{ secrets.MODAL_TOKEN_ID }}
+          MODAL_TOKEN_SECRET: ${{ secrets.MODAL_TOKEN_SECRET }}
+          POLICYENGINE_US_VERSION: ${{ steps.versions.outputs.us_version }}
+          POLICYENGINE_UK_VERSION: ${{ steps.versions.outputs.uk_version }}
+        run: |
+          chmod +x .github/scripts/modal-deploy-versioned.sh
+          .github/scripts/modal-deploy-versioned.sh staging
+
+      - name: Deploy agent sandbox to staging
         env:
           MODAL_TOKEN_ID: ${{ secrets.MODAL_TOKEN_ID }}
           MODAL_TOKEN_SECRET: ${{ secrets.MODAL_TOKEN_SECRET }}
         run: |
-          uv run modal deploy --env=staging src/policyengine_api/modal_app.py
           uv run modal deploy --env=staging src/policyengine_api/agent_sandbox.py
 
   deploy-staging-cloudrun:
@@ -360,23 +375,43 @@ jobs:
           chmod +x .github/scripts/*.sh
           .github/scripts/modal-sync-secrets.sh main prod
 
-      - name: Deploy Modal functions to production
+      - name: Extract package versions
+        id: prod-versions
+        run: |
+          chmod +x .github/scripts/modal-extract-versions.sh
+          .github/scripts/modal-extract-versions.sh .
+
+      - name: Deploy versioned Modal simulation app to production
+        env:
+          MODAL_TOKEN_ID: ${{ secrets.MODAL_TOKEN_ID }}
+          MODAL_TOKEN_SECRET: ${{ secrets.MODAL_TOKEN_SECRET }}
+          POLICYENGINE_US_VERSION: ${{ steps.prod-versions.outputs.us_version }}
+          POLICYENGINE_UK_VERSION: ${{ steps.prod-versions.outputs.uk_version }}
+        run: |
+          chmod +x .github/scripts/modal-deploy-versioned.sh
+          .github/scripts/modal-deploy-versioned.sh main
+
+      - name: Deploy agent sandbox to production
         env:
           MODAL_TOKEN_ID: ${{ secrets.MODAL_TOKEN_ID }}
           MODAL_TOKEN_SECRET: ${{ secrets.MODAL_TOKEN_SECRET }}
         run: |
-          uv run modal deploy --env=main src/policyengine_api/modal_app.py
           uv run modal deploy --env=main src/policyengine_api/agent_sandbox.py
 
       - name: Validate Modal secrets
         env:
           MODAL_TOKEN_ID: ${{ secrets.MODAL_TOKEN_ID }}
           MODAL_TOKEN_SECRET: ${{ secrets.MODAL_TOKEN_SECRET }}
+          POLICYENGINE_US_VERSION: ${{ steps.prod-versions.outputs.us_version }}
+          POLICYENGINE_UK_VERSION: ${{ steps.prod-versions.outputs.uk_version }}
         run: |
-          echo "Validating Modal secrets..."
+          US_SAFE="${POLICYENGINE_US_VERSION//./-}"
+          UK_SAFE="${POLICYENGINE_UK_VERSION//./-}"
+          APP_NAME="policyengine-us${US_SAFE}-uk${UK_SAFE}"
+          echo "Validating Modal secrets on ${APP_NAME}..."
           result=$(uv run python -c "
           import modal
-          f = modal.Function.from_name('policyengine', 'validate_secrets')
+          f = modal.Function.from_name('${APP_NAME}', 'validate_secrets')
           result = f.remote()
           import json
           print(json.dumps(result))
