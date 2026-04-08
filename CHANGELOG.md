@@ -1,3 +1,10 @@
+0.5.1 (2026-04-08)
+
+# Fixed
+
+- Skip the deploy and integration-test pipeline for automated package version update commits. (#208)
+
+
 0.5.0 (2026-04-06)
 
 # Added
