@@ -67,7 +67,9 @@ class TestResolveAppName:
         with patch("modal.Dict.from_name", return_value=mock_dict) as from_name:
             _resolve_app_name("uk", "2.0.0", "staging")
 
-        from_name.assert_called_once_with("api-v2-uk-versions", environment_name="staging")
+        from_name.assert_called_once_with(
+            "api-v2-uk-versions", environment_name="staging"
+        )
 
     def test_lru_cache_returns_same_result(self):
         """Repeated calls with same args hit cache, not Modal Dict."""
