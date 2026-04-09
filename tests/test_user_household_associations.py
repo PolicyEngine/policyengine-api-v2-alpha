@@ -153,6 +153,64 @@ def test_update_association_label(client, session):
     assert response.status_code == 200
     data = response.json()
     assert data["label"] == "New label"
+    assert data["household_id"] == str(household.id)
+
+
+def test_update_association_household_reassignment(client, session):
+    """Update household_id and keep the same association record."""
+    user = create_user(session)
+    original_household = create_household(session, label="Original")
+    replacement_household = create_household(session, label="Replacement")
+    assoc = create_association(
+        session, user.id, original_household.id, label="My household"
+    )
+
+    response = client.put(
+        f"/user-household-associations/{assoc.id}",
+        params={"user_id": str(user.id)},
+        json={"household_id": str(replacement_household.id)},
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["id"] == str(assoc.id)
+    assert data["household_id"] == str(replacement_household.id)
+    assert data["label"] == "My household"
+
+
+def test_update_association_household_reassignment_not_found(client, session):
+    """Updating household_id rejects a missing replacement household."""
+    user = create_user(session)
+    household = create_household(session)
+    assoc = create_association(session, user.id, household.id, label="Old")
+
+    response = client.put(
+        f"/user-household-associations/{assoc.id}",
+        params={"user_id": str(user.id)},
+        json={"household_id": str(uuid4())},
+    )
+    assert response.status_code == 404
+    assert "not found" in response.json()["detail"]
+
+
+def test_update_association_label_and_household_reassignment(client, session):
+    """Updating label and household_id applies both changes together."""
+    user = create_user(session)
+    original_household = create_household(session, label="Original")
+    replacement_household = create_household(session, label="Replacement")
+    assoc = create_association(session, user.id, original_household.id, label="Old")
+
+    response = client.put(
+        f"/user-household-associations/{assoc.id}",
+        params={"user_id": str(user.id)},
+        json={
+            "label": "New label",
+            "household_id": str(replacement_household.id),
+        },
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["label"] == "New label"
+    assert data["household_id"] == str(replacement_household.id)
 
 
 def test_update_association_wrong_user(client, session):
