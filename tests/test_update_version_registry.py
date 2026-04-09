@@ -16,7 +16,7 @@ class TestUpdateVersionDict:
 
         with patch("modal.Dict.from_name", return_value=mock_dict):
             update_version_dict(
-                "simulation-api-us-versions",
+                "api-v2-us-versions",
                 "staging",
                 "1.592.4",
                 "policyengine-v2-us1-592-4-uk2-75-1",
@@ -35,7 +35,7 @@ class TestUpdateVersionDict:
 
         with patch("modal.Dict.from_name", return_value=mock_dict):
             update_version_dict(
-                "simulation-api-us-versions",
+                "api-v2-us-versions",
                 "main",
                 "1.592.4",
                 "new-app-name",
@@ -51,7 +51,7 @@ class TestUpdateVersionDict:
 
         with patch("modal.Dict.from_name", return_value=mock_dict):
             update_version_dict(
-                "simulation-api-uk-versions",
+                "api-v2-uk-versions",
                 "staging",
                 "2.0.0",
                 "app-v2",
@@ -67,14 +67,14 @@ class TestUpdateVersionDict:
 
         with patch("modal.Dict.from_name", return_value=mock_dict) as from_name:
             update_version_dict(
-                "simulation-api-us-versions",
+                "api-v2-us-versions",
                 "staging",
                 "1.0.0",
                 "app",
             )
 
         from_name.assert_called_once_with(
-            "simulation-api-us-versions",
+            "api-v2-us-versions",
             environment_name="staging",
             create_if_missing=True,
         )
@@ -87,7 +87,7 @@ class TestUpdateVersionDict:
 
         with patch("modal.Dict.from_name", return_value=mock_dict) as from_name:
             update_version_dict(
-                "simulation-api-uk-versions",
+                "api-v2-uk-versions",
                 "main",
                 "2.75.1",
                 "app-uk",

@@ -23,7 +23,7 @@ See [docs/DESIGN.md](docs/DESIGN.md) for the full design including future endpoi
 
 ## Versioned Modal deployments
 
-Each deploy creates a versioned Modal app named `policyengine-v2-us{X}-uk{Y}` (e.g., `policyengine-v2-us1-592-4-uk2-75-1`). Old versions remain deployed and accessible. Cloud Run routes to the correct version via Modal Dict registries (`simulation-api-us-versions`, `simulation-api-uk-versions`).
+Each deploy creates a versioned Modal app named `policyengine-v2-us{X}-uk{Y}` (e.g., `policyengine-v2-us1-592-4-uk2-75-1`). Old versions remain deployed and accessible. Cloud Run routes to the correct version via v2-specific Modal Dict registries (`api-v2-us-versions`, `api-v2-uk-versions`).
 
 **Key files:**
 - `src/policyengine_api/modal/app.py` — Versioned app definition (dynamic name from env vars)
