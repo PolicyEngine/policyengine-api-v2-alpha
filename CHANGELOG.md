@@ -1,3 +1,10 @@
+0.6.0 (2026-04-09)
+
+# Added
+
+- User-household associations can now be reassigned to a different `household_id` while preserving the existing association record. (household-association-reassignment)
+
+
 0.5.3 (2026-04-09)
 
 # Changed
