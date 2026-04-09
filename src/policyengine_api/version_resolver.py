@@ -2,8 +2,8 @@
 Resolve policyengine package versions to versioned Modal app names.
 
 Uses Modal Dicts as a version registry:
-  - simulation-api-us-versions: maps US version strings -> app names
-  - simulation-api-uk-versions: maps UK version strings -> app names
+  - api-v2-us-versions: maps US version strings -> app names
+  - api-v2-uk-versions: maps UK version strings -> app names
 
 Each dict also has a "latest" key pointing to the current default version.
 
@@ -22,6 +22,11 @@ import modal
 logger = logging.getLogger(__name__)
 
 
+def _registry_name(country: str) -> str:
+    """Return the v2-specific Modal Dict name for a country."""
+    return f"api-v2-{country.lower()}-versions"
+
+
 @functools.lru_cache(maxsize=32)
 def _resolve_app_name(country: str, version: str | None, environment: str) -> str:
     """Look up the Modal app name for a given country+version from Modal Dicts.
@@ -37,7 +42,7 @@ def _resolve_app_name(country: str, version: str | None, environment: str) -> st
     Raises:
         KeyError: If version not found in registry
     """
-    dict_name = f"simulation-api-{country.lower()}-versions"
+    dict_name = _registry_name(country)
     version_dict = modal.Dict.from_name(dict_name, environment_name=environment)
 
     if version is None:

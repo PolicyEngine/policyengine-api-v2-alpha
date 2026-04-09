@@ -50,28 +50,24 @@ class TestResolveAppName:
         mock_dict.__getitem__.assert_called_once_with("1.459.0")
 
     def test_routes_to_correct_dict_for_us(self):
-        """Country 'us' reads from simulation-api-us-versions."""
+        """Country 'us' reads from api-v2-us-versions."""
         mock_dict = MagicMock()
         mock_dict.__getitem__ = MagicMock(return_value="app-name")
 
         with patch("modal.Dict.from_name", return_value=mock_dict) as from_name:
             _resolve_app_name("us", "1.0.0", "main")
 
-        from_name.assert_called_once_with(
-            "simulation-api-us-versions", environment_name="main"
-        )
+        from_name.assert_called_once_with("api-v2-us-versions", environment_name="main")
 
     def test_routes_to_correct_dict_for_uk(self):
-        """Country 'uk' reads from simulation-api-uk-versions."""
+        """Country 'uk' reads from api-v2-uk-versions."""
         mock_dict = MagicMock()
         mock_dict.__getitem__ = MagicMock(return_value="app-name")
 
         with patch("modal.Dict.from_name", return_value=mock_dict) as from_name:
             _resolve_app_name("uk", "2.0.0", "staging")
 
-        from_name.assert_called_once_with(
-            "simulation-api-uk-versions", environment_name="staging"
-        )
+        from_name.assert_called_once_with("api-v2-uk-versions", environment_name="staging")
 
     def test_lru_cache_returns_same_result(self):
         """Repeated calls with same args hit cache, not Modal Dict."""

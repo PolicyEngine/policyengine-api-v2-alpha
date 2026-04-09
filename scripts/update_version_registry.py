@@ -2,7 +2,8 @@
 Update Modal version registries after deployment.
 
 Each deployment creates a versioned app (e.g., policyengine-v2-us1-592-4-uk2-75-1).
-This script updates the version dicts to map package versions to app names.
+This script updates the v2-specific version dicts to map package versions to
+app names.
 
 The dicts allow Cloud Run to route requests for specific versions to the
 correct versioned Modal app. Multiple versions coexist — old deployments
@@ -58,7 +59,7 @@ def update_version_dict(
     """Update a version dict: set version → app_name and latest → version.
 
     Args:
-        dict_name: Name of the Modal Dict (e.g., "simulation-api-us-versions")
+        dict_name: Name of the Modal Dict (e.g., "api-v2-us-versions")
         environment: Modal environment (staging or main)
         version: Package version (e.g., "1.592.4")
         app_name: App name to map this version to
@@ -107,7 +108,7 @@ def main():
 
     print("US version registry:")
     update_version_dict(
-        "simulation-api-us-versions",
+        "api-v2-us-versions",
         args.environment,
         args.us_version,
         args.app_name,
@@ -116,7 +117,7 @@ def main():
 
     print("UK version registry:")
     update_version_dict(
-        "simulation-api-uk-versions",
+        "api-v2-uk-versions",
         args.environment,
         args.uk_version,
         args.app_name,
