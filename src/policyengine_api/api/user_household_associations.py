@@ -93,7 +93,7 @@ def update_association(
     user_id: UUID = Query(..., description="User ID for ownership verification"),
     session: Session = Depends(get_session),
 ):
-    """Update a user-household association (label).
+    """Update a user-household association.
 
     Requires user_id to verify ownership - only the owner can update.
     """
@@ -109,6 +109,13 @@ def update_association(
             detail=f"Association {association_id} not found",
         )
     update_data = body.model_dump(exclude_unset=True)
+    if "household_id" in update_data:
+        household = session.get(Household, update_data["household_id"])
+        if not household:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Household {update_data['household_id']} not found",
+            )
     for key, value in update_data.items():
         setattr(record, key, value)
     record.updated_at = datetime.now(timezone.utc)

@@ -43,6 +43,7 @@ class UserHouseholdAssociationUpdate(SQLModel):
     model_config = {"extra": "forbid"}
 
     label: str | None = None
+    household_id: UUID | None = None
 
 
 class UserHouseholdAssociationRead(UserHouseholdAssociationBase):
