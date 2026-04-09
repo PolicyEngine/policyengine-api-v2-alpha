@@ -1,3 +1,10 @@
+0.6.1 (2026-04-09)
+
+# Fixed
+
+- Moved api-v2 version routing to dedicated Modal registries so api-v2-alpha deployments no longer overwrite the legacy simulation API registry. (#215)
+
+
 0.6.0 (2026-04-09)
 
 # Added
