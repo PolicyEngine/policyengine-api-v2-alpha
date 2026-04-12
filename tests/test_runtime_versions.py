@@ -107,3 +107,36 @@ def test_resolve_shared_runtime_model_version_from_db_requires_consistent_bundle
     )
 
     assert resolved is fake_runtime
+
+
+def test_resolve_shared_runtime_model_version_from_db_rejects_mixed_models(
+    session, monkeypatch
+):
+    baseline_version = _create_model_version(
+        session, model_name="policyengine-us", version="1.602.0"
+    )
+    reform_version = _create_model_version(
+        session, model_name="policyengine-uk", version="1.602.0"
+    )
+
+    us_runtime = SimpleNamespace(version="1.602.0")
+    uk_runtime = SimpleNamespace(version="1.602.0")
+
+    def _fake_import(module_name: str):
+        if module_name.endswith(".us"):
+            return SimpleNamespace(us_latest=us_runtime)
+        if module_name.endswith(".uk"):
+            return SimpleNamespace(uk_latest=uk_runtime)
+        raise AssertionError(f"Unexpected module {module_name}")
+
+    monkeypatch.setattr(
+        "policyengine_api.runtime_versions.import_module",
+        _fake_import,
+    )
+
+    with pytest.raises(ValueError, match="same tax-benefit model"):
+        resolve_shared_runtime_model_version_from_db(
+            session,
+            baseline_version.id,
+            reform_version.id,
+        )

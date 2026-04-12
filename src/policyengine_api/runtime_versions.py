@@ -58,6 +58,28 @@ def resolve_runtime_model_version_from_db(
     return runtime_model_version
 
 
+def _resolve_runtime_model_entry_from_db(
+    session: Session,
+    tax_benefit_model_version_id: UUID,
+):
+    from policyengine_api.models import TaxBenefitModel, TaxBenefitModelVersion
+
+    db_version = session.get(TaxBenefitModelVersion, tax_benefit_model_version_id)
+    if db_version is None:
+        raise ValueError(
+            f"Tax-benefit model version {tax_benefit_model_version_id} not found"
+        )
+
+    db_model = session.get(TaxBenefitModel, db_version.model_id)
+    if db_model is None:
+        raise ValueError(f"Tax-benefit model {db_version.model_id} not found")
+
+    runtime_model_version = resolve_runtime_model_version_from_db(
+        session, tax_benefit_model_version_id
+    )
+    return _normalize_model_name(db_model.name), runtime_model_version
+
+
 def resolve_shared_runtime_model_version_from_db(
     session: Session,
     *tax_benefit_model_version_ids: UUID,
@@ -66,13 +88,18 @@ def resolve_shared_runtime_model_version_from_db(
     if not tax_benefit_model_version_ids:
         raise ValueError("At least one tax-benefit model version ID is required")
 
-    resolved_versions = [
-        resolve_runtime_model_version_from_db(session, version_id)
+    resolved_entries = [
+        _resolve_runtime_model_entry_from_db(session, version_id)
         for version_id in tax_benefit_model_version_ids
     ]
-    first_version = resolved_versions[0]
+    first_model_name, first_version = resolved_entries[0]
 
-    for runtime_model_version in resolved_versions[1:]:
+    for model_name, runtime_model_version in resolved_entries[1:]:
+        if model_name != first_model_name:
+            raise ValueError(
+                "All simulations in a comparison must use the same tax-benefit "
+                f"model. Got {first_model_name} and {model_name}."
+            )
         if runtime_model_version.version != first_version.version:
             raise ValueError(
                 "All simulations in a comparison must use the same deployed "

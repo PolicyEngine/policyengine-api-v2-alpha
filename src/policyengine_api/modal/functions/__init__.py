@@ -15,7 +15,6 @@ from policyengine_api.modal.shared import (  # noqa: F401
     get_database_url,
     get_db_session,
 )
-
 from policyengine_api.runtime_versions import (
     resolve_runtime_model_version_from_db,
     resolve_shared_runtime_model_version_from_db,
