@@ -1,3 +1,10 @@
+0.6.2 (2026-04-12)
+
+# Changed
+
+- Reject shared runtime bundle reuse when the compared database rows point at different model identities, even if their runtime version strings match. (runtime-version-resolution)
+
+
 0.6.1 (2026-04-09)
 
 # Fixed
