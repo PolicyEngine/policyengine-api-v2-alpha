@@ -31,6 +31,7 @@ from policyengine_api.models import (
     SimulationStatus,
     SimulationType,
 )
+from policyengine_api.security import require_expensive_endpoint_access
 from policyengine_api.services.database import get_session
 from policyengine_api.services.model_resolver import (
     resolve_country_from_simulation,
@@ -665,6 +666,7 @@ def validate_policy_exists(policy_id: UUID | None, session: Session) -> None:
 @router.post("/household-impact", response_model=HouseholdImpactResponse)
 def household_impact(
     request: HouseholdImpactRequest,
+    _: None = Depends(require_expensive_endpoint_access),
     session: Session = Depends(get_session),
 ) -> HouseholdImpactResponse:
     """Run household impact analysis.
@@ -729,6 +731,7 @@ def household_impact(
 @router.get("/household-impact/{report_id}", response_model=HouseholdImpactResponse)
 def get_household_impact(
     report_id: UUID,
+    _: None = Depends(require_expensive_endpoint_access),
     session: Session = Depends(get_session),
 ) -> HouseholdImpactResponse:
     """Get household impact analysis status and results."""
