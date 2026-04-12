@@ -37,6 +37,8 @@ class Settings(BaseSettings):
     api_version: str = _get_version()
     api_port: int = 8000
     debug: bool = False
+    cors_allowed_origins: str = "http://localhost:3000,http://127.0.0.1:3000"
+    expensive_endpoint_api_key: str = ""
 
     # Seeding
     limit_seed_parameters: bool = False
@@ -71,6 +73,15 @@ class Settings(BaseSettings):
             ).replace("https://", "postgresql://postgres:postgres@")
             + "/postgres"
         )
+
+    @property
+    def cors_origins(self) -> list[str]:
+        """Return the configured CORS allowlist."""
+        return [
+            origin.strip()
+            for origin in self.cors_allowed_origins.split(",")
+            if origin.strip()
+        ]
 
 
 settings = Settings()

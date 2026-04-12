@@ -21,6 +21,7 @@ from policyengine_api.models import (
     HouseholdJobStatus,
     Policy,
 )
+from policyengine_api.security import require_expensive_endpoint_access
 from policyengine_api.services.database import get_session
 
 
@@ -841,7 +842,11 @@ def _get_dynamic_data(dynamic_id: UUID | None, session: Session) -> dict | None:
     }
 
 
-@router.post("/calculate", response_model=HouseholdJobResponse)
+@router.post(
+    "/calculate",
+    response_model=HouseholdJobResponse,
+    dependencies=[Depends(require_expensive_endpoint_access)],
+)
 def calculate_household(
     request: HouseholdCalculateRequest,
     session: Session = Depends(get_session),
@@ -973,7 +978,11 @@ def _compute_impact(
     return impact
 
 
-@router.post("/impact", response_model=HouseholdJobResponse)
+@router.post(
+    "/impact",
+    response_model=HouseholdJobResponse,
+    dependencies=[Depends(require_expensive_endpoint_access)],
+)
 def calculate_household_impact_comparison(
     request: HouseholdImpactRequest,
     session: Session = Depends(get_session),

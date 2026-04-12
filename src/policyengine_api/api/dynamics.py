@@ -11,12 +11,17 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel import Session, select
 
 from policyengine_api.models import Dynamic, DynamicCreate, DynamicRead
+from policyengine_api.security import require_expensive_endpoint_access
 from policyengine_api.services.database import get_session
 
 router = APIRouter(prefix="/dynamics", tags=["dynamics"])
 
 
-@router.post("/", response_model=DynamicRead)
+@router.post(
+    "/",
+    response_model=DynamicRead,
+    dependencies=[Depends(require_expensive_endpoint_access)],
+)
 def create_dynamic(dynamic: DynamicCreate, session: Session = Depends(get_session)):
     """Create a new behavioural dynamics specification.
 

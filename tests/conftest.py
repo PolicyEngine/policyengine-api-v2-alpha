@@ -17,7 +17,17 @@ from policyengine_api.models import (
     TaxBenefitModel,
     TaxBenefitModelVersion,
 )
+from policyengine_api.security import require_expensive_endpoint_access
 from policyengine_api.services.database import get_session
+
+
+@pytest.fixture(autouse=True)
+def expensive_endpoint_auth_override():
+    """Keep behavioral tests focused on endpoint logic, not API-key wiring."""
+
+    app.dependency_overrides[require_expensive_endpoint_access] = lambda: None
+    yield
+    app.dependency_overrides.pop(require_expensive_endpoint_access, None)
 
 
 @pytest.fixture(name="session")

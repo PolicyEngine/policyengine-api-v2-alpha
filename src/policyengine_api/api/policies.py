@@ -43,6 +43,7 @@ from policyengine_api.models import (
     PolicyRead,
     TaxBenefitModel,
 )
+from policyengine_api.security import require_expensive_endpoint_access
 from policyengine_api.services.database import get_session
 
 
@@ -77,7 +78,11 @@ def _policy_to_read(policy: Policy) -> PolicyRead:
 router = APIRouter(prefix="/policies", tags=["policies"])
 
 
-@router.post("/", response_model=PolicyRead)
+@router.post(
+    "/",
+    response_model=PolicyRead,
+    dependencies=[Depends(require_expensive_endpoint_access)],
+)
 def create_policy(policy: PolicyCreate, session: Session = Depends(get_session)):
     """Create a new policy reform with parameter values.
 

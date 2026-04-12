@@ -19,6 +19,7 @@ from policyengine_api.models import (
     TaxBenefitModel,
     TaxBenefitModelVersion,
 )
+from policyengine_api.security import require_expensive_endpoint_access
 from policyengine_api.services.database import get_session
 
 router = APIRouter(prefix="/outputs/aggregates", tags=["aggregates"])
@@ -83,7 +84,11 @@ def _trigger_aggregate_computation(
     )
 
 
-@router.post("", response_model=List[AggregateOutputRead])
+@router.post(
+    "",
+    response_model=List[AggregateOutputRead],
+    dependencies=[Depends(require_expensive_endpoint_access)],
+)
 def create_aggregate_outputs(
     outputs: List[AggregateOutputCreate],
     background_tasks: BackgroundTasks,
@@ -122,14 +127,22 @@ def create_aggregate_outputs(
     return db_outputs
 
 
-@router.get("", response_model=List[AggregateOutputRead])
+@router.get(
+    "",
+    response_model=List[AggregateOutputRead],
+    dependencies=[Depends(require_expensive_endpoint_access)],
+)
 def list_aggregate_outputs(session: Session = Depends(get_session)):
     """List all aggregates."""
     outputs = session.exec(select(AggregateOutput)).all()
     return outputs
 
 
-@router.get("/{output_id}", response_model=AggregateOutputRead)
+@router.get(
+    "/{output_id}",
+    response_model=AggregateOutputRead,
+    dependencies=[Depends(require_expensive_endpoint_access)],
+)
 def get_aggregate_output(output_id: UUID, session: Session = Depends(get_session)):
     """Get a specific aggregate."""
     output = session.get(AggregateOutput, output_id)

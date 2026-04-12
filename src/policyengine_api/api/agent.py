@@ -11,11 +11,12 @@ import uuid
 from datetime import datetime
 
 import logfire
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from opentelemetry.trace.propagation.tracecontext import TraceContextTextMapPropagator
 from pydantic import BaseModel
 
 from policyengine_api.config import settings
+from policyengine_api.security import require_expensive_endpoint_access
 
 
 def get_traceparent() -> str | None:
@@ -105,7 +106,11 @@ def _run_local_agent(
         _calls[call_id]["result"] = {"status": "failed", "error": str(e)}
 
 
-@router.post("/run", response_model=RunResponse)
+@router.post(
+    "/run",
+    response_model=RunResponse,
+    dependencies=[Depends(require_expensive_endpoint_access)],
+)
 async def run_agent(request: RunRequest) -> RunResponse:
     """Start the agent to answer a policy question.
 
@@ -186,7 +191,10 @@ async def run_agent(request: RunRequest) -> RunResponse:
     return RunResponse(call_id=call_id, status="running")
 
 
-@router.post("/log/{call_id}")
+@router.post(
+    "/log/{call_id}",
+    dependencies=[Depends(require_expensive_endpoint_access)],
+)
 async def post_log(call_id: str, log_input: LogInput) -> dict:
     """Receive a log entry from the running agent.
 
@@ -204,7 +212,10 @@ async def post_log(call_id: str, log_input: LogInput) -> dict:
     return {"status": "ok"}
 
 
-@router.post("/complete/{call_id}")
+@router.post(
+    "/complete/{call_id}",
+    dependencies=[Depends(require_expensive_endpoint_access)],
+)
 async def complete_call(call_id: str, result: dict) -> dict:
     """Mark a call as complete with its result.
 

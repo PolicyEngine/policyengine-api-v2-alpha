@@ -67,6 +67,7 @@ from policyengine_api.models import (
 from policyengine_api.runtime_versions import (
     resolve_shared_runtime_model_version_from_db,
 )
+from policyengine_api.security import require_expensive_endpoint_access
 from policyengine_api.services.database import get_session
 from policyengine_api.services.model_resolver import (
     resolve_country_from_simulation,
@@ -1232,7 +1233,11 @@ def _resolve_dataset_and_region(
         )
 
 
-@router.post("/economic-impact", response_model=EconomicImpactResponse)
+@router.post(
+    "/economic-impact",
+    response_model=EconomicImpactResponse,
+    dependencies=[Depends(require_expensive_endpoint_access)],
+)
 def economic_impact(
     request: EconomicImpactRequest,
     session: Session = Depends(get_session),
@@ -1318,7 +1323,11 @@ def economic_impact(
     return _build_response(report, baseline_sim, reform_sim, session, region)
 
 
-@router.get("/economic-impact/{report_id}", response_model=EconomicImpactResponse)
+@router.get(
+    "/economic-impact/{report_id}",
+    response_model=EconomicImpactResponse,
+    dependencies=[Depends(require_expensive_endpoint_access)],
+)
 def get_economic_impact_status(
     report_id: UUID,
     session: Session = Depends(get_session),
@@ -1436,7 +1445,11 @@ def _build_filtered_response(
     return EconomicImpactResponse.model_construct(**filtered)
 
 
-@router.post("/economy-custom", response_model=EconomicImpactResponse)
+@router.post(
+    "/economy-custom",
+    response_model=EconomicImpactResponse,
+    dependencies=[Depends(require_expensive_endpoint_access)],
+)
 def economy_custom(
     request: EconomyCustomRequest,
     session: Session = Depends(get_session),
@@ -1543,7 +1556,11 @@ def economy_custom(
     return _build_filtered_response(full_response, request.modules)
 
 
-@router.get("/economy-custom/{report_id}", response_model=EconomicImpactResponse)
+@router.get(
+    "/economy-custom/{report_id}",
+    response_model=EconomicImpactResponse,
+    dependencies=[Depends(require_expensive_endpoint_access)],
+)
 def get_economy_custom_status(
     report_id: UUID,
     modules: str | None = None,
@@ -1593,7 +1610,11 @@ class RerunResponse(BaseModel):
     status: str
 
 
-@router.post("/rerun/{report_id}", response_model=RerunResponse)
+@router.post(
+    "/rerun/{report_id}",
+    response_model=RerunResponse,
+    dependencies=[Depends(require_expensive_endpoint_access)],
+)
 def rerun_report(
     report_id: UUID,
     session: Session = Depends(get_session),
