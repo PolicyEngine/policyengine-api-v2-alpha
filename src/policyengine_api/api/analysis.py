@@ -64,6 +64,9 @@ from policyengine_api.models import (
     TaxBenefitModel,
     TaxBenefitModelVersion,
 )
+from policyengine_api.runtime_versions import (
+    resolve_shared_runtime_model_version_from_db,
+)
 from policyengine_api.services.database import get_session
 from policyengine_api.services.model_resolver import (
     resolve_country_from_simulation,
@@ -752,7 +755,6 @@ def _run_local_economy_comparison_uk(
     from policyengine.core.dynamic import Dynamic as PEDynamic
     from policyengine.core.policy import ParameterValue as PEParameterValue
     from policyengine.core.policy import Policy as PEPolicy
-    from policyengine.tax_benefit_models.uk import uk_latest
     from policyengine.tax_benefit_models.uk.datasets import PolicyEngineUKDataset
 
     from policyengine_api.models import Policy as DBPolicy
@@ -778,7 +780,11 @@ def _run_local_economy_comparison_uk(
     if not dataset:
         raise ValueError(f"Dataset {baseline_sim.dataset_id} not found")
 
-    pe_model_version = uk_latest
+    pe_model_version = resolve_shared_runtime_model_version_from_db(
+        session,
+        baseline_sim.tax_benefit_model_version_id,
+        reform_sim.tax_benefit_model_version_id,
+    )
     param_lookup = {p.name: p for p in pe_model_version.parameters}
 
     def build_policy(policy_id):
@@ -937,7 +943,6 @@ def _run_local_economy_comparison_us(
     from policyengine.core.dynamic import Dynamic as PEDynamic
     from policyengine.core.policy import ParameterValue as PEParameterValue
     from policyengine.core.policy import Policy as PEPolicy
-    from policyengine.tax_benefit_models.us import us_latest
     from policyengine.tax_benefit_models.us.datasets import PolicyEngineUSDataset
 
     from policyengine_api.models import Policy as DBPolicy
@@ -963,7 +968,11 @@ def _run_local_economy_comparison_us(
     if not dataset:
         raise ValueError(f"Dataset {baseline_sim.dataset_id} not found")
 
-    pe_model_version = us_latest
+    pe_model_version = resolve_shared_runtime_model_version_from_db(
+        session,
+        baseline_sim.tax_benefit_model_version_id,
+        reform_sim.tax_benefit_model_version_id,
+    )
     param_lookup = {p.name: p for p in pe_model_version.parameters}
 
     def build_policy(policy_id):

@@ -15,6 +15,10 @@ from policyengine_api.modal.shared import (  # noqa: F401
     get_database_url,
     get_db_session,
 )
+from policyengine_api.runtime_versions import (
+    resolve_runtime_model_version_from_db,
+    resolve_shared_runtime_model_version_from_db,
+)
 
 # Required environment variables from each secret
 REQUIRED_DB_VARS = ["DATABASE_URL", "SUPABASE_URL", "SUPABASE_KEY"]
@@ -674,12 +678,13 @@ def simulate_economy_uk(simulation_id: str, traceparent: str | None = None) -> N
 
                     # Import policyengine
                     from policyengine.core import Simulation as PESimulation
-                    from policyengine.tax_benefit_models.uk import uk_latest
                     from policyengine.tax_benefit_models.uk.datasets import (
                         PolicyEngineUKDataset,
                     )
 
-                    pe_model_version = uk_latest
+                    pe_model_version = resolve_runtime_model_version_from_db(
+                        session, simulation.tax_benefit_model_version_id
+                    )
 
                     # Get policy and dynamic
                     policy = _get_pe_policy_uk(
@@ -847,12 +852,13 @@ def simulate_economy_us(simulation_id: str, traceparent: str | None = None) -> N
 
                     # Import policyengine
                     from policyengine.core import Simulation as PESimulation
-                    from policyengine.tax_benefit_models.us import us_latest
                     from policyengine.tax_benefit_models.us.datasets import (
                         PolicyEngineUSDataset,
                     )
 
-                    pe_model_version = us_latest
+                    pe_model_version = resolve_runtime_model_version_from_db(
+                        session, simulation.tax_benefit_model_version_id
+                    )
 
                     # Get policy and dynamic
                     policy = _get_pe_policy_us(
@@ -1008,7 +1014,6 @@ def economy_comparison_uk(job_id: str, traceparent: str | None = None) -> None:
                     ReportStatus,
                     Simulation,
                     SimulationStatus,
-                    TaxBenefitModelVersion,
                 )
 
                 with Session(engine) as session:
@@ -1035,12 +1040,6 @@ def economy_comparison_uk(job_id: str, traceparent: str | None = None) -> None:
                     if not dataset:
                         raise ValueError(f"Dataset {baseline_sim.dataset_id} not found")
 
-                    # Get model version (unused but keeping for reference)
-                    _ = session.get(
-                        TaxBenefitModelVersion,
-                        baseline_sim.tax_benefit_model_version_id,
-                    )
-
                     # Import policyengine
                     from policyengine.core import Simulation as PESimulation
                     from policyengine.outputs import DecileImpact as PEDecileImpact
@@ -1050,7 +1049,6 @@ def economy_comparison_uk(job_id: str, traceparent: str | None = None) -> None:
                     from policyengine.outputs.aggregate import (
                         AggregateType as PEAggregateType,
                     )
-                    from policyengine.tax_benefit_models.uk import uk_latest
                     from policyengine.tax_benefit_models.uk.datasets import (
                         PolicyEngineUKDataset,
                     )
@@ -1058,7 +1056,11 @@ def economy_comparison_uk(job_id: str, traceparent: str | None = None) -> None:
                         ProgrammeStatistics as PEProgrammeStats,
                     )
 
-                    pe_model_version = uk_latest
+                    pe_model_version = resolve_shared_runtime_model_version_from_db(
+                        session,
+                        baseline_sim.tax_benefit_model_version_id,
+                        reform_sim.tax_benefit_model_version_id,
+                    )
 
                     # Get policies
                     baseline_policy = _get_pe_policy_uk(
@@ -1725,7 +1727,6 @@ def economy_comparison_us(job_id: str, traceparent: str | None = None) -> None:
                     from policyengine.outputs.aggregate import (
                         AggregateType as PEAggregateType,
                     )
-                    from policyengine.tax_benefit_models.us import us_latest
                     from policyengine.tax_benefit_models.us.datasets import (
                         PolicyEngineUSDataset,
                     )
@@ -1733,7 +1734,11 @@ def economy_comparison_us(job_id: str, traceparent: str | None = None) -> None:
                         ProgramStatistics as PEProgramStats,
                     )
 
-                    pe_model_version = us_latest
+                    pe_model_version = resolve_shared_runtime_model_version_from_db(
+                        session,
+                        baseline_sim.tax_benefit_model_version_id,
+                        reform_sim.tax_benefit_model_version_id,
+                    )
 
                     # Get policies
                     baseline_policy = _get_pe_policy_us(
@@ -2631,7 +2636,6 @@ def compute_aggregate_uk(aggregate_id: str, traceparent: str | None = None) -> N
                 from policyengine.core import Simulation as PESimulation
                 from policyengine.outputs import Aggregate as PEAggregate
                 from policyengine.outputs import AggregateType as PEAggregateType
-                from policyengine.tax_benefit_models.uk import uk_latest
                 from policyengine.tax_benefit_models.uk.datasets import (
                     PolicyEngineUKDataset,
                 )
@@ -2692,6 +2696,10 @@ def compute_aggregate_uk(aggregate_id: str, traceparent: str | None = None) -> N
                         )
 
                     # Create policyengine simulation with loaded output
+                    pe_model_version = resolve_runtime_model_version_from_db(
+                        session, simulation.tax_benefit_model_version_id
+                    )
+
                     with logfire.span("load_output"):
                         pe_output_dataset = PolicyEngineUKDataset(
                             name=output_dataset.name or "output",
@@ -2703,7 +2711,7 @@ def compute_aggregate_uk(aggregate_id: str, traceparent: str | None = None) -> N
 
                         pe_sim = PESimulation(
                             dataset=pe_output_dataset,  # Use output as dataset
-                            tax_benefit_model_version=uk_latest,
+                            tax_benefit_model_version=pe_model_version,
                         )
                         pe_sim.output_dataset = pe_output_dataset
 
@@ -2787,7 +2795,6 @@ def compute_aggregate_us(aggregate_id: str, traceparent: str | None = None) -> N
                 from policyengine.core import Simulation as PESimulation
                 from policyengine.outputs import Aggregate as PEAggregate
                 from policyengine.outputs import AggregateType as PEAggregateType
-                from policyengine.tax_benefit_models.us import us_latest
                 from policyengine.tax_benefit_models.us.datasets import (
                     PolicyEngineUSDataset,
                 )
@@ -2841,6 +2848,10 @@ def compute_aggregate_us(aggregate_id: str, traceparent: str | None = None) -> N
                             storage_bucket,
                         )
 
+                    pe_model_version = resolve_runtime_model_version_from_db(
+                        session, simulation.tax_benefit_model_version_id
+                    )
+
                     with logfire.span("load_output"):
                         pe_output_dataset = PolicyEngineUSDataset(
                             name=output_dataset.name or "output",
@@ -2852,7 +2863,7 @@ def compute_aggregate_us(aggregate_id: str, traceparent: str | None = None) -> N
 
                         pe_sim = PESimulation(
                             dataset=pe_output_dataset,
-                            tax_benefit_model_version=us_latest,
+                            tax_benefit_model_version=pe_model_version,
                         )
                         pe_sim.output_dataset = pe_output_dataset
 
