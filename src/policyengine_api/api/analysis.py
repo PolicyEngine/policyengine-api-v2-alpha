@@ -1670,7 +1670,10 @@ def rerun_report(
         if sim:
             sim.status = SimulationStatus.PENDING
             sim.error_message = None
+            sim.started_at = None
             sim.completed_at = None
+            sim.household_result = None
+            sim.output_dataset_id = None
             session.add(sim)
 
     session.commit()
