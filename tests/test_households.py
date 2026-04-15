@@ -6,6 +6,7 @@ from test_fixtures.fixtures_households import (
     MOCK_HOUSEHOLD_MINIMAL,
     MOCK_UK_HOUSEHOLD_CREATE,
     MOCK_US_HOUSEHOLD_CREATE,
+    MOCK_US_MULTI_GROUP_HOUSEHOLD_CREATE,
     create_household,
 )
 
@@ -57,6 +58,18 @@ def test_create_household_minimal(client):
     assert data["label"] is None
     assert data["tax_unit"] == []
     assert data["benunit"] == []
+
+
+def test_create_household_round_trips_multiple_entity_groups(client):
+    """Stored household CRUD preserves multiple groups of the same type."""
+    response = client.post("/households", json=MOCK_US_MULTI_GROUP_HOUSEHOLD_CREATE)
+    assert response.status_code == 201
+    data = response.json()
+    assert len(data["tax_unit"]) == 2
+    assert data["tax_unit"][0]["tax_unit_id"] == 0
+    assert data["tax_unit"][1]["tax_unit_id"] == 1
+    assert len(data["marital_unit"]) == 2
+    assert data["people"][1]["person_marital_unit_id"] == 1
 
 
 def test_create_household_invalid_country_id(client):

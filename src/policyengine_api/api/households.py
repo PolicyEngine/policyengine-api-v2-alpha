@@ -34,9 +34,7 @@ def _pack_household_data(body: HouseholdCreate) -> dict[str, Any]:
     """Pack the flat request fields into a single JSON blob for storage."""
     data: dict[str, Any] = {"people": body.people}
     for key in _ENTITY_GROUP_KEYS:
-        val = getattr(body, key)
-        if val is not None:
-            data[key] = val
+        data[key] = list(getattr(body, key))
     return data
 
 
