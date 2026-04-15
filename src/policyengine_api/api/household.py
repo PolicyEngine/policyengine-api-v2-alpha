@@ -17,8 +17,10 @@ from sqlmodel import Session
 from policyengine_api.config.constants import CountryId
 from policyengine_api.models import (
     Dynamic,
+    HouseholdEntityCollections,
     HouseholdJob,
     HouseholdJobStatus,
+    HouseholdPayloadBase,
     Policy,
 )
 from policyengine_api.services.database import get_session
@@ -47,7 +49,7 @@ def get_traceparent() -> str | None:
 router = APIRouter(prefix="/household", tags=["household"])
 
 
-class HouseholdCalculateRequest(BaseModel):
+class HouseholdCalculateRequest(HouseholdPayloadBase):
     """Request body for household calculation.
 
     IMPORTANT: Use flat values for variables, NOT time-period dictionaries.
@@ -96,9 +98,6 @@ class HouseholdCalculateRequest(BaseModel):
     }
     """
 
-    country_id: CountryId = Field(
-        description="Which country model to use ('us' or 'uk')"
-    )
     people: list[dict[str, Any]] = Field(
         description="List of people with flat variable values. Include person_id and person_{entity}_id fields to link to entities."
     )
@@ -130,6 +129,9 @@ class HouseholdCalculateRequest(BaseModel):
         default=None,
         description="Simulation year (default: 2024 for US, 2026 for UK). Specify this instead of embedding years in variable values.",
     )
+    country_id: CountryId = Field(
+        description="Which country model to use ('us' or 'uk')"
+    )
     policy_id: UUID | None = Field(
         default=None, description="Optional policy reform ID"
     )
@@ -138,16 +140,10 @@ class HouseholdCalculateRequest(BaseModel):
     )
 
 
-class HouseholdCalculateResponse(BaseModel):
+class HouseholdCalculateResponse(HouseholdEntityCollections):
     """Response from household calculation."""
 
     person: list[dict[str, Any]]
-    benunit: list[dict[str, Any]] | None = None
-    marital_unit: list[dict[str, Any]] | None = None
-    family: list[dict[str, Any]] | None = None
-    spm_unit: list[dict[str, Any]] | None = None
-    tax_unit: list[dict[str, Any]] | None = None
-    household: list[dict[str, Any]]
 
 
 class HouseholdJobResponse(BaseModel):
@@ -166,7 +162,7 @@ class HouseholdJobStatusResponse(BaseModel):
     error_message: str | None = None
 
 
-class HouseholdImpactRequest(BaseModel):
+class HouseholdImpactRequest(HouseholdPayloadBase):
     """Request body for household impact comparison.
 
     Same format as HouseholdCalculateRequest - use flat values, NOT time-period dictionaries.
@@ -183,9 +179,6 @@ class HouseholdImpactRequest(BaseModel):
     }
     """
 
-    country_id: CountryId = Field(
-        description="Which country model to use ('us' or 'uk')"
-    )
     people: list[dict[str, Any]] = Field(
         description="List of people with flat variable values. Include person_id and person_{entity}_id fields to link to entities."
     )
@@ -215,6 +208,9 @@ class HouseholdImpactRequest(BaseModel):
     )
     year: int | None = Field(
         default=None, description="Simulation year (default: 2024 for US, 2026 for UK)"
+    )
+    country_id: CountryId = Field(
+        description="Which country model to use ('us' or 'uk')"
     )
     policy_id: UUID | None = Field(
         default=None, description="Reform policy ID to compare against baseline"
