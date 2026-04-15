@@ -71,6 +71,19 @@ MOCK_HOUSEHOLD_MINIMAL = {
     "people": [{"age": 25}],
 }
 
+MOCK_US_HOUSEHOLD_CREATE_LEGACY = {
+    "country_id": "us",
+    "year": 2024,
+    "label": "US legacy household",
+    "people": [
+        {"age": 30, "employment_income": 50000},
+        {"age": 28, "employment_income": 30000},
+    ],
+    "tax_unit": {},
+    "family": {},
+    "household": {"state_name": "CA"},
+}
+
 
 # -----------------------------------------------------------------------------
 # Factory functions

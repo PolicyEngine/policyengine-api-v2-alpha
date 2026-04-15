@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 from typing import Any
 from uuid import UUID, uuid4
 
-from pydantic import model_validator
+from pydantic import field_validator, model_validator
 from sqlalchemy import JSON
 from sqlmodel import Column, Field, SQLModel
 
@@ -18,6 +18,18 @@ _ENTITY_ID_KEY_BY_GROUP = {
     "tax_unit": "tax_unit_id",
     "household": "household_id",
 }
+
+_ENTITY_GROUP_FIELDS = tuple(_ENTITY_ID_KEY_BY_GROUP.keys())
+
+
+def _coerce_entity_group_collection(value: Any) -> Any:
+    if value is None:
+        return []
+    if isinstance(value, list):
+        return value
+    if isinstance(value, dict):
+        return [value]
+    return value
 
 
 class HouseholdBase(SQLModel):
@@ -45,6 +57,11 @@ class HouseholdCreate(HouseholdPayloadBase):
     Uses the same plural entity-list shape as the household calculation API:
     people as an array, entity groups as optional lists.
     """
+
+    @field_validator(*_ENTITY_GROUP_FIELDS, mode="before")
+    @classmethod
+    def coerce_legacy_singular_entity_groups(cls, value: Any) -> Any:
+        return _coerce_entity_group_collection(value)
 
     @model_validator(mode="after")
     def validate_relationships(self) -> "HouseholdCreate":

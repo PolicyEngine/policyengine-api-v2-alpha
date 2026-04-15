@@ -6,6 +6,7 @@ from test_fixtures.fixtures_households import (
     MOCK_HOUSEHOLD_MINIMAL,
     MOCK_UK_HOUSEHOLD_CREATE,
     MOCK_US_HOUSEHOLD_CREATE,
+    MOCK_US_HOUSEHOLD_CREATE_LEGACY,
     MOCK_US_MULTI_GROUP_HOUSEHOLD_CREATE,
     create_household,
 )
@@ -79,6 +80,17 @@ def test_create_household_invalid_country_id(client):
     assert response.status_code == 422
 
 
+def test_create_household_accepts_legacy_singular_entity_groups(client):
+    """Legacy singular entity dicts are coerced to one-element lists."""
+    response = client.post("/households", json=MOCK_US_HOUSEHOLD_CREATE_LEGACY)
+
+    assert response.status_code == 201
+    data = response.json()
+    assert data["tax_unit"] == [{}]
+    assert data["family"] == [{}]
+    assert data["household"] == [{"state_name": "CA"}]
+
+
 def test_create_household_rejects_duplicate_entity_ids(client):
     """Reject duplicate entity IDs within a stored group collection."""
     payload = {
@@ -146,6 +158,22 @@ def test_get_household(client, session):
     data = response.json()
     assert data["id"] == str(record.id)
     assert data["country_id"] == "us"
+
+
+def test_get_household_coerces_legacy_singular_entity_rows(client, session):
+    """Legacy singular entity dicts stored in JSON are returned as one-element lists."""
+    record = create_household(
+        session,
+        household={"state_name": "CA"},
+        tax_unit={},
+    )
+
+    response = client.get(f"/households/{record.id}")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["household"] == [{"state_name": "CA"}]
+    assert data["tax_unit"] == [{}]
 
 
 def test_get_household_not_found(client):
