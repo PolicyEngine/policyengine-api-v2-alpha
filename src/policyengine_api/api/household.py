@@ -17,10 +17,8 @@ from sqlmodel import Session
 from policyengine_api.config.constants import CountryId
 from policyengine_api.models import (
     Dynamic,
-    HouseholdEntityCollections,
     HouseholdJob,
     HouseholdJobStatus,
-    HouseholdPayloadBase,
     Policy,
 )
 from policyengine_api.services.database import get_session
@@ -49,7 +47,7 @@ def get_traceparent() -> str | None:
 router = APIRouter(prefix="/household", tags=["household"])
 
 
-class HouseholdCalculateRequest(HouseholdPayloadBase):
+class HouseholdCalculateRequest(BaseModel):
     """Request body for household calculation.
 
     IMPORTANT: Use flat values for variables, NOT time-period dictionaries.
@@ -140,10 +138,16 @@ class HouseholdCalculateRequest(HouseholdPayloadBase):
     )
 
 
-class HouseholdCalculateResponse(HouseholdEntityCollections):
+class HouseholdCalculateResponse(BaseModel):
     """Response from household calculation."""
 
     person: list[dict[str, Any]]
+    benunit: list[dict[str, Any]] | None = None
+    marital_unit: list[dict[str, Any]] | None = None
+    family: list[dict[str, Any]] | None = None
+    spm_unit: list[dict[str, Any]] | None = None
+    tax_unit: list[dict[str, Any]] | None = None
+    household: list[dict[str, Any]]
 
 
 class HouseholdJobResponse(BaseModel):
@@ -162,7 +166,7 @@ class HouseholdJobStatusResponse(BaseModel):
     error_message: str | None = None
 
 
-class HouseholdImpactRequest(HouseholdPayloadBase):
+class HouseholdImpactRequest(BaseModel):
     """Request body for household impact comparison.
 
     Same format as HouseholdCalculateRequest - use flat values, NOT time-period dictionaries.
@@ -850,7 +854,7 @@ def calculate_household(
     Use flat values for all variables - do NOT use time-period format like {"2024": value}.
     The simulation year is specified via the `year` parameter.
 
-    US example: people=[{"employment_income": 70000, "age": 40}], tax_unit={"state_code": "CA"}, year=2024
+    US example: people=[{"employment_income": 70000, "age": 40}], tax_unit=[{"state_code": "CA"}], year=2024
     UK example: people=[{"employment_income": 50000, "age": 30}], year=2026
     """
     with logfire.span(

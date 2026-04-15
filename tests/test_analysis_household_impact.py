@@ -244,7 +244,9 @@ class TestGetCalculator:
 class TestStoredHouseholdCalculatorAlignment:
     """Tests that stored-household analysis preserves plural entity lists."""
 
-    def test_calculate_us_household_passes_multi_group_lists_through(self, monkeypatch):
+    def test_calculate_us_household_passes_multi_marital_units_through(
+        self, monkeypatch
+    ):
         from policyengine_api.api import household as household_api
         from policyengine_api.api.household_analysis import calculate_us_household
 
@@ -290,14 +292,11 @@ class TestStoredHouseholdCalculatorAlignment:
                 {
                     "person_id": 1,
                     "person_household_id": 0,
-                    "person_tax_unit_id": 1,
+                    "person_tax_unit_id": 0,
                     "person_marital_unit_id": 1,
                 },
             ],
-            "tax_unit": [
-                {"tax_unit_id": 0, "state_name": "CA"},
-                {"tax_unit_id": 1, "state_name": "CA"},
-            ],
+            "tax_unit": [{"tax_unit_id": 0, "state_name": "CA"}],
             "marital_unit": [
                 {"marital_unit_id": 0},
                 {"marital_unit_id": 1},
@@ -309,10 +308,10 @@ class TestStoredHouseholdCalculatorAlignment:
 
         calculate_us_household(household_data, 2024, {"name": "test"})
 
-        assert len(captured["tax_unit"]) == 2
+        assert len(captured["tax_unit"]) == 1
         assert len(captured["marital_unit"]) == 2
-        assert captured["tax_unit"][1]["tax_unit_id"] == 1
-        assert captured["people"][1]["person_tax_unit_id"] == 1
+        assert captured["tax_unit"][0]["tax_unit_id"] == 0
+        assert captured["people"][1]["person_marital_unit_id"] == 1
 
     def test_calculate_uk_household_passes_plural_groups_through(self, monkeypatch):
         from policyengine_api.api import household as household_api

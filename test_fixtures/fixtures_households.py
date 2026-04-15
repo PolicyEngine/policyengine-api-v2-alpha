@@ -46,16 +46,13 @@ MOCK_US_MULTI_GROUP_HOUSEHOLD_CREATE = {
         {
             "person_id": 1,
             "person_household_id": 0,
-            "person_tax_unit_id": 1,
+            "person_tax_unit_id": 0,
             "person_marital_unit_id": 1,
             "age": 28,
             "employment_income": 30000,
         },
     ],
-    "tax_unit": [
-        {"tax_unit_id": 0, "state_name": "CA"},
-        {"tax_unit_id": 1, "state_name": "CA"},
-    ],
+    "tax_unit": [{"tax_unit_id": 0, "state_name": "CA"}],
     "marital_unit": [
         {"marital_unit_id": 0},
         {"marital_unit_id": 1},

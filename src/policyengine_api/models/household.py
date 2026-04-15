@@ -8,7 +8,7 @@ from pydantic import field_validator, model_validator
 from sqlalchemy import JSON
 from sqlmodel import Column, Field, SQLModel
 
-from policyengine_api.models.household_payload import HouseholdPayloadBase
+from policyengine_api.models.household_payload import StoredHouseholdPayload
 
 _ENTITY_ID_KEY_BY_GROUP = {
     "benunit": "benunit_id",
@@ -20,6 +20,7 @@ _ENTITY_ID_KEY_BY_GROUP = {
 }
 
 _ENTITY_GROUP_FIELDS = tuple(_ENTITY_ID_KEY_BY_GROUP.keys())
+_MULTI_ROW_ALLOWED = {"marital_unit"}
 
 
 def _coerce_entity_group_collection(value: Any) -> Any:
@@ -51,11 +52,11 @@ class Household(HouseholdBase, table=True):
     updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
-class HouseholdCreate(HouseholdPayloadBase):
+class HouseholdCreate(StoredHouseholdPayload):
     """Schema for creating a stored household.
 
-    Uses the same plural entity-list shape as the household calculation API:
-    people as an array, entity groups as optional lists.
+    Uses list-based entity groups for storage, with multiple rows allowed only
+    for marital_unit.
     """
 
     @field_validator(*_ENTITY_GROUP_FIELDS, mode="before")
@@ -76,6 +77,12 @@ class HouseholdCreate(HouseholdPayloadBase):
         for group_key, entity_id_key in _ENTITY_ID_KEY_BY_GROUP.items():
             entity_records = getattr(self, group_key)
             person_link_key = f"person_{entity_id_key}"
+
+            if len(entity_records) > 1 and group_key not in _MULTI_ROW_ALLOWED:
+                raise ValueError(
+                    f"{group_key} supports at most one row in stored households"
+                )
+
             entity_ids = [
                 entity[entity_id_key]
                 for entity in entity_records

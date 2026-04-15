@@ -34,7 +34,7 @@ from .household_job import (
     HouseholdJobRead,
     HouseholdJobStatus,
 )
-from .household_payload import HouseholdEntityCollections, HouseholdPayloadBase
+from .household_payload import HouseholdEntityCollections, StoredHouseholdPayload
 from .inequality import Inequality, InequalityCreate, InequalityRead
 from .intra_decile_impact import (
     DecileType,
@@ -154,7 +154,7 @@ __all__ = [
     "Household",
     "HouseholdCreate",
     "HouseholdEntityCollections",
-    "HouseholdPayloadBase",
+    "StoredHouseholdPayload",
     "HouseholdRead",
     "HouseholdJob",
     "HouseholdJobCreate",

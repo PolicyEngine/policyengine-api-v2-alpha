@@ -18,8 +18,8 @@ class HouseholdEntityCollections(SQLModel):
     household: list[dict[str, Any]] = Field(default_factory=list)
 
 
-class HouseholdPayloadBase(HouseholdEntityCollections):
-    """Core household payload shared by stored and calculation flows."""
+class StoredHouseholdPayload(HouseholdEntityCollections):
+    """Core payload shared by stored household create/read flows."""
 
     country_id: CountryId
     people: list[dict[str, Any]]
