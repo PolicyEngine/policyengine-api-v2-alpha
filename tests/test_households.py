@@ -34,9 +34,9 @@ def test_create_household_returns_people_and_entities(client):
     assert len(data["people"]) == 2
     assert data["people"][0]["age"] == 30
     assert data["people"][0]["employment_income"] == 50000
-    assert data["household"] == {"state_name": "CA"}
-    assert data["tax_unit"] == {}
-    assert data["family"] == {}
+    assert data["household"] == [{"state_name": "CA"}]
+    assert data["tax_unit"] == [{}]
+    assert data["family"] == [{}]
 
 
 def test_create_uk_household(client):
@@ -45,8 +45,8 @@ def test_create_uk_household(client):
     assert response.status_code == 201
     data = response.json()
     assert data["country_id"] == "uk"
-    assert data["benunit"] == {"is_married": False}
-    assert data["household"] == {"region": "LONDON"}
+    assert data["benunit"] == [{"is_married": False}]
+    assert data["household"] == [{"region": "LONDON"}]
 
 
 def test_create_household_minimal(client):
@@ -55,8 +55,8 @@ def test_create_household_minimal(client):
     assert response.status_code == 201
     data = response.json()
     assert data["label"] is None
-    assert data["tax_unit"] is None
-    assert data["benunit"] is None
+    assert data["tax_unit"] == []
+    assert data["benunit"] == []
 
 
 def test_create_household_invalid_country_id(client):

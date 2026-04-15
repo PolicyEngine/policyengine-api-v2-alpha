@@ -14,9 +14,9 @@ MOCK_US_HOUSEHOLD_CREATE = {
         {"age": 30, "employment_income": 50000},
         {"age": 28, "employment_income": 30000},
     ],
-    "tax_unit": {},
-    "family": {},
-    "household": {"state_name": "CA"},
+    "tax_unit": [{}],
+    "family": [{}],
+    "household": [{"state_name": "CA"}],
 }
 
 MOCK_UK_HOUSEHOLD_CREATE = {
@@ -26,8 +26,8 @@ MOCK_UK_HOUSEHOLD_CREATE = {
     "people": [
         {"age": 40, "employment_income": 35000},
     ],
-    "benunit": {"is_married": False},
-    "household": {"region": "LONDON"},
+    "benunit": [{"is_married": False}],
+    "household": [{"region": "LONDON"}],
 }
 
 MOCK_HOUSEHOLD_MINIMAL = {

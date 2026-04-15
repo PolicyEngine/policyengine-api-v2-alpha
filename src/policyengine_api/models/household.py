@@ -7,7 +7,7 @@ from uuid import UUID, uuid4
 from sqlalchemy import JSON
 from sqlmodel import Column, Field, SQLModel
 
-from policyengine_api.config.constants import CountryId
+from policyengine_api.models.household_payload import HouseholdPayloadBase
 
 
 class HouseholdBase(SQLModel):
@@ -29,23 +29,12 @@ class Household(HouseholdBase, table=True):
     updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
-class HouseholdCreate(SQLModel):
+class HouseholdCreate(HouseholdPayloadBase):
     """Schema for creating a stored household.
 
-    Accepts the flat structure matching the frontend Household interface:
-    people as an array, entity groups as optional dicts.
+    Uses the same plural entity-list shape as the household calculation API:
+    people as an array, entity groups as optional lists.
     """
-
-    country_id: CountryId
-    year: int
-    label: str | None = None
-    people: list[dict[str, Any]]
-    tax_unit: dict[str, Any] | None = None
-    family: dict[str, Any] | None = None
-    spm_unit: dict[str, Any] | None = None
-    marital_unit: dict[str, Any] | None = None
-    household: dict[str, Any] | None = None
-    benunit: dict[str, Any] | None = None
 
 
 class HouseholdRead(HouseholdCreate):
