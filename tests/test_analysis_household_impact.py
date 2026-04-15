@@ -244,9 +244,7 @@ class TestGetCalculator:
 class TestStoredHouseholdCalculatorAlignment:
     """Tests that stored-household analysis preserves plural entity lists."""
 
-    def test_calculate_us_household_passes_multi_group_lists_through(
-        self, monkeypatch
-    ):
+    def test_calculate_us_household_passes_multi_group_lists_through(self, monkeypatch):
         from policyengine_api.api import household as household_api
         from policyengine_api.api.household_analysis import calculate_us_household
 
