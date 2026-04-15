@@ -4,10 +4,20 @@ from datetime import datetime, timezone
 from typing import Any
 from uuid import UUID, uuid4
 
+from pydantic import model_validator
 from sqlalchemy import JSON
 from sqlmodel import Column, Field, SQLModel
 
 from policyengine_api.models.household_payload import HouseholdPayloadBase
+
+_ENTITY_ID_KEY_BY_GROUP = {
+    "benunit": "benunit_id",
+    "marital_unit": "marital_unit_id",
+    "family": "family_id",
+    "spm_unit": "spm_unit_id",
+    "tax_unit": "tax_unit_id",
+    "household": "household_id",
+}
 
 
 class HouseholdBase(SQLModel):
@@ -35,6 +45,58 @@ class HouseholdCreate(HouseholdPayloadBase):
     Uses the same plural entity-list shape as the household calculation API:
     people as an array, entity groups as optional lists.
     """
+
+    @model_validator(mode="after")
+    def validate_relationships(self) -> "HouseholdCreate":
+        person_ids = [
+            person["person_id"]
+            for person in self.people
+            if person.get("person_id") is not None
+        ]
+        if len(person_ids) != len(set(person_ids)):
+            raise ValueError("people contains duplicate person_id values")
+
+        for group_key, entity_id_key in _ENTITY_ID_KEY_BY_GROUP.items():
+            entity_records = getattr(self, group_key)
+            person_link_key = f"person_{entity_id_key}"
+            entity_ids = [
+                entity[entity_id_key]
+                for entity in entity_records
+                if entity.get(entity_id_key) is not None
+            ]
+
+            if len(entity_ids) != len(set(entity_ids)):
+                raise ValueError(
+                    f"{group_key} contains duplicate {entity_id_key} values"
+                )
+
+            requires_linkage = len(entity_records) > 1
+            person_links = []
+            for person in self.people:
+                person_link = person.get(person_link_key)
+                if person_link is None:
+                    if requires_linkage:
+                        raise ValueError(
+                            f"people must include {person_link_key} when {group_key} has multiple rows"
+                        )
+                    continue
+                person_links.append(person_link)
+
+            if not person_links:
+                continue
+
+            if len(entity_ids) != len(entity_records):
+                raise ValueError(
+                    f"{group_key} rows must all include {entity_id_key} when people reference {person_link_key}"
+                )
+
+            unknown_links = sorted(set(person_links) - set(entity_ids))
+            if unknown_links:
+                raise ValueError(
+                    f"{group_key} is missing rows for referenced {entity_id_key} values: {unknown_links}"
+                )
+
+        return self
 
 
 class HouseholdRead(HouseholdCreate):

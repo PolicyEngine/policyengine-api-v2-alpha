@@ -79,6 +79,60 @@ def test_create_household_invalid_country_id(client):
     assert response.status_code == 422
 
 
+def test_create_household_rejects_duplicate_entity_ids(client):
+    """Reject duplicate entity IDs within a stored group collection."""
+    payload = {
+        **MOCK_US_MULTI_GROUP_HOUSEHOLD_CREATE,
+        "tax_unit": [
+            {"tax_unit_id": 0, "state_name": "CA"},
+            {"tax_unit_id": 0, "state_name": "NY"},
+        ],
+    }
+
+    response = client.post("/households", json=payload)
+
+    assert response.status_code == 422
+    assert "duplicate tax_unit_id" in response.text
+
+
+def test_create_household_rejects_unknown_person_entity_links(client):
+    """Reject person-to-entity references that do not resolve to stored rows."""
+    payload = {
+        **MOCK_US_MULTI_GROUP_HOUSEHOLD_CREATE,
+        "people": [
+            {
+                "person_id": 0,
+                "person_household_id": 0,
+                "person_tax_unit_id": 7,
+                "person_marital_unit_id": 0,
+                "age": 30,
+            }
+        ],
+    }
+
+    response = client.post("/households", json=payload)
+
+    assert response.status_code == 422
+    assert "missing rows for referenced tax_unit_id values" in response.text
+
+
+def test_create_household_requires_person_links_for_multi_group_rows(client):
+    """Reject multi-group payloads that omit person linkage."""
+    payload = {
+        **MOCK_US_MULTI_GROUP_HOUSEHOLD_CREATE,
+        "people": [
+            {"person_id": 0, "person_household_id": 0, "age": 30},
+            {"person_id": 1, "person_household_id": 0, "age": 28},
+        ],
+    }
+
+    response = client.post("/households", json=payload)
+
+    assert response.status_code == 422
+    assert "people must include person_" in response.text
+    assert "when " in response.text
+
+
 # ---------------------------------------------------------------------------
 # GET /households/{id}
 # ---------------------------------------------------------------------------
