@@ -8,7 +8,7 @@ from policyengine_api.config.constants import CountryId
 
 
 class HouseholdEntityCollections(SQLModel):
-    """Plural household entity collections used by calculation and storage APIs."""
+    """Plural household entity collections used by stored and calculation APIs."""
 
     benunit: list[dict[str, Any]] = Field(default_factory=list)
     marital_unit: list[dict[str, Any]] = Field(default_factory=list)

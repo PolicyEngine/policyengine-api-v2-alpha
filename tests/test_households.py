@@ -5,6 +5,7 @@ from uuid import uuid4
 from test_fixtures.fixtures_households import (
     MOCK_HOUSEHOLD_MINIMAL,
     MOCK_UK_HOUSEHOLD_CREATE,
+    MOCK_US_FULL_MULTI_GROUP_HOUSEHOLD_CREATE,
     MOCK_US_HOUSEHOLD_CREATE,
     MOCK_US_HOUSEHOLD_CREATE_LEGACY,
     MOCK_US_MULTI_GROUP_HOUSEHOLD_CREATE,
@@ -62,14 +63,20 @@ def test_create_household_minimal(client):
 
 
 def test_create_household_round_trips_multiple_entity_groups(client):
-    """Stored household CRUD preserves multiple marital units."""
-    response = client.post("/households", json=MOCK_US_MULTI_GROUP_HOUSEHOLD_CREATE)
+    """Stored household CRUD preserves multiple rows across entity groups."""
+    response = client.post(
+        "/households", json=MOCK_US_FULL_MULTI_GROUP_HOUSEHOLD_CREATE
+    )
     assert response.status_code == 201
     data = response.json()
-    assert len(data["tax_unit"]) == 1
-    assert data["tax_unit"][0]["tax_unit_id"] == 0
+    assert len(data["tax_unit"]) == 2
     assert len(data["marital_unit"]) == 2
-    assert data["people"][1]["person_marital_unit_id"] == 1
+    assert len(data["family"]) == 2
+    assert len(data["spm_unit"]) == 2
+    assert len(data["household"]) == 2
+    assert data["people"][0]["person_tax_unit_id"] == 0
+    assert data["people"][1]["person_tax_unit_id"] == 1
+    assert data["people"][1]["person_household_id"] == 1
 
 
 def test_create_household_invalid_country_id(client):
@@ -154,8 +161,8 @@ def test_create_household_requires_person_links_for_multi_group_rows(client):
     assert "when " in response.text
 
 
-def test_create_household_rejects_multiple_tax_units(client):
-    """Stored households support at most one tax unit."""
+def test_create_household_accepts_multiple_tax_units(client):
+    """Stored households preserve multiple tax units when person links are present."""
     payload = {
         **MOCK_US_MULTI_GROUP_HOUSEHOLD_CREATE,
         "tax_unit": [
@@ -182,12 +189,14 @@ def test_create_household_rejects_multiple_tax_units(client):
 
     response = client.post("/households", json=payload)
 
-    assert response.status_code == 422
-    assert "tax_unit supports at most one row" in response.text
+    assert response.status_code == 201
+    data = response.json()
+    assert len(data["tax_unit"]) == 2
+    assert data["people"][1]["person_tax_unit_id"] == 1
 
 
-def test_create_household_rejects_multiple_households(client):
-    """Stored households support at most one household row."""
+def test_create_household_accepts_multiple_households(client):
+    """Stored households preserve multiple household rows when person links are present."""
     payload = {
         **MOCK_US_MULTI_GROUP_HOUSEHOLD_CREATE,
         "household": [
@@ -214,8 +223,10 @@ def test_create_household_rejects_multiple_households(client):
 
     response = client.post("/households", json=payload)
 
-    assert response.status_code == 422
-    assert "household supports at most one row" in response.text
+    assert response.status_code == 201
+    data = response.json()
+    assert len(data["household"]) == 2
+    assert data["people"][1]["person_household_id"] == 1
 
 
 # ---------------------------------------------------------------------------

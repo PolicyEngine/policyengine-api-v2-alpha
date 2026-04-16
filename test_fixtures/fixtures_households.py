@@ -62,6 +62,54 @@ MOCK_US_MULTI_GROUP_HOUSEHOLD_CREATE = {
     "household": [{"household_id": 0, "state_name": "CA"}],
 }
 
+MOCK_US_FULL_MULTI_GROUP_HOUSEHOLD_CREATE = {
+    "country_id": "us",
+    "year": 2024,
+    "label": "US fully multi-group household",
+    "people": [
+        {
+            "person_id": 0,
+            "person_household_id": 0,
+            "person_tax_unit_id": 0,
+            "person_marital_unit_id": 0,
+            "person_family_id": 0,
+            "person_spm_unit_id": 0,
+            "age": 30,
+            "employment_income": 50000,
+        },
+        {
+            "person_id": 1,
+            "person_household_id": 1,
+            "person_tax_unit_id": 1,
+            "person_marital_unit_id": 1,
+            "person_family_id": 1,
+            "person_spm_unit_id": 1,
+            "age": 28,
+            "employment_income": 30000,
+        },
+    ],
+    "tax_unit": [
+        {"tax_unit_id": 0, "state_name": "CA"},
+        {"tax_unit_id": 1, "state_name": "CA"},
+    ],
+    "marital_unit": [
+        {"marital_unit_id": 0},
+        {"marital_unit_id": 1},
+    ],
+    "family": [
+        {"family_id": 0},
+        {"family_id": 1},
+    ],
+    "spm_unit": [
+        {"spm_unit_id": 0},
+        {"spm_unit_id": 1},
+    ],
+    "household": [
+        {"household_id": 0, "state_name": "CA"},
+        {"household_id": 1, "state_name": "NY"},
+    ],
+}
+
 MOCK_HOUSEHOLD_MINIMAL = {
     "country_id": "us",
     "year": 2024,

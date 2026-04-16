@@ -20,7 +20,6 @@ _ENTITY_ID_KEY_BY_GROUP = {
 }
 
 _ENTITY_GROUP_FIELDS = tuple(_ENTITY_ID_KEY_BY_GROUP.keys())
-_MULTI_ROW_ALLOWED = {"marital_unit"}
 
 
 def _coerce_entity_group_collection(value: Any) -> Any:
@@ -55,8 +54,8 @@ class Household(HouseholdBase, table=True):
 class HouseholdCreate(StoredHouseholdPayload):
     """Schema for creating a stored household.
 
-    Uses list-based entity groups for storage, with multiple rows allowed only
-    for marital_unit.
+    Uses the same list-based relational entity shape as the household
+    calculation APIs.
     """
 
     @field_validator(*_ENTITY_GROUP_FIELDS, mode="before")
@@ -77,11 +76,6 @@ class HouseholdCreate(StoredHouseholdPayload):
         for group_key, entity_id_key in _ENTITY_ID_KEY_BY_GROUP.items():
             entity_records = getattr(self, group_key)
             person_link_key = f"person_{entity_id_key}"
-
-            if len(entity_records) > 1 and group_key not in _MULTI_ROW_ALLOWED:
-                raise ValueError(
-                    f"{group_key} supports at most one row in stored households"
-                )
 
             entity_ids = [
                 entity[entity_id_key]
