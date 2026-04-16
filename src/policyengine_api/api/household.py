@@ -96,9 +96,6 @@ class HouseholdCalculateRequest(BaseModel):
     }
     """
 
-    country_id: CountryId = Field(
-        description="Which country model to use ('us' or 'uk')"
-    )
     people: list[dict[str, Any]] = Field(
         description="List of people with flat variable values. Include person_id and person_{entity}_id fields to link to entities."
     )
@@ -129,6 +126,9 @@ class HouseholdCalculateRequest(BaseModel):
     year: int | None = Field(
         default=None,
         description="Simulation year (default: 2024 for US, 2026 for UK). Specify this instead of embedding years in variable values.",
+    )
+    country_id: CountryId = Field(
+        description="Which country model to use ('us' or 'uk')"
     )
     policy_id: UUID | None = Field(
         default=None, description="Optional policy reform ID"
@@ -183,9 +183,6 @@ class HouseholdImpactRequest(BaseModel):
     }
     """
 
-    country_id: CountryId = Field(
-        description="Which country model to use ('us' or 'uk')"
-    )
     people: list[dict[str, Any]] = Field(
         description="List of people with flat variable values. Include person_id and person_{entity}_id fields to link to entities."
     )
@@ -215,6 +212,9 @@ class HouseholdImpactRequest(BaseModel):
     )
     year: int | None = Field(
         default=None, description="Simulation year (default: 2024 for US, 2026 for UK)"
+    )
+    country_id: CountryId = Field(
+        description="Which country model to use ('us' or 'uk')"
     )
     policy_id: UUID | None = Field(
         default=None, description="Reform policy ID to compare against baseline"
@@ -854,7 +854,7 @@ def calculate_household(
     Use flat values for all variables - do NOT use time-period format like {"2024": value}.
     The simulation year is specified via the `year` parameter.
 
-    US example: people=[{"employment_income": 70000, "age": 40}], tax_unit={"state_code": "CA"}, year=2024
+    US example: people=[{"employment_income": 70000, "age": 40}], tax_unit=[{"state_code": "CA"}], year=2024
     UK example: people=[{"employment_income": 50000, "age": 30}], year=2026
     """
     with logfire.span(

@@ -241,6 +241,129 @@ class TestGetCalculator:
         assert calc == calculate_us_household
 
 
+class TestStoredHouseholdCalculatorAlignment:
+    """Tests that stored-household analysis preserves plural entity lists."""
+
+    def test_calculate_us_household_passes_multi_marital_units_through(
+        self, monkeypatch
+    ):
+        from policyengine_api.api import household as household_api
+        from policyengine_api.api.household_analysis import calculate_us_household
+
+        captured: dict = {}
+
+        def fake_calculate_household_us(
+            *,
+            people,
+            marital_unit,
+            family,
+            spm_unit,
+            tax_unit,
+            household,
+            year,
+            policy_data,
+        ):
+            captured.update(
+                {
+                    "people": people,
+                    "marital_unit": marital_unit,
+                    "family": family,
+                    "spm_unit": spm_unit,
+                    "tax_unit": tax_unit,
+                    "household": household,
+                    "year": year,
+                    "policy_data": policy_data,
+                }
+            )
+            return {"person": []}
+
+        monkeypatch.setattr(
+            household_api, "_calculate_household_us", fake_calculate_household_us
+        )
+
+        household_data = {
+            "people": [
+                {
+                    "person_id": 0,
+                    "person_household_id": 0,
+                    "person_tax_unit_id": 0,
+                    "person_marital_unit_id": 0,
+                },
+                {
+                    "person_id": 1,
+                    "person_household_id": 0,
+                    "person_tax_unit_id": 0,
+                    "person_marital_unit_id": 1,
+                },
+            ],
+            "tax_unit": [{"tax_unit_id": 0, "state_name": "CA"}],
+            "marital_unit": [
+                {"marital_unit_id": 0},
+                {"marital_unit_id": 1},
+            ],
+            "family": [{"family_id": 0}],
+            "spm_unit": [{"spm_unit_id": 0}],
+            "household": [{"household_id": 0, "state_name": "CA"}],
+        }
+
+        calculate_us_household(household_data, 2024, {"name": "test"})
+
+        assert len(captured["tax_unit"]) == 1
+        assert len(captured["marital_unit"]) == 2
+        assert captured["tax_unit"][0]["tax_unit_id"] == 0
+        assert captured["people"][1]["person_marital_unit_id"] == 1
+
+    def test_calculate_uk_household_passes_plural_groups_through(self, monkeypatch):
+        from policyengine_api.api import household as household_api
+        from policyengine_api.api.household_analysis import calculate_uk_household
+
+        captured: dict = {}
+
+        def fake_calculate_household_uk(
+            *, people, benunit, household, year, policy_data
+        ):
+            captured.update(
+                {
+                    "people": people,
+                    "benunit": benunit,
+                    "household": household,
+                    "year": year,
+                    "policy_data": policy_data,
+                }
+            )
+            return {"person": []}
+
+        monkeypatch.setattr(
+            household_api, "_calculate_household_uk", fake_calculate_household_uk
+        )
+
+        household_data = {
+            "people": [
+                {
+                    "person_id": 0,
+                    "person_benunit_id": 0,
+                    "person_household_id": 0,
+                },
+                {
+                    "person_id": 1,
+                    "person_benunit_id": 1,
+                    "person_household_id": 1,
+                },
+            ],
+            "benunit": [{"benunit_id": 0}, {"benunit_id": 1}],
+            "household": [
+                {"household_id": 0, "region": "LONDON"},
+                {"household_id": 1, "region": "NORTH_EAST"},
+            ],
+        }
+
+        calculate_uk_household(household_data, 2026, None)
+
+        assert len(captured["benunit"]) == 2
+        assert len(captured["household"]) == 2
+        assert captured["household"][1]["household_id"] == 1
+
+
 # ---------------------------------------------------------------------------
 # Validation tests (no database required beyond session fixture)
 # ---------------------------------------------------------------------------

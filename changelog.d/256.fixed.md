@@ -1,0 +1,1 @@
+Stored `/households` definitions now use the same plural entity-list contract as household calculation, including validation for multi-group person/entity linkage and compatibility coercion for legacy singular payloads.

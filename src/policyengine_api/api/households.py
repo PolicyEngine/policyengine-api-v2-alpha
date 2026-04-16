@@ -34,9 +34,7 @@ def _pack_household_data(body: HouseholdCreate) -> dict[str, Any]:
     """Pack the flat request fields into a single JSON blob for storage."""
     data: dict[str, Any] = {"people": body.people}
     for key in _ENTITY_GROUP_KEYS:
-        val = getattr(body, key)
-        if val is not None:
-            data[key] = val
+        data[key] = list(getattr(body, key))
     return data
 
 
@@ -49,12 +47,12 @@ def _to_read(record: Household) -> HouseholdRead:
         year=record.year,
         label=record.label,
         people=data["people"],
-        tax_unit=data.get("tax_unit"),
-        family=data.get("family"),
-        spm_unit=data.get("spm_unit"),
-        marital_unit=data.get("marital_unit"),
-        household=data.get("household"),
-        benunit=data.get("benunit"),
+        tax_unit=data.get("tax_unit", []),
+        family=data.get("family", []),
+        spm_unit=data.get("spm_unit", []),
+        marital_unit=data.get("marital_unit", []),
+        household=data.get("household", []),
+        benunit=data.get("benunit", []),
         created_at=record.created_at,
         updated_at=record.updated_at,
     )

@@ -5,7 +5,10 @@ from uuid import uuid4
 from test_fixtures.fixtures_households import (
     MOCK_HOUSEHOLD_MINIMAL,
     MOCK_UK_HOUSEHOLD_CREATE,
+    MOCK_US_FULL_MULTI_GROUP_HOUSEHOLD_CREATE,
     MOCK_US_HOUSEHOLD_CREATE,
+    MOCK_US_HOUSEHOLD_CREATE_LEGACY,
+    MOCK_US_MULTI_GROUP_HOUSEHOLD_CREATE,
     create_household,
 )
 
@@ -34,9 +37,9 @@ def test_create_household_returns_people_and_entities(client):
     assert len(data["people"]) == 2
     assert data["people"][0]["age"] == 30
     assert data["people"][0]["employment_income"] == 50000
-    assert data["household"] == {"state_name": "CA"}
-    assert data["tax_unit"] == {}
-    assert data["family"] == {}
+    assert data["household"] == [{"state_name": "CA"}]
+    assert data["tax_unit"] == [{}]
+    assert data["family"] == [{}]
 
 
 def test_create_uk_household(client):
@@ -45,8 +48,8 @@ def test_create_uk_household(client):
     assert response.status_code == 201
     data = response.json()
     assert data["country_id"] == "uk"
-    assert data["benunit"] == {"is_married": False}
-    assert data["household"] == {"region": "LONDON"}
+    assert data["benunit"] == [{"is_married": False}]
+    assert data["household"] == [{"region": "LONDON"}]
 
 
 def test_create_household_minimal(client):
@@ -55,8 +58,25 @@ def test_create_household_minimal(client):
     assert response.status_code == 201
     data = response.json()
     assert data["label"] is None
-    assert data["tax_unit"] is None
-    assert data["benunit"] is None
+    assert data["tax_unit"] == []
+    assert data["benunit"] == []
+
+
+def test_create_household_round_trips_multiple_entity_groups(client):
+    """Stored household CRUD preserves multiple rows across entity groups."""
+    response = client.post(
+        "/households", json=MOCK_US_FULL_MULTI_GROUP_HOUSEHOLD_CREATE
+    )
+    assert response.status_code == 201
+    data = response.json()
+    assert len(data["tax_unit"]) == 2
+    assert len(data["marital_unit"]) == 2
+    assert len(data["family"]) == 2
+    assert len(data["spm_unit"]) == 2
+    assert len(data["household"]) == 2
+    assert data["people"][0]["person_tax_unit_id"] == 0
+    assert data["people"][1]["person_tax_unit_id"] == 1
+    assert data["people"][1]["person_household_id"] == 1
 
 
 def test_create_household_invalid_country_id(client):
@@ -64,6 +84,149 @@ def test_create_household_invalid_country_id(client):
     payload = {**MOCK_HOUSEHOLD_MINIMAL, "country_id": "invalid"}
     response = client.post("/households", json=payload)
     assert response.status_code == 422
+
+
+def test_create_household_accepts_legacy_singular_entity_groups(client):
+    """Legacy singular entity dicts are coerced to one-element lists."""
+    response = client.post("/households", json=MOCK_US_HOUSEHOLD_CREATE_LEGACY)
+
+    assert response.status_code == 201
+    data = response.json()
+    assert data["tax_unit"] == [{}]
+    assert data["family"] == [{}]
+    assert data["household"] == [{"state_name": "CA"}]
+
+
+def test_create_household_rejects_duplicate_entity_ids(client):
+    """Reject duplicate entity IDs within a stored group collection."""
+    payload = {
+        **MOCK_US_MULTI_GROUP_HOUSEHOLD_CREATE,
+        "marital_unit": [
+            {"marital_unit_id": 0},
+            {"marital_unit_id": 0},
+        ],
+    }
+
+    response = client.post("/households", json=payload)
+
+    assert response.status_code == 422
+    assert "duplicate marital_unit_id" in response.text
+
+
+def test_create_household_rejects_unknown_person_entity_links(client):
+    """Reject person-to-entity references that do not resolve to stored rows."""
+    payload = {
+        **MOCK_US_MULTI_GROUP_HOUSEHOLD_CREATE,
+        "people": [
+            {
+                "person_id": 0,
+                "person_household_id": 0,
+                "person_tax_unit_id": 0,
+                "person_marital_unit_id": 7,
+                "age": 30,
+            }
+        ],
+    }
+
+    response = client.post("/households", json=payload)
+
+    assert response.status_code == 422
+    assert "missing rows for referenced marital_unit_id values" in response.text
+
+
+def test_create_household_requires_person_links_for_multi_group_rows(client):
+    """Reject multi-group payloads that omit person linkage."""
+    payload = {
+        **MOCK_US_MULTI_GROUP_HOUSEHOLD_CREATE,
+        "people": [
+            {
+                "person_id": 0,
+                "person_household_id": 0,
+                "person_tax_unit_id": 0,
+                "age": 30,
+            },
+            {
+                "person_id": 1,
+                "person_household_id": 0,
+                "person_tax_unit_id": 0,
+                "age": 28,
+            },
+        ],
+    }
+
+    response = client.post("/households", json=payload)
+
+    assert response.status_code == 422
+    assert "people must include person_" in response.text
+    assert "when " in response.text
+
+
+def test_create_household_accepts_multiple_tax_units(client):
+    """Stored households preserve multiple tax units when person links are present."""
+    payload = {
+        **MOCK_US_MULTI_GROUP_HOUSEHOLD_CREATE,
+        "tax_unit": [
+            {"tax_unit_id": 0, "state_name": "CA"},
+            {"tax_unit_id": 1, "state_name": "CA"},
+        ],
+        "people": [
+            {
+                "person_id": 0,
+                "person_household_id": 0,
+                "person_tax_unit_id": 0,
+                "person_marital_unit_id": 0,
+                "age": 30,
+            },
+            {
+                "person_id": 1,
+                "person_household_id": 0,
+                "person_tax_unit_id": 1,
+                "person_marital_unit_id": 1,
+                "age": 28,
+            },
+        ],
+    }
+
+    response = client.post("/households", json=payload)
+
+    assert response.status_code == 201
+    data = response.json()
+    assert len(data["tax_unit"]) == 2
+    assert data["people"][1]["person_tax_unit_id"] == 1
+
+
+def test_create_household_accepts_multiple_households(client):
+    """Stored households preserve multiple household rows when person links are present."""
+    payload = {
+        **MOCK_US_MULTI_GROUP_HOUSEHOLD_CREATE,
+        "household": [
+            {"household_id": 0, "state_name": "CA"},
+            {"household_id": 1, "state_name": "NY"},
+        ],
+        "people": [
+            {
+                "person_id": 0,
+                "person_household_id": 0,
+                "person_tax_unit_id": 0,
+                "person_marital_unit_id": 0,
+                "age": 30,
+            },
+            {
+                "person_id": 1,
+                "person_household_id": 1,
+                "person_tax_unit_id": 0,
+                "person_marital_unit_id": 1,
+                "age": 28,
+            },
+        ],
+    }
+
+    response = client.post("/households", json=payload)
+
+    assert response.status_code == 201
+    data = response.json()
+    assert len(data["household"]) == 2
+    assert data["people"][1]["person_household_id"] == 1
 
 
 # ---------------------------------------------------------------------------
@@ -79,6 +242,22 @@ def test_get_household(client, session):
     data = response.json()
     assert data["id"] == str(record.id)
     assert data["country_id"] == "us"
+
+
+def test_get_household_coerces_legacy_singular_entity_rows(client, session):
+    """Legacy singular entity dicts stored in JSON are returned as one-element lists."""
+    record = create_household(
+        session,
+        household={"state_name": "CA"},
+        tax_unit={},
+    )
+
+    response = client.get(f"/households/{record.id}")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["household"] == [{"state_name": "CA"}]
+    assert data["tax_unit"] == [{}]
 
 
 def test_get_household_not_found(client):

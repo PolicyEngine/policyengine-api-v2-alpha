@@ -6,7 +6,38 @@ without requiring database setup or API calls.
 
 import pytest
 
-from policyengine_api.api.household import _calculate_household_us
+from policyengine_api.api.household import (
+    HouseholdCalculateResponse,
+    _calculate_household_us,
+)
+
+
+class TestHouseholdCalculateResponse:
+    """Response model should allow country-specific group omissions."""
+
+    def test_accepts_uk_style_result_without_us_groups(self):
+        result = HouseholdCalculateResponse(
+            person=[{"employment_income": 30000}],
+            benunit=[{"is_married": False}],
+            household=[{"region": "LONDON"}],
+        )
+
+        assert result.benunit == [{"is_married": False}]
+        assert result.tax_unit is None
+        assert result.marital_unit is None
+
+    def test_accepts_us_style_result_without_uk_groups(self):
+        result = HouseholdCalculateResponse(
+            person=[{"employment_income": 60000}],
+            marital_unit=[{}],
+            family=[{}],
+            spm_unit=[{}],
+            tax_unit=[{"state_code": "CA"}],
+            household=[{"state_fips": 6}],
+        )
+
+        assert result.tax_unit == [{"state_code": "CA"}]
+        assert result.benunit is None
 
 
 class TestUSHouseholdCalculation:

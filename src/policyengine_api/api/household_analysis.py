@@ -9,6 +9,10 @@ WORKFLOW:
 3. Run analysis: POST /analysis/household-impact (returns report_id)
 4. Poll GET /analysis/household-impact/{report_id} until status="completed"
 5. Results include baseline_result, reform_result (if comparison), and impact diff
+
+Stored households now use the same plural entity-list contract as the
+/household/calculate endpoint. Analysis should pass those lists through
+without collapsing multi-group households into a single entity row.
 """
 
 from dataclasses import dataclass
@@ -109,7 +113,7 @@ def calculate_uk_household(
     year: int,
     policy_data: dict | None,
 ) -> dict:
-    """Calculate UK household using the existing implementation."""
+    """Calculate UK household using the stored-household plural entity contract."""
     from policyengine_api.api.household import _calculate_household_uk
 
     return _calculate_household_uk(
@@ -126,7 +130,7 @@ def calculate_us_household(
     year: int,
     policy_data: dict | None,
 ) -> dict:
-    """Calculate US household using the existing implementation."""
+    """Calculate US household using the stored-household plural entity contract."""
     from policyengine_api.api.household import _calculate_household_us
 
     return _calculate_household_us(
