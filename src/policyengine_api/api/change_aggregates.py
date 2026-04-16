@@ -20,6 +20,7 @@ from policyengine_api.models import (
     TaxBenefitModel,
     TaxBenefitModelVersion,
 )
+from policyengine_api.security import require_expensive_endpoint_access
 from policyengine_api.services.database import get_session
 
 router = APIRouter(prefix="/outputs/change-aggregates", tags=["change-aggregates"])
@@ -84,7 +85,11 @@ def _trigger_change_aggregate_computation(
     )
 
 
-@router.post("", response_model=List[ChangeAggregateRead])
+@router.post(
+    "",
+    response_model=List[ChangeAggregateRead],
+    dependencies=[Depends(require_expensive_endpoint_access)],
+)
 def create_change_aggregates(
     outputs: List[ChangeAggregateCreate],
     background_tasks: BackgroundTasks,
@@ -129,14 +134,22 @@ def create_change_aggregates(
     return db_outputs
 
 
-@router.get("", response_model=List[ChangeAggregateRead])
+@router.get(
+    "",
+    response_model=List[ChangeAggregateRead],
+    dependencies=[Depends(require_expensive_endpoint_access)],
+)
 def list_change_aggregates(session: Session = Depends(get_session)):
     """List all change aggregates."""
     outputs = session.exec(select(ChangeAggregate)).all()
     return outputs
 
 
-@router.get("/{output_id}", response_model=ChangeAggregateRead)
+@router.get(
+    "/{output_id}",
+    response_model=ChangeAggregateRead,
+    dependencies=[Depends(require_expensive_endpoint_access)],
+)
 def get_change_aggregate(output_id: UUID, session: Session = Depends(get_session)):
     """Get a specific change aggregate."""
     output = session.get(ChangeAggregate, output_id)

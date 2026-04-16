@@ -31,6 +31,105 @@ console = Console()
 PROJECT_ROOT = Path(__file__).parent.parent
 
 
+def build_rls_policies_sql() -> str:
+    """Build the SQL used to apply RLS policies.
+
+    The generated policies intentionally avoid anonymous access for database
+    tables. Storage policies remain separate because they are managed by a
+    different access pattern.
+    """
+
+    tables = [
+        "datasets",
+        "dataset_versions",
+        "simulations",
+        "reports",
+        "decile_impacts",
+        "program_statistics",
+        "policies",
+        "dynamics",
+        "aggregates",
+        "change_aggregates",
+        "tax_benefit_models",
+        "tax_benefit_model_versions",
+        "variables",
+        "parameters",
+        "parameter_values",
+        "users",
+        "household_jobs",
+        "households",
+        "user_household_associations",
+        "poverty",
+        "inequality",
+    ]
+
+    # Read-only tables are readable only by authenticated clients.
+    readonly_tables = [
+        "tax_benefit_models",
+        "tax_benefit_model_versions",
+        "variables",
+        "parameters",
+        "parameter_values",
+        "datasets",
+        "dataset_versions",
+    ]
+
+    # User-scoped and mutable tables are only accessible through the service role.
+    service_role_only_tables = [
+        "simulations",
+        "policies",
+        "dynamics",
+        "reports",
+        "household_jobs",
+        "households",
+        "aggregates",
+        "change_aggregates",
+        "decile_impacts",
+        "program_statistics",
+        "user_household_associations",
+        "poverty",
+        "inequality",
+    ]
+
+    sql_parts = []
+
+    for table in tables:
+        sql_parts.append(f"ALTER TABLE {table} ENABLE ROW LEVEL SECURITY;")
+
+    for table in tables:
+        sql_parts.append(
+            f"""
+        DROP POLICY IF EXISTS "Service role full access" ON {table};
+        CREATE POLICY "Service role full access" ON {table}
+        FOR ALL TO service_role USING (true) WITH CHECK (true);
+        """
+        )
+
+    for table in readonly_tables:
+        sql_parts.append(
+            f"""
+        DROP POLICY IF EXISTS "Public read access" ON {table};
+        CREATE POLICY "Public read access" ON {table}
+        FOR SELECT TO authenticated USING (true);
+        """
+        )
+
+    for table in service_role_only_tables:
+        drop_statements = [
+            f'DROP POLICY IF EXISTS "Users can create" ON {table};',
+            f'DROP POLICY IF EXISTS "Users can read" ON {table};',
+            f'DROP POLICY IF EXISTS "Public read access" ON {table};',
+        ]
+        if table == "user_household_associations":
+            drop_statements.append(
+                'DROP POLICY IF EXISTS "Users can manage own associations" '
+                "ON user_household_associations;"
+            )
+        sql_parts.append("\n".join(drop_statements))
+
+    return "\n".join(sql_parts)
+
+
 def reset_storage_bucket():
     """Delete and recreate the storage bucket."""
     console.print("[bold blue]Resetting storage bucket...")
@@ -175,119 +274,14 @@ def apply_storage_policies(engine):
 def apply_rls_policies(engine):
     """Apply row-level security policies to all tables."""
     console.print("[bold blue]Applying RLS policies...")
-
-    tables = [
-        "datasets",
-        "dataset_versions",
-        "simulations",
-        "reports",
-        "decile_impacts",
-        "program_statistics",
-        "policies",
-        "dynamics",
-        "aggregates",
-        "change_aggregates",
-        "tax_benefit_models",
-        "tax_benefit_model_versions",
-        "variables",
-        "parameters",
-        "parameter_values",
-        "users",
-        "household_jobs",
-        "households",
-        "user_household_associations",
-        "poverty",
-        "inequality",
-    ]
-
-    # Read-only tables (public can read, only service role can write)
-    readonly_tables = [
-        "tax_benefit_models",
-        "tax_benefit_model_versions",
-        "variables",
-        "parameters",
-        "parameter_values",
-        "datasets",
-        "dataset_versions",
-    ]
-
-    # User-writable tables
-    user_writable_tables = [
-        "simulations",
-        "policies",
-        "dynamics",
-        "reports",
-        "household_jobs",
-        "households",
-    ]
-
-    # Read-only results tables
-    results_tables = [
-        "aggregates",
-        "change_aggregates",
-        "decile_impacts",
-        "program_statistics",
-        "poverty",
-        "inequality",
-    ]
-
-    sql_parts = []
-
-    # Enable RLS on all tables
-    for table in tables:
-        sql_parts.append(f"ALTER TABLE {table} ENABLE ROW LEVEL SECURITY;")
-
-    # Service role full access on all tables
-    for table in tables:
-        sql_parts.append(f"""
-        DROP POLICY IF EXISTS "Service role full access" ON {table};
-        CREATE POLICY "Service role full access" ON {table}
-        FOR ALL TO service_role USING (true) WITH CHECK (true);
-        """)
-
-    # Public read access for read-only tables
-    for table in readonly_tables:
-        sql_parts.append(f"""
-        DROP POLICY IF EXISTS "Public read access" ON {table};
-        CREATE POLICY "Public read access" ON {table}
-        FOR SELECT TO anon, authenticated USING (true);
-        """)
-
-    # User create/read for user-writable tables
-    for table in user_writable_tables:
-        sql_parts.append(f"""
-        DROP POLICY IF EXISTS "Users can create" ON {table};
-        CREATE POLICY "Users can create" ON {table}
-        FOR INSERT TO anon, authenticated WITH CHECK (true);
-
-        DROP POLICY IF EXISTS "Users can read" ON {table};
-        CREATE POLICY "Users can read" ON {table}
-        FOR SELECT TO anon, authenticated USING (true);
-        """)
-
-    # Read access for results tables
-    for table in results_tables:
-        sql_parts.append(f"""
-        DROP POLICY IF EXISTS "Users can read" ON {table};
-        CREATE POLICY "Users can read" ON {table}
-        FOR SELECT TO anon, authenticated USING (true);
-        """)
-
-    # User-household associations need special handling
-    sql_parts.append("""
-    DROP POLICY IF EXISTS "Users can manage own associations" ON user_household_associations;
-    CREATE POLICY "Users can manage own associations" ON user_household_associations
-    FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
-    """)
-
-    sql = "\n".join(sql_parts)
+    sql = build_rls_policies_sql()
 
     conn = engine.raw_connection()
     try:
         cursor = conn.cursor()
         cursor.execute(sql)
         conn.commit()
-        console.print(f"[green]✓[/green] RLS policies applied to {len(tables)} tables")
+        console.print("[green]✓[/green] RLS policies applied to database tables")
     except Exception as e:
         console.print(f"[red]✗ Error applying RLS policies: {e}[/red]")
         raise
