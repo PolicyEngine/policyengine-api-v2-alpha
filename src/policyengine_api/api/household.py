@@ -1078,8 +1078,13 @@ def calculate_household_impact_comparison(
         session.refresh(baseline_job)
         session.refresh(reform_job)
 
-        # Update reform job with baseline reference
-        reform_job.request_data["baseline_job_id"] = str(baseline_job.id)
+        # Update reform job with baseline reference. SQLAlchemy does not track
+        # in-place mutations of JSON columns, so we rebuild the dict to force
+        # a new value that the ORM will persist.
+        reform_job.request_data = {
+            **reform_job.request_data,
+            "baseline_job_id": str(baseline_job.id),
+        }
         session.add(reform_job)
         session.commit()
 
