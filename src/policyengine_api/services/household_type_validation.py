@@ -14,7 +14,9 @@ mismatches raise ``HTTPException(422)`` so clients get a precise error.
 
 from __future__ import annotations
 
+import threading
 from typing import Any
+from uuid import UUID
 
 from fastapi import HTTPException
 from sqlmodel import Session, select
@@ -40,17 +42,49 @@ _ALLOWED_TYPES: dict[str, tuple[type, ...]] = {
 }
 
 
+# Catalogs are immutable per ``TaxBenefitModelVersion``; a deploy that
+# publishes a new catalog bumps the version and writes a new row. Keyed by
+# ``TaxBenefitModelVersion.id``, a process-lifetime cache is safe.
+#
+# We use a plain dict + ``threading.Lock`` rather than ``functools.lru_cache``
+# because ``lru_cache`` would require the ``Session`` to be part of the key
+# (sessions are not hashable, and coupling cache identity to session lifetime
+# is undesirable anyway). Bounded by the number of distinct model versions
+# ever seen in a process — in practice a small handful.
+_types_cache: dict[UUID, dict[str, str]] = {}
+_types_cache_lock = threading.Lock()
+
+
 def _variable_types_for_country(
     country_id: CountryId, session: Session
 ) -> dict[str, str]:
-    """Return a ``{variable_name: data_type}`` map for the latest country model."""
+    """Return a ``{variable_name: data_type}`` map for the latest country model.
+
+    Results are memoised per ``TaxBenefitModelVersion``; the catalog is
+    immutable per version, so repeated validations for the same country pay
+    the SQL query once per deploy.
+    """
     _, version = resolve_country_model(country_id, session)
+    version_id = version.id
+
+    with _types_cache_lock:
+        cached = _types_cache.get(version_id)
+        if cached is not None:
+            return cached
+
     rows = session.exec(
         select(Variable.name, Variable.data_type).where(
-            Variable.tax_benefit_model_version_id == version.id
+            Variable.tax_benefit_model_version_id == version_id
         )
     ).all()
-    return {name: dtype for name, dtype in rows if dtype}
+    types_by_name = {name: dtype for name, dtype in rows if dtype}
+
+    with _types_cache_lock:
+        # Double-checked set: another thread may have beaten us here, but the
+        # result is identical so overwriting is harmless.
+        _types_cache[version_id] = types_by_name
+
+    return types_by_name
 
 
 def validate_entity_values(
