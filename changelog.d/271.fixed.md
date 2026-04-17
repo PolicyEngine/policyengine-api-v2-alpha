@@ -1,0 +1,1 @@
+Household endpoints now validate entity values against variable dtypes (rejecting mixed-dtype inputs with 422) and pick dtype-compatible column defaults to prevent the simulation kernel from building object-dtype DataFrames.

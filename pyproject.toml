@@ -25,6 +25,7 @@ dependencies = [
     "modal>=0.68.0",
     "anthropic>=0.40.0",
     "alembic>=1.13.0",
+    "cachetools>=7.0.5",
 ]
 
 [project.optional-dependencies]

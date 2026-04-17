@@ -4,11 +4,12 @@ Aggregates are computed statistics from simulations (e.g. total tax revenue,
 benefit spending, poverty rates). Computation is triggered on Modal.
 """
 
-from typing import List
+from typing import Annotated, List
 from uuid import UUID
 
 import logfire
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
+from pydantic import Field
 from sqlmodel import Session, select
 
 from policyengine_api.models import (
@@ -20,6 +21,11 @@ from policyengine_api.models import (
     TaxBenefitModelVersion,
 )
 from policyengine_api.services.database import get_session
+
+# Upper bound on how many aggregates can be created per request. Each entry
+# spawns a Modal function, so a large batch both monopolises the worker pool
+# and racks up cost.
+MAX_BATCH_SIZE = 100
 
 router = APIRouter(prefix="/outputs/aggregates", tags=["aggregates"])
 
@@ -85,7 +91,7 @@ def _trigger_aggregate_computation(
 
 @router.post("", response_model=List[AggregateOutputRead])
 def create_aggregate_outputs(
-    outputs: List[AggregateOutputCreate],
+    outputs: Annotated[List[AggregateOutputCreate], Field(max_length=MAX_BATCH_SIZE)],
     background_tasks: BackgroundTasks,
     session: Session = Depends(get_session),
 ):
@@ -123,9 +129,13 @@ def create_aggregate_outputs(
 
 
 @router.get("", response_model=List[AggregateOutputRead])
-def list_aggregate_outputs(session: Session = Depends(get_session)):
-    """List all aggregates."""
-    outputs = session.exec(select(AggregateOutput)).all()
+def list_aggregate_outputs(
+    skip: int = Query(default=0, ge=0),
+    limit: int = Query(default=100, ge=1, le=500),
+    session: Session = Depends(get_session),
+):
+    """List aggregates (paginated)."""
+    outputs = session.exec(select(AggregateOutput).offset(skip).limit(limit)).all()
     return outputs
 
 

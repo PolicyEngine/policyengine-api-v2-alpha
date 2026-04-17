@@ -50,6 +50,22 @@ async def lifespan(app: FastAPI):
     FastAPICache.init(InMemoryBackend(), prefix="fastapi-cache")
     console.print("[bold green]Cache initialized[/bold green]")
 
+    # Warn if the agent callback HMAC secret is unset. Without a configured
+    # secret, ``policyengine_api.security`` falls back to a per-process
+    # random key; in a multi-worker deploy, a callback issued by one worker
+    # will be rejected by any other worker (signatures won't verify). Surface
+    # this loudly at startup rather than silently breaking agent callbacks.
+    if not settings.agent_callback_secret:
+        msg = (
+            "agent_callback_secret is unset; HMAC signatures will use a "
+            "per-process random key. Callbacks issued by one worker will "
+            "fail verification in any other worker. Set "
+            "AGENT_CALLBACK_SECRET in production."
+        )
+        console.print(f"[bold yellow]WARNING:[/bold yellow] {msg}")
+        if _logfire_enabled:
+            logfire.warn("agent_callback_secret_unset", detail=msg)
+
     yield
 
 

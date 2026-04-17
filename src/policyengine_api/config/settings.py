@@ -46,6 +46,12 @@ class Settings(BaseSettings):
     anthropic_api_key: str = ""
     agent_use_modal: bool = False
     policyengine_api_url: str = "https://v2.api.policyengine.org"
+    # HMAC secret used to sign agent callback identifiers. If unset the
+    # security module falls back to a per-process random value.
+    agent_callback_secret: str = ""
+
+    # Shared API key used to gate destructive/privileged endpoints.
+    api_key: str = ""
 
     # Modal
     modal_environment: str = "main"
@@ -54,8 +60,15 @@ class Settings(BaseSettings):
     def database_url(self) -> str:
         """Get database URL from Supabase.
 
-        For local development, the database runs on port 54322 (not 54321 which is the API).
-        Use supabase_db_url to override, or rely on the default local URL.
+        For local development, the database runs on port 54322 (not 54321
+        which is the API). Use ``supabase_db_url`` to override, or rely on
+        the default local URL.
+
+        We deliberately do not synthesise a ``postgres:postgres@...`` URL for
+        remote Supabase deployments — the fallback would leak credentials
+        into whatever Supabase hostname the caller pointed at, and any
+        production deployment that arrived at that branch has misconfigured
+        ``supabase_db_url`` and should fail loudly.
         """
         if self.supabase_db_url:
             return self.supabase_db_url
@@ -64,12 +77,10 @@ class Settings(BaseSettings):
         if "localhost" in self.supabase_url or "127.0.0.1" in self.supabase_url:
             return "postgresql://postgres:postgres@127.0.0.1:54322/postgres"
 
-        # For remote Supabase, construct URL from API URL (usually need supabase_db_url set)
-        return (
-            self.supabase_url.replace(
-                "http://", "postgresql://postgres:postgres@"
-            ).replace("https://", "postgresql://postgres:postgres@")
-            + "/postgres"
+        raise ValueError(
+            "supabase_db_url must be configured for non-local Supabase. "
+            "Set SUPABASE_DB_URL (e.g. "
+            "postgresql://user:pass@db.project.supabase.co:5432/postgres)."
         )
 
 

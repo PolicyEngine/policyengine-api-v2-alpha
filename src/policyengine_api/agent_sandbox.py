@@ -4,6 +4,7 @@ import json
 import re
 import time
 from typing import Callable
+from urllib.parse import quote
 
 import anthropic
 import modal
@@ -16,6 +17,11 @@ image = modal.Image.debian_slim(python_version="3.12").pip_install(
 app = modal.App("policyengine-sandbox")
 anthropic_secret = modal.Secret.from_name("anthropic-api-key")
 logfire_secrets = modal.Secret.from_name("policyengine-logfire")
+
+# Default maximum number of tool-calling turns the agent may take before the
+# loop is forcibly terminated. Kept in one place so the local implementation
+# and the Modal entry point stay in sync.
+DEFAULT_AGENT_MAX_TURNS = 30
 
 
 def configure_logfire(traceparent: str | None = None):
@@ -314,7 +320,9 @@ def execute_api_tool(
             continue
 
         if param_in == "path":
-            url = url.replace(f"{{{param_name}}}", str(value))
+            # URL-encode path parameters so values containing '/', '#', etc.
+            # do not escape the path segment or collide with other routes.
+            url = url.replace(f"{{{param_name}}}", quote(str(value), safe=""))
         elif param_in == "query":
             query_params[param_name] = value
         elif param_in == "header":
@@ -380,7 +388,7 @@ def _run_agent_impl(
     api_base_url: str = "https://v2.api.policyengine.org",
     call_id: str = "",
     history: list[dict] | None = None,
-    max_turns: int = 100,
+    max_turns: int = DEFAULT_AGENT_MAX_TURNS,
     traceparent: str | None = None,
 ) -> dict:
     """Core agent implementation."""
@@ -521,7 +529,7 @@ def run_agent(
     api_base_url: str = "https://v2.api.policyengine.org",
     call_id: str = "",
     history: list[dict] | None = None,
-    max_turns: int = 30,
+    max_turns: int = DEFAULT_AGENT_MAX_TURNS,
     traceparent: str | None = None,
 ) -> dict:
     """Run agentic loop to answer a policy question (Modal wrapper)."""

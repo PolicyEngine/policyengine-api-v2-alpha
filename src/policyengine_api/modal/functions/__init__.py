@@ -15,6 +15,10 @@ from policyengine_api.modal.shared import (  # noqa: F401
     get_database_url,
     get_db_session,
 )
+from policyengine_api.models.household_payload import (
+    MAX_ENTITIES_PER_GROUP,
+    MAX_KEYS_PER_ENTITY,
+)
 from policyengine_api.runtime_versions import (
     resolve_runtime_model_version_from_db,
     resolve_shared_runtime_model_version_from_db,
@@ -23,6 +27,67 @@ from policyengine_api.runtime_versions import (
 # Required environment variables from each secret
 REQUIRED_DB_VARS = ["DATABASE_URL", "SUPABASE_URL", "SUPABASE_KEY"]
 REQUIRED_LOGFIRE_VARS = ["LOGFIRE_TOKEN"]
+
+
+def _assert_bounded_entity_list(name: str, values: list[dict]) -> None:
+    """Defense-in-depth cap for Modal-side inputs.
+
+    The API layer already enforces these bounds via Pydantic, but the Modal
+    functions are invoked by other call sites (tests, maintenance scripts) and
+    must not trust their inputs to be bounded.
+    """
+    if len(values) > MAX_ENTITIES_PER_GROUP:
+        raise ValueError(
+            f"{name} has {len(values)} entries; maximum is {MAX_ENTITIES_PER_GROUP}"
+        )
+    for idx, entity in enumerate(values):
+        if isinstance(entity, dict) and len(entity) > MAX_KEYS_PER_ENTITY:
+            raise ValueError(
+                f"{name}[{idx}] has {len(entity)} keys; "
+                f"maximum is {MAX_KEYS_PER_ENTITY}"
+            )
+
+
+def _default_for_dtype(sample_value) -> object:
+    """Pick a default fill value whose dtype matches ``sample_value``.
+
+    MicroDataFrame derives each column's dtype from its values, so a default
+    of ``0.0`` placed alongside string entries (e.g. ``state_code='CA'``)
+    produces a fragile object-dtype column. This helper returns a
+    dtype-compatible default instead.
+    """
+    if isinstance(sample_value, bool):
+        return False
+    if isinstance(sample_value, str):
+        return ""
+    if isinstance(sample_value, (int, float)):
+        return 0.0
+    return 0.0
+
+
+def _assert_consistent_value(name: str, column_name: str, default, value) -> None:
+    """Raise if ``value`` has a dtype incompatible with ``default``."""
+    if value is None:
+        return
+    if isinstance(default, str):
+        if not isinstance(value, str):
+            raise ValueError(
+                f"{name}.{column_name}: mixed dtype (expected str, got "
+                f"{type(value).__name__}, value={value!r})"
+            )
+    elif isinstance(default, bool):
+        if not isinstance(value, bool):
+            raise ValueError(
+                f"{name}.{column_name}: mixed dtype (expected bool, got "
+                f"{type(value).__name__}, value={value!r})"
+            )
+    elif isinstance(default, (int, float)) and not isinstance(
+        value, (int, float, bool)
+    ):
+        raise ValueError(
+            f"{name}.{column_name}: mixed dtype (expected numeric, got "
+            f"{type(value).__name__}, value={value!r})"
+        )
 
 
 @app.function(
@@ -105,6 +170,10 @@ def simulate_household_uk(
 
     configure_logfire("policyengine-modal-uk", traceparent)
 
+    _assert_bounded_entity_list("people", people)
+    _assert_bounded_entity_list("benunit", benunit)
+    _assert_bounded_entity_list("household", household)
+
     try:
         with logfire.span("simulate_household_uk", job_id=job_id):
             database_url = get_database_url()
@@ -133,7 +202,10 @@ def simulate_household_uk(
                 for i, person in enumerate(people):
                     for key, value in person.items():
                         if key not in person_data:
-                            person_data[key] = [0.0] * n_people
+                            person_data[key] = [_default_for_dtype(value)] * n_people
+                        _assert_consistent_value(
+                            "people", key, person_data[key][0], value
+                        )
                         person_data[key][i] = value
 
                 # Build benunit data
@@ -144,7 +216,10 @@ def simulate_household_uk(
                 for i, bu in enumerate(benunit if benunit else [{}]):
                     for key, value in bu.items():
                         if key not in benunit_data:
-                            benunit_data[key] = [0.0] * n_benunits
+                            benunit_data[key] = [_default_for_dtype(value)] * n_benunits
+                        _assert_consistent_value(
+                            "benunit", key, benunit_data[key][0], value
+                        )
                         benunit_data[key][i] = value
 
                 # Build household data
@@ -159,7 +234,12 @@ def simulate_household_uk(
                 for i, hh in enumerate(household if household else [{}]):
                     for key, value in hh.items():
                         if key not in household_data:
-                            household_data[key] = [0.0] * n_households
+                            household_data[key] = [
+                                _default_for_dtype(value)
+                            ] * n_households
+                        _assert_consistent_value(
+                            "household", key, household_data[key][0], value
+                        )
                         household_data[key][i] = value
 
                 # Create MicroDataFrames
@@ -350,6 +430,13 @@ def simulate_household_us(
 
     configure_logfire("policyengine-modal-us", traceparent)
 
+    _assert_bounded_entity_list("people", people)
+    _assert_bounded_entity_list("marital_unit", marital_unit)
+    _assert_bounded_entity_list("family", family)
+    _assert_bounded_entity_list("spm_unit", spm_unit)
+    _assert_bounded_entity_list("tax_unit", tax_unit)
+    _assert_bounded_entity_list("household", household)
+
     try:
         with logfire.span("simulate_household_us", job_id=job_id):
             database_url = get_database_url()
@@ -384,7 +471,10 @@ def simulate_household_us(
                 for i, person in enumerate(people):
                     for key, value in person.items():
                         if key not in person_data:
-                            person_data[key] = [0.0] * n_people
+                            person_data[key] = [_default_for_dtype(value)] * n_people
+                        _assert_consistent_value(
+                            "people", key, person_data[key][0], value
+                        )
                         person_data[key][i] = value
 
                 # Build household data
@@ -395,7 +485,12 @@ def simulate_household_us(
                 for i, hh in enumerate(household if household else [{}]):
                     for key, value in hh.items():
                         if key not in household_data:
-                            household_data[key] = [0.0] * n_households
+                            household_data[key] = [
+                                _default_for_dtype(value)
+                            ] * n_households
+                        _assert_consistent_value(
+                            "household", key, household_data[key][0], value
+                        )
                         household_data[key][i] = value
 
                 # Build marital_unit data
@@ -406,7 +501,12 @@ def simulate_household_us(
                 for i, mu in enumerate(marital_unit if marital_unit else [{}]):
                     for key, value in mu.items():
                         if key not in marital_unit_data:
-                            marital_unit_data[key] = [0.0] * n_marital_units
+                            marital_unit_data[key] = [
+                                _default_for_dtype(value)
+                            ] * n_marital_units
+                        _assert_consistent_value(
+                            "marital_unit", key, marital_unit_data[key][0], value
+                        )
                         marital_unit_data[key][i] = value
 
                 # Build family data
@@ -417,7 +517,10 @@ def simulate_household_us(
                 for i, fam in enumerate(family if family else [{}]):
                     for key, value in fam.items():
                         if key not in family_data:
-                            family_data[key] = [0.0] * n_families
+                            family_data[key] = [_default_for_dtype(value)] * n_families
+                        _assert_consistent_value(
+                            "family", key, family_data[key][0], value
+                        )
                         family_data[key][i] = value
 
                 # Build spm_unit data
@@ -428,7 +531,12 @@ def simulate_household_us(
                 for i, spm in enumerate(spm_unit if spm_unit else [{}]):
                     for key, value in spm.items():
                         if key not in spm_unit_data:
-                            spm_unit_data[key] = [0.0] * n_spm_units
+                            spm_unit_data[key] = [
+                                _default_for_dtype(value)
+                            ] * n_spm_units
+                        _assert_consistent_value(
+                            "spm_unit", key, spm_unit_data[key][0], value
+                        )
                         spm_unit_data[key][i] = value
 
                 # Build tax_unit data
@@ -439,7 +547,12 @@ def simulate_household_us(
                 for i, tu in enumerate(tax_unit if tax_unit else [{}]):
                     for key, value in tu.items():
                         if key not in tax_unit_data:
-                            tax_unit_data[key] = [0.0] * n_tax_units
+                            tax_unit_data[key] = [
+                                _default_for_dtype(value)
+                            ] * n_tax_units
+                        _assert_consistent_value(
+                            "tax_unit", key, tax_unit_data[key][0], value
+                        )
                         tax_unit_data[key][i] = value
 
                 # Create MicroDataFrames

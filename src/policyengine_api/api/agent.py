@@ -7,15 +7,17 @@ The agent runs in a Modal sandbox (production) or locally (development).
 """
 
 import asyncio
-import uuid
-from datetime import datetime
+import threading
+from datetime import datetime, timezone
 
 import logfire
-from fastapi import APIRouter, HTTPException
+from cachetools import TTLCache
+from fastapi import APIRouter, Depends, HTTPException
 from opentelemetry.trace.propagation.tracecontext import TraceContextTextMapPropagator
 from pydantic import BaseModel
 
 from policyengine_api.config import settings
+from policyengine_api.security import issue_signed_call_id, verified_call_id
 
 
 def get_traceparent() -> str | None:
@@ -79,9 +81,26 @@ class StatusResponse(BaseModel):
     result: dict | None = None
 
 
-# In-memory storage for function calls and their logs
-_calls: dict[str, dict] = {}
-_logs: dict[str, list[LogEntry]] = {}
+# In-memory storage for function calls and their logs. Bounded so a flood of
+# spawn requests cannot drive the process OOM; entries expire after
+# ``_CALL_TTL_SECONDS`` of inactivity.
+#
+# Thread-safety: ``cachetools.TTLCache`` is NOT thread-safe, but the local
+# path mutates these caches from both the asyncio event-loop thread (FastAPI
+# handlers) and a ``run_in_executor`` worker thread (``_run_local_agent``).
+# Every read and write therefore goes through ``_cache_lock``; a single lock
+# is sufficient because contention is bounded by request rate (~2048 TTL
+# entries, each operation is O(1)) and a shared lock simplifies reasoning
+# about the one cross-cache invariant we care about (``_logs[id]`` exists iff
+# ``_calls[id]`` was or will shortly be populated).
+_MAX_ACTIVE_CALLS = 2048
+_CALL_TTL_SECONDS = 60 * 60  # 1 hour
+
+_cache_lock = threading.Lock()
+_calls: TTLCache[str, dict] = TTLCache(maxsize=_MAX_ACTIVE_CALLS, ttl=_CALL_TTL_SECONDS)
+_logs: TTLCache[str, list[LogEntry]] = TTLCache(
+    maxsize=_MAX_ACTIVE_CALLS, ttl=_CALL_TTL_SECONDS
+)
 
 
 def _run_local_agent(
@@ -90,7 +109,12 @@ def _run_local_agent(
     api_base_url: str,
     history: list[ConversationMessage] | None = None,
 ) -> None:
-    """Run agent locally in a background thread."""
+    """Run agent locally in a background thread.
+
+    Runs inside ``run_in_executor``, so every ``_calls`` mutation must hold
+    ``_cache_lock`` — the event loop thread concurrently reads/writes the
+    same cache via ``/agent/logs`` and ``/agent/complete``.
+    """
     from policyengine_api.agent_sandbox import _run_agent_impl
 
     try:
@@ -98,11 +122,17 @@ def _run_local_agent(
             {"role": m.role, "content": m.content} for m in (history or [])
         ]
         result = _run_agent_impl(question, api_base_url, call_id, history_dicts)
-        _calls[call_id]["status"] = result.get("status", "completed")
-        _calls[call_id]["result"] = result
+        with _cache_lock:
+            entry = _calls.get(call_id)
+            if entry is not None:
+                entry["status"] = result.get("status", "completed")
+                entry["result"] = result
     except Exception as e:
-        _calls[call_id]["status"] = "failed"
-        _calls[call_id]["result"] = {"status": "failed", "error": str(e)}
+        with _cache_lock:
+            entry = _calls.get(call_id)
+            if entry is not None:
+                entry["status"] = "failed"
+                entry["result"] = {"status": "failed", "error": str(e)}
 
 
 @router.post("/run", response_model=RunResponse)
@@ -128,10 +158,14 @@ async def run_agent(request: RunRequest) -> RunResponse:
     logfire.info("agent_run", question=request.question[:100])
 
     api_base_url = settings.policyengine_api_url
-    call_id = f"fc-{uuid.uuid4().hex[:24]}"
+    # Signed id: the public path segment doubles as a bearer token for the
+    # downstream ``/agent/log/{id}`` and ``/agent/complete/{id}`` callbacks.
+    call_id = issue_signed_call_id()
 
-    # Initialize logs storage
-    _logs[call_id] = []
+    # Initialize logs storage under the shared lock (background worker may
+    # append concurrently as soon as the executor task starts).
+    with _cache_lock:
+        _logs[call_id] = []
 
     if settings.agent_use_modal:
         # Production: use Modal
@@ -150,30 +184,35 @@ async def run_agent(request: RunRequest) -> RunResponse:
             traceparent=traceparent,
         )
 
-        _calls[call_id] = {
-            "call": call,
-            "modal_call_id": call.object_id,
-            "question": request.question,
-            "started_at": datetime.utcnow().isoformat(),
-            "status": "running",
-            "result": None,
-            "trace_id": traceparent,  # Store for linking
-        }
+        with _cache_lock:
+            _calls[call_id] = {
+                "call": call,
+                "modal_call_id": call.object_id,
+                "question": request.question,
+                "started_at": datetime.now(timezone.utc).isoformat(),
+                "status": "running",
+                "result": None,
+                "trace_id": traceparent,  # Store for linking
+            }
         logfire.info("agent_spawned", call_id=call_id, modal_call_id=call.object_id)
     else:
         # Local development: run in background thread
-        _calls[call_id] = {
-            "call": None,
-            "modal_call_id": None,
-            "question": request.question,
-            "started_at": datetime.utcnow().isoformat(),
-            "status": "running",
-            "result": None,
-        }
+        with _cache_lock:
+            _calls[call_id] = {
+                "call": None,
+                "modal_call_id": None,
+                "question": request.question,
+                "started_at": datetime.now(timezone.utc).isoformat(),
+                "status": "running",
+                "result": None,
+            }
         logfire.info("agent_spawned_local", call_id=call_id)
 
-        # Run in background using asyncio
-        loop = asyncio.get_event_loop()
+        # Run in background using the currently-running event loop. The
+        # endpoint is already ``async def`` so a loop is always available;
+        # ``get_event_loop`` is deprecated outside of a running loop and was
+        # emitting DeprecationWarnings on every invocation.
+        loop = asyncio.get_running_loop()
         loop.run_in_executor(
             None,
             _run_local_agent,
@@ -187,32 +226,42 @@ async def run_agent(request: RunRequest) -> RunResponse:
 
 
 @router.post("/log/{call_id}")
-async def post_log(call_id: str, log_input: LogInput) -> dict:
+async def post_log(
+    log_input: LogInput,
+    call_id: str = Depends(verified_call_id),
+) -> dict:
     """Receive a log entry from the running agent.
 
     This endpoint is called by the Modal function to stream logs back.
+    The ``call_id`` must be a signed identifier issued by ``/agent/run``.
     """
-    if call_id not in _logs:
-        _logs[call_id] = []
-
     entry = LogEntry(
-        timestamp=datetime.utcnow().isoformat(),
+        timestamp=datetime.now(timezone.utc).isoformat(),
         message=log_input.message,
     )
-    _logs[call_id].append(entry)
+    with _cache_lock:
+        # ``setdefault`` avoids a lost-update race with /agent/run initialising
+        # the list concurrently.
+        _logs.setdefault(call_id, []).append(entry)
 
     return {"status": "ok"}
 
 
 @router.post("/complete/{call_id}")
-async def complete_call(call_id: str, result: dict) -> dict:
+async def complete_call(
+    result: dict,
+    call_id: str = Depends(verified_call_id),
+) -> dict:
     """Mark a call as complete with its result.
 
-    Called by the Modal function when it finishes.
+    Called by the Modal function when it finishes. The ``call_id`` must
+    be a signed identifier issued by ``/agent/run``.
     """
-    if call_id in _calls:
-        _calls[call_id]["status"] = result.get("status", "completed")
-        _calls[call_id]["result"] = result
+    with _cache_lock:
+        entry = _calls.get(call_id)
+        if entry is not None:
+            entry["status"] = result.get("status", "completed")
+            entry["result"] = result
 
     return {"status": "ok"}
 
@@ -230,17 +279,21 @@ async def get_logs(call_id: str) -> LogsResponse:
     """
     logfire.info("agent_get_logs", call_id=call_id)
 
-    if call_id not in _calls:
-        raise HTTPException(status_code=404, detail="Call not found")
-
-    call_info = _calls[call_id]
-    logs = _logs.get(call_id, [])
+    with _cache_lock:
+        call_info = _calls.get(call_id)
+        if call_info is None:
+            raise HTTPException(status_code=404, detail="Call not found")
+        # Snapshot the fields we return before releasing the lock so concurrent
+        # mutation of the underlying dict cannot produce a half-updated response.
+        status = call_info["status"]
+        result = call_info["result"]
+        logs = list(_logs.get(call_id, []))
 
     return LogsResponse(
         call_id=call_id,
-        status=call_info["status"],
+        status=status,
         logs=logs,
-        result=call_info["result"],
+        result=result,
     )
 
 
@@ -252,13 +305,15 @@ async def get_status(call_id: str) -> StatusResponse:
     """
     logfire.info("agent_get_status", call_id=call_id)
 
-    if call_id not in _calls:
-        raise HTTPException(status_code=404, detail="Call not found")
-
-    call_info = _calls[call_id]
+    with _cache_lock:
+        call_info = _calls.get(call_id)
+        if call_info is None:
+            raise HTTPException(status_code=404, detail="Call not found")
+        status = call_info["status"]
+        result = call_info["result"]
 
     return StatusResponse(
         call_id=call_id,
-        status=call_info["status"],
-        result=call_info["result"],
+        status=status,
+        result=result,
     )
