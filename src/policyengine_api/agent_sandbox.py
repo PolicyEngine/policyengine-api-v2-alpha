@@ -4,6 +4,7 @@ import json
 import re
 import time
 from typing import Callable
+from urllib.parse import quote
 
 import anthropic
 import modal
@@ -319,7 +320,9 @@ def execute_api_tool(
             continue
 
         if param_in == "path":
-            url = url.replace(f"{{{param_name}}}", str(value))
+            # URL-encode path parameters so values containing '/', '#', etc.
+            # do not escape the path segment or collide with other routes.
+            url = url.replace(f"{{{param_name}}}", quote(str(value), safe=""))
         elif param_in == "query":
             query_params[param_name] = value
         elif param_in == "header":
