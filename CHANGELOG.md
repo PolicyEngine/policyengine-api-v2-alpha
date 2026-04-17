@@ -1,3 +1,22 @@
+0.6.4 (2026-04-17)
+
+# Fixed
+
+- Agent callback endpoints (`/agent/log/{call_id}`, `/agent/complete/{call_id}`) now require HMAC-signed call IDs and store state in bounded TTLCaches to prevent log injection and unbounded memory growth. All reads and writes to the TTLCaches are serialised behind a `threading.Lock` so the asyncio event-loop thread and the background executor thread (`_run_local_agent`) cannot corrupt the cache under concurrent access. Server startup now emits a warning when `AGENT_CALLBACK_SECRET` falls back to a per-process random value (a multi-worker hazard). Country variable-type catalogs used by household validation are cached per `TaxBenefitModelVersion` to avoid re-querying an immutable catalog on every request. (#265)
+- Unified the agent turn limit under a single `DEFAULT_AGENT_MAX_TURNS` constant so local and Modal entry points no longer diverge (previously 100 vs 30). (#266)
+- `/analysis/rerun/{report_id}` now requires an `X-API-Key` header; the endpoint is destructive (deletes result records) and was previously reachable anonymously. (#267)
+- Household payload models now cap entity groups at 1000 entries and 500 keys per entity to prevent OOM from oversized requests. (#268)
+- Aggregate and change-aggregate batch endpoints now cap batches at 100 entries to prevent worker-pool exhaustion. (#269)
+- Household impact jobs now persist the `baseline_job_id` on the reform job's JSON `request_data` column by replacing the dict rather than mutating it in place (SQLAlchemy doesn't track in-place JSON mutations). (#270)
+- Household endpoints now validate entity values against variable dtypes (rejecting mixed-dtype inputs with 422) and pick dtype-compatible column defaults to prevent the simulation kernel from building object-dtype DataFrames. (#271)
+- List endpoints (`/parameters`, `/parameter-values`, `/outputs/aggregates`, `/outputs/change-aggregates`) now enforce `limit <= 500` and reject non-positive values to prevent full-table scans. (#272)
+- Agent sandbox now URL-encodes path parameters so values containing `/`, `#`, or `?` cannot escape the intended path segment. (#273)
+- `download_dataset` now rejects path-traversal filepaths (`../../etc/passwd`, absolute paths) that would write outside the Modal dataset cache root. (#274)
+- Replaced the deprecated `asyncio.get_event_loop()` call inside `/agent/run` with `asyncio.get_running_loop()`. (#275)
+- Replaced deprecated `datetime.utcnow()` with timezone-aware `datetime.now(timezone.utc)` in the agent router. (#276)
+- `settings.database_url` now raises `ValueError` for non-local Supabase URLs that lack `supabase_db_url` instead of silently synthesising a `postgres:postgres@...` string. (#277)
+
+
 0.6.3 (2026-04-16)
 
 # Fixed
