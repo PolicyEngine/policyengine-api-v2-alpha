@@ -67,6 +67,7 @@ from policyengine_api.models import (
 from policyengine_api.runtime_versions import (
     resolve_shared_runtime_model_version_from_db,
 )
+from policyengine_api.security import require_api_key
 from policyengine_api.services.database import get_session
 from policyengine_api.services.model_resolver import (
     resolve_country_from_simulation,
@@ -1593,7 +1594,11 @@ class RerunResponse(BaseModel):
     status: str
 
 
-@router.post("/rerun/{report_id}", response_model=RerunResponse)
+@router.post(
+    "/rerun/{report_id}",
+    response_model=RerunResponse,
+    dependencies=[Depends(require_api_key)],
+)
 def rerun_report(
     report_id: UUID,
     session: Session = Depends(get_session),
@@ -1603,6 +1608,10 @@ def rerun_report(
     Resets the report and its simulations to PENDING, deletes all
     previously computed result records, and re-triggers computation.
     Works for both economy and household reports.
+
+    Authentication: requires the ``X-API-Key`` header. The endpoint is
+    destructive (drops result records) and must not be reachable by
+    anonymous traffic.
     """
     from sqlmodel import delete
 
