@@ -26,6 +26,9 @@ from policyengine_api.models.household_payload import (
     MAX_KEYS_PER_ENTITY,
 )
 from policyengine_api.services.database import get_session
+from policyengine_api.services.household_type_validation import (
+    validate_household_payload,
+)
 
 
 def _cap_keys_per_entity(values: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -43,6 +46,49 @@ _BoundedEntityList = Annotated[
     list[dict[str, Any]],
     AfterValidator(_cap_keys_per_entity),
 ]
+
+
+def _default_for_dtype(sample_value: Any) -> Any:
+    """Pick a dtype-compatible default fill value.
+
+    MicroDataFrame derives column dtypes from the underlying list; a default
+    of ``0.0`` placed alongside string values (e.g. ``state_code='CA'``)
+    silently produces an object-dtype column that breaks numeric operations.
+    """
+    if isinstance(sample_value, bool):
+        return False
+    if isinstance(sample_value, str):
+        return ""
+    if isinstance(sample_value, (int, float)):
+        return 0.0
+    return 0.0
+
+
+def _assert_consistent_value(
+    name: str, column_name: str, default: Any, value: Any
+) -> None:
+    """Raise if ``value`` has a dtype incompatible with ``default``."""
+    if value is None:
+        return
+    if isinstance(default, str):
+        if not isinstance(value, str):
+            raise ValueError(
+                f"{name}.{column_name}: mixed dtype (expected str, got "
+                f"{type(value).__name__}, value={value!r})"
+            )
+    elif isinstance(default, bool):
+        if not isinstance(value, bool):
+            raise ValueError(
+                f"{name}.{column_name}: mixed dtype (expected bool, got "
+                f"{type(value).__name__}, value={value!r})"
+            )
+    elif isinstance(default, (int, float)) and not isinstance(
+        value, (int, float, bool)
+    ):
+        raise ValueError(
+            f"{name}.{column_name}: mixed dtype (expected numeric, got "
+            f"{type(value).__name__}, value={value!r})"
+        )
 
 
 def _sanitize_for_json(obj: Any) -> Any:
@@ -359,7 +405,8 @@ def _calculate_household_uk(
     for i, person in enumerate(people):
         for key, value in person.items():
             if key not in person_data:
-                person_data[key] = [0.0] * n_people
+                person_data[key] = [_default_for_dtype(value)] * n_people
+            _assert_consistent_value("people", key, person_data[key][0], value)
             person_data[key][i] = value
 
     # Build benunit data with defaults
@@ -370,7 +417,8 @@ def _calculate_household_uk(
     for i, bu in enumerate(benunit if benunit else [{}]):
         for key, value in bu.items():
             if key not in benunit_data:
-                benunit_data[key] = [0.0] * n_benunits
+                benunit_data[key] = [_default_for_dtype(value)] * n_benunits
+            _assert_consistent_value("benunit", key, benunit_data[key][0], value)
             benunit_data[key][i] = value
 
     # Build household data with defaults
@@ -385,7 +433,8 @@ def _calculate_household_uk(
     for i, hh in enumerate(household if household else [{}]):
         for key, value in hh.items():
             if key not in household_data:
-                household_data[key] = [0.0] * n_households
+                household_data[key] = [_default_for_dtype(value)] * n_households
+            _assert_consistent_value("household", key, household_data[key][0], value)
             household_data[key][i] = value
 
     # Create MicroDataFrames
@@ -585,7 +634,8 @@ def _calculate_household_us(
     for i, person in enumerate(people):
         for key, value in person.items():
             if key not in person_data:
-                person_data[key] = [0.0] * n_people
+                person_data[key] = [_default_for_dtype(value)] * n_people
+            _assert_consistent_value("people", key, person_data[key][0], value)
             person_data[key][i] = value
 
     # Build household data
@@ -596,7 +646,8 @@ def _calculate_household_us(
     for i, hh in enumerate(household if household else [{}]):
         for key, value in hh.items():
             if key not in household_data:
-                household_data[key] = [0.0] * n_households
+                household_data[key] = [_default_for_dtype(value)] * n_households
+            _assert_consistent_value("household", key, household_data[key][0], value)
             household_data[key][i] = value
 
     # Build marital_unit data
@@ -607,7 +658,10 @@ def _calculate_household_us(
     for i, mu in enumerate(marital_unit if marital_unit else [{}]):
         for key, value in mu.items():
             if key not in marital_unit_data:
-                marital_unit_data[key] = [0.0] * n_marital_units
+                marital_unit_data[key] = [_default_for_dtype(value)] * n_marital_units
+            _assert_consistent_value(
+                "marital_unit", key, marital_unit_data[key][0], value
+            )
             marital_unit_data[key][i] = value
 
     # Build family data
@@ -618,7 +672,8 @@ def _calculate_household_us(
     for i, fam in enumerate(family if family else [{}]):
         for key, value in fam.items():
             if key not in family_data:
-                family_data[key] = [0.0] * n_families
+                family_data[key] = [_default_for_dtype(value)] * n_families
+            _assert_consistent_value("family", key, family_data[key][0], value)
             family_data[key][i] = value
 
     # Build spm_unit data
@@ -629,7 +684,8 @@ def _calculate_household_us(
     for i, spm in enumerate(spm_unit if spm_unit else [{}]):
         for key, value in spm.items():
             if key not in spm_unit_data:
-                spm_unit_data[key] = [0.0] * n_spm_units
+                spm_unit_data[key] = [_default_for_dtype(value)] * n_spm_units
+            _assert_consistent_value("spm_unit", key, spm_unit_data[key][0], value)
             spm_unit_data[key][i] = value
 
     # Build tax_unit data
@@ -640,7 +696,8 @@ def _calculate_household_us(
     for i, tu in enumerate(tax_unit if tax_unit else [{}]):
         for key, value in tu.items():
             if key not in tax_unit_data:
-                tax_unit_data[key] = [0.0] * n_tax_units
+                tax_unit_data[key] = [_default_for_dtype(value)] * n_tax_units
+            _assert_consistent_value("tax_unit", key, tax_unit_data[key][0], value)
             tax_unit_data[key][i] = value
 
     # Create MicroDataFrames
@@ -900,6 +957,21 @@ def calculate_household(
         has_policy=request.policy_id is not None,
         has_dynamic=request.dynamic_id is not None,
     ):
+        # Validate variable value types against the country's variable catalog.
+        # Rejecting at the API layer prevents mixed-dtype DataFrames from being
+        # built by the simulation kernel.
+        validate_household_payload(
+            request.country_id,
+            session,
+            people=request.people,
+            benunit=request.benunit,
+            marital_unit=request.marital_unit,
+            family=request.family,
+            spm_unit=request.spm_unit,
+            tax_unit=request.tax_unit,
+            household=request.household,
+        )
+
         # Get policy and dynamic data for Modal
         policy_data = _get_policy_data(request.policy_id, session)
         dynamic_data = _get_dynamic_data(request.dynamic_id, session)
@@ -1030,6 +1102,20 @@ def calculate_household_impact_comparison(
         year=request.year,
         has_policy=request.policy_id is not None,
     ):
+        # Validate variable value types against the country's variable catalog
+        # so mismatches surface as 422 rather than corrupted MicroDataFrames.
+        validate_household_payload(
+            request.country_id,
+            session,
+            people=request.people,
+            benunit=request.benunit,
+            marital_unit=request.marital_unit,
+            family=request.family,
+            spm_unit=request.spm_unit,
+            tax_unit=request.tax_unit,
+            household=request.household,
+        )
+
         # Get policy and dynamic data
         policy_data = _get_policy_data(request.policy_id, session)
         dynamic_data = _get_dynamic_data(request.dynamic_id, session)
