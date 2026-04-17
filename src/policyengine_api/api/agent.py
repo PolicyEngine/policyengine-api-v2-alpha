@@ -7,15 +7,16 @@ The agent runs in a Modal sandbox (production) or locally (development).
 """
 
 import asyncio
-import uuid
 from datetime import datetime
 
 import logfire
-from fastapi import APIRouter, HTTPException
+from cachetools import TTLCache
+from fastapi import APIRouter, Depends, HTTPException
 from opentelemetry.trace.propagation.tracecontext import TraceContextTextMapPropagator
 from pydantic import BaseModel
 
 from policyengine_api.config import settings
+from policyengine_api.security import issue_signed_call_id, verified_call_id
 
 
 def get_traceparent() -> str | None:
@@ -79,9 +80,16 @@ class StatusResponse(BaseModel):
     result: dict | None = None
 
 
-# In-memory storage for function calls and their logs
-_calls: dict[str, dict] = {}
-_logs: dict[str, list[LogEntry]] = {}
+# In-memory storage for function calls and their logs. Bounded so a flood of
+# spawn requests cannot drive the process OOM; entries expire after
+# ``_CALL_TTL_SECONDS`` of inactivity.
+_MAX_ACTIVE_CALLS = 2048
+_CALL_TTL_SECONDS = 60 * 60  # 1 hour
+
+_calls: TTLCache[str, dict] = TTLCache(maxsize=_MAX_ACTIVE_CALLS, ttl=_CALL_TTL_SECONDS)
+_logs: TTLCache[str, list[LogEntry]] = TTLCache(
+    maxsize=_MAX_ACTIVE_CALLS, ttl=_CALL_TTL_SECONDS
+)
 
 
 def _run_local_agent(
@@ -128,7 +136,9 @@ async def run_agent(request: RunRequest) -> RunResponse:
     logfire.info("agent_run", question=request.question[:100])
 
     api_base_url = settings.policyengine_api_url
-    call_id = f"fc-{uuid.uuid4().hex[:24]}"
+    # Signed id: the public path segment doubles as a bearer token for the
+    # downstream ``/agent/log/{id}`` and ``/agent/complete/{id}`` callbacks.
+    call_id = issue_signed_call_id()
 
     # Initialize logs storage
     _logs[call_id] = []
@@ -187,10 +197,14 @@ async def run_agent(request: RunRequest) -> RunResponse:
 
 
 @router.post("/log/{call_id}")
-async def post_log(call_id: str, log_input: LogInput) -> dict:
+async def post_log(
+    log_input: LogInput,
+    call_id: str = Depends(verified_call_id),
+) -> dict:
     """Receive a log entry from the running agent.
 
     This endpoint is called by the Modal function to stream logs back.
+    The ``call_id`` must be a signed identifier issued by ``/agent/run``.
     """
     if call_id not in _logs:
         _logs[call_id] = []
@@ -205,10 +219,14 @@ async def post_log(call_id: str, log_input: LogInput) -> dict:
 
 
 @router.post("/complete/{call_id}")
-async def complete_call(call_id: str, result: dict) -> dict:
+async def complete_call(
+    result: dict,
+    call_id: str = Depends(verified_call_id),
+) -> dict:
     """Mark a call as complete with its result.
 
-    Called by the Modal function when it finishes.
+    Called by the Modal function when it finishes. The ``call_id`` must
+    be a signed identifier issued by ``/agent/run``.
     """
     if call_id in _calls:
         _calls[call_id]["status"] = result.get("status", "completed")

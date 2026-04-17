@@ -1,0 +1,1 @@
+Agent callback endpoints (`/agent/log/{call_id}`, `/agent/complete/{call_id}`) now require HMAC-signed call IDs and store state in bounded TTLCaches to prevent log injection and unbounded memory growth.

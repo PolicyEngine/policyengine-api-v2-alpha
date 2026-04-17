@@ -46,6 +46,12 @@ class Settings(BaseSettings):
     anthropic_api_key: str = ""
     agent_use_modal: bool = False
     policyengine_api_url: str = "https://v2.api.policyengine.org"
+    # HMAC secret used to sign agent callback identifiers. If unset the
+    # security module falls back to a per-process random value.
+    agent_callback_secret: str = ""
+
+    # Shared API key used to gate destructive/privileged endpoints.
+    api_key: str = ""
 
     # Modal
     modal_environment: str = "main"
