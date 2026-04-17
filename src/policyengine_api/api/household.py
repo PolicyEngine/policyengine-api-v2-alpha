@@ -5,13 +5,13 @@ Poll the status endpoint until the job is complete.
 """
 
 import math
-from typing import Any
+from typing import Annotated, Any
 from uuid import UUID
 
 import logfire
 from fastapi import APIRouter, Depends, HTTPException
 from opentelemetry.trace.propagation.tracecontext import TraceContextTextMapPropagator
-from pydantic import BaseModel, Field
+from pydantic import AfterValidator, BaseModel, Field
 from sqlmodel import Session
 
 from policyengine_api.config.constants import CountryId
@@ -21,7 +21,28 @@ from policyengine_api.models import (
     HouseholdJobStatus,
     Policy,
 )
+from policyengine_api.models.household_payload import (
+    MAX_ENTITIES_PER_GROUP,
+    MAX_KEYS_PER_ENTITY,
+)
 from policyengine_api.services.database import get_session
+
+
+def _cap_keys_per_entity(values: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Reject entity lists where any dict exceeds MAX_KEYS_PER_ENTITY keys."""
+    for idx, entity in enumerate(values):
+        if isinstance(entity, dict) and len(entity) > MAX_KEYS_PER_ENTITY:
+            raise ValueError(
+                f"Entity at index {idx} has {len(entity)} keys; "
+                f"maximum is {MAX_KEYS_PER_ENTITY}"
+            )
+    return values
+
+
+_BoundedEntityList = Annotated[
+    list[dict[str, Any]],
+    AfterValidator(_cap_keys_per_entity),
+]
 
 
 def _sanitize_for_json(obj: Any) -> Any:
@@ -96,32 +117,39 @@ class HouseholdCalculateRequest(BaseModel):
     }
     """
 
-    people: list[dict[str, Any]] = Field(
-        description="List of people with flat variable values. Include person_id and person_{entity}_id fields to link to entities."
+    people: _BoundedEntityList = Field(
+        description="List of people with flat variable values. Include person_id and person_{entity}_id fields to link to entities.",
+        max_length=MAX_ENTITIES_PER_GROUP,
     )
-    benunit: list[dict[str, Any]] = Field(
+    benunit: _BoundedEntityList = Field(
         default_factory=list,
         description="UK benefit units. Include benunit_id to link with person_benunit_id in people.",
+        max_length=MAX_ENTITIES_PER_GROUP,
     )
-    marital_unit: list[dict[str, Any]] = Field(
+    marital_unit: _BoundedEntityList = Field(
         default_factory=list,
         description="US marital units. Include marital_unit_id to link with person_marital_unit_id in people.",
+        max_length=MAX_ENTITIES_PER_GROUP,
     )
-    family: list[dict[str, Any]] = Field(
+    family: _BoundedEntityList = Field(
         default_factory=list,
         description="US families. Include family_id to link with person_family_id in people.",
+        max_length=MAX_ENTITIES_PER_GROUP,
     )
-    spm_unit: list[dict[str, Any]] = Field(
+    spm_unit: _BoundedEntityList = Field(
         default_factory=list,
         description="US SPM units. Include spm_unit_id to link with person_spm_unit_id in people.",
+        max_length=MAX_ENTITIES_PER_GROUP,
     )
-    tax_unit: list[dict[str, Any]] = Field(
+    tax_unit: _BoundedEntityList = Field(
         default_factory=list,
         description="US tax units. Include tax_unit_id to link with person_tax_unit_id in people.",
+        max_length=MAX_ENTITIES_PER_GROUP,
     )
-    household: list[dict[str, Any]] = Field(
+    household: _BoundedEntityList = Field(
         default_factory=list,
         description="Households. Include household_id to link with person_household_id in people.",
+        max_length=MAX_ENTITIES_PER_GROUP,
     )
     year: int | None = Field(
         default=None,
@@ -183,32 +211,39 @@ class HouseholdImpactRequest(BaseModel):
     }
     """
 
-    people: list[dict[str, Any]] = Field(
-        description="List of people with flat variable values. Include person_id and person_{entity}_id fields to link to entities."
+    people: _BoundedEntityList = Field(
+        description="List of people with flat variable values. Include person_id and person_{entity}_id fields to link to entities.",
+        max_length=MAX_ENTITIES_PER_GROUP,
     )
-    benunit: list[dict[str, Any]] = Field(
+    benunit: _BoundedEntityList = Field(
         default_factory=list,
         description="UK benefit units. Include benunit_id to link with person_benunit_id in people.",
+        max_length=MAX_ENTITIES_PER_GROUP,
     )
-    marital_unit: list[dict[str, Any]] = Field(
+    marital_unit: _BoundedEntityList = Field(
         default_factory=list,
         description="US marital units. Include marital_unit_id to link with person_marital_unit_id in people.",
+        max_length=MAX_ENTITIES_PER_GROUP,
     )
-    family: list[dict[str, Any]] = Field(
+    family: _BoundedEntityList = Field(
         default_factory=list,
         description="US families. Include family_id to link with person_family_id in people.",
+        max_length=MAX_ENTITIES_PER_GROUP,
     )
-    spm_unit: list[dict[str, Any]] = Field(
+    spm_unit: _BoundedEntityList = Field(
         default_factory=list,
         description="US SPM units. Include spm_unit_id to link with person_spm_unit_id in people.",
+        max_length=MAX_ENTITIES_PER_GROUP,
     )
-    tax_unit: list[dict[str, Any]] = Field(
+    tax_unit: _BoundedEntityList = Field(
         default_factory=list,
         description="US tax units. Include tax_unit_id to link with person_tax_unit_id in people.",
+        max_length=MAX_ENTITIES_PER_GROUP,
     )
-    household: list[dict[str, Any]] = Field(
+    household: _BoundedEntityList = Field(
         default_factory=list,
         description="Households. Include household_id to link with person_household_id in people.",
+        max_length=MAX_ENTITIES_PER_GROUP,
     )
     year: int | None = Field(
         default=None, description="Simulation year (default: 2024 for US, 2026 for UK)"

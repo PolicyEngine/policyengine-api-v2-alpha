@@ -15,6 +15,10 @@ from policyengine_api.modal.shared import (  # noqa: F401
     get_database_url,
     get_db_session,
 )
+from policyengine_api.models.household_payload import (
+    MAX_ENTITIES_PER_GROUP,
+    MAX_KEYS_PER_ENTITY,
+)
 from policyengine_api.runtime_versions import (
     resolve_runtime_model_version_from_db,
     resolve_shared_runtime_model_version_from_db,
@@ -23,6 +27,25 @@ from policyengine_api.runtime_versions import (
 # Required environment variables from each secret
 REQUIRED_DB_VARS = ["DATABASE_URL", "SUPABASE_URL", "SUPABASE_KEY"]
 REQUIRED_LOGFIRE_VARS = ["LOGFIRE_TOKEN"]
+
+
+def _assert_bounded_entity_list(name: str, values: list[dict]) -> None:
+    """Defense-in-depth cap for Modal-side inputs.
+
+    The API layer already enforces these bounds via Pydantic, but the Modal
+    functions are invoked by other call sites (tests, maintenance scripts) and
+    must not trust their inputs to be bounded.
+    """
+    if len(values) > MAX_ENTITIES_PER_GROUP:
+        raise ValueError(
+            f"{name} has {len(values)} entries; maximum is {MAX_ENTITIES_PER_GROUP}"
+        )
+    for idx, entity in enumerate(values):
+        if isinstance(entity, dict) and len(entity) > MAX_KEYS_PER_ENTITY:
+            raise ValueError(
+                f"{name}[{idx}] has {len(entity)} keys; "
+                f"maximum is {MAX_KEYS_PER_ENTITY}"
+            )
 
 
 @app.function(
@@ -104,6 +127,10 @@ def simulate_household_uk(
     from sqlmodel import Session, create_engine
 
     configure_logfire("policyengine-modal-uk", traceparent)
+
+    _assert_bounded_entity_list("people", people)
+    _assert_bounded_entity_list("benunit", benunit)
+    _assert_bounded_entity_list("household", household)
 
     try:
         with logfire.span("simulate_household_uk", job_id=job_id):
@@ -349,6 +376,13 @@ def simulate_household_us(
     from sqlmodel import Session, create_engine
 
     configure_logfire("policyengine-modal-us", traceparent)
+
+    _assert_bounded_entity_list("people", people)
+    _assert_bounded_entity_list("marital_unit", marital_unit)
+    _assert_bounded_entity_list("family", family)
+    _assert_bounded_entity_list("spm_unit", spm_unit)
+    _assert_bounded_entity_list("tax_unit", tax_unit)
+    _assert_bounded_entity_list("household", household)
 
     try:
         with logfire.span("simulate_household_us", job_id=job_id):
