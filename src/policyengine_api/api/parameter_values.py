@@ -9,7 +9,7 @@ from datetime import datetime, timezone
 from typing import List
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlmodel import Session, or_, select
 
 from policyengine_api.config.constants import CountryId
@@ -27,8 +27,8 @@ def list_parameter_values(
     current: bool = False,
     country_id: CountryId | None = None,
     tax_benefit_model_version_id: UUID | None = None,
-    skip: int = 0,
-    limit: int = 100,
+    skip: int = Query(default=0, ge=0),
+    limit: int = Query(default=100, ge=1, le=500),
     session: Session = Depends(get_session),
 ):
     """List parameter values with optional filtering.

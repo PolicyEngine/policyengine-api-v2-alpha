@@ -28,8 +28,8 @@ router = APIRouter(prefix="/parameters", tags=["parameters"])
 
 @router.get("/", response_model=List[ParameterRead])
 def list_parameters(
-    skip: int = 0,
-    limit: int = 100,
+    skip: int = Query(default=0, ge=0),
+    limit: int = Query(default=100, ge=1, le=500),
     search: str | None = None,
     country_id: CountryId | None = None,
     tax_benefit_model_version_id: UUID | None = None,

@@ -9,7 +9,7 @@ from typing import Annotated, List
 from uuid import UUID
 
 import logfire
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from pydantic import Field
 from sqlmodel import Session, select
 
@@ -136,9 +136,13 @@ def create_change_aggregates(
 
 
 @router.get("", response_model=List[ChangeAggregateRead])
-def list_change_aggregates(session: Session = Depends(get_session)):
-    """List all change aggregates."""
-    outputs = session.exec(select(ChangeAggregate)).all()
+def list_change_aggregates(
+    skip: int = Query(default=0, ge=0),
+    limit: int = Query(default=100, ge=1, le=500),
+    session: Session = Depends(get_session),
+):
+    """List change aggregates (paginated)."""
+    outputs = session.exec(select(ChangeAggregate).offset(skip).limit(limit)).all()
     return outputs
 
 

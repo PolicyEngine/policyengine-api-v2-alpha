@@ -8,7 +8,7 @@ from typing import Annotated, List
 from uuid import UUID
 
 import logfire
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from pydantic import Field
 from sqlmodel import Session, select
 
@@ -129,9 +129,13 @@ def create_aggregate_outputs(
 
 
 @router.get("", response_model=List[AggregateOutputRead])
-def list_aggregate_outputs(session: Session = Depends(get_session)):
-    """List all aggregates."""
-    outputs = session.exec(select(AggregateOutput)).all()
+def list_aggregate_outputs(
+    skip: int = Query(default=0, ge=0),
+    limit: int = Query(default=100, ge=1, le=500),
+    session: Session = Depends(get_session),
+):
+    """List aggregates (paginated)."""
+    outputs = session.exec(select(AggregateOutput).offset(skip).limit(limit)).all()
     return outputs
 
 
