@@ -17,6 +17,11 @@ app = modal.App("policyengine-sandbox")
 anthropic_secret = modal.Secret.from_name("anthropic-api-key")
 logfire_secrets = modal.Secret.from_name("policyengine-logfire")
 
+# Default maximum number of tool-calling turns the agent may take before the
+# loop is forcibly terminated. Kept in one place so the local implementation
+# and the Modal entry point stay in sync.
+DEFAULT_AGENT_MAX_TURNS = 30
+
 
 def configure_logfire(traceparent: str | None = None):
     """Configure logfire with optional trace context propagation."""
@@ -380,7 +385,7 @@ def _run_agent_impl(
     api_base_url: str = "https://v2.api.policyengine.org",
     call_id: str = "",
     history: list[dict] | None = None,
-    max_turns: int = 100,
+    max_turns: int = DEFAULT_AGENT_MAX_TURNS,
     traceparent: str | None = None,
 ) -> dict:
     """Core agent implementation."""
@@ -521,7 +526,7 @@ def run_agent(
     api_base_url: str = "https://v2.api.policyengine.org",
     call_id: str = "",
     history: list[dict] | None = None,
-    max_turns: int = 30,
+    max_turns: int = DEFAULT_AGENT_MAX_TURNS,
     traceparent: str | None = None,
 ) -> dict:
     """Run agentic loop to answer a policy question (Modal wrapper)."""
