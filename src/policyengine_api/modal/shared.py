@@ -67,14 +67,26 @@ def download_dataset(
     supabase_key: str,
     storage_bucket: str,
 ) -> str:
-    """Download dataset from Supabase storage with local caching."""
+    """Download dataset from Supabase storage with local caching.
+
+    ``filepath`` is trusted to come from the database (``Dataset.filepath``)
+    but we still resolve it against the cache root and reject any value that
+    escapes the root — a compromised row or a misconfigured test environment
+    should not be able to read or overwrite arbitrary local files.
+    """
     from pathlib import Path
 
     from supabase import create_client
 
     cache_dir = Path("/tmp/policyengine_dataset_cache")
     cache_dir.mkdir(parents=True, exist_ok=True)
-    cache_path = cache_dir / filepath
+    cache_root = cache_dir.resolve()
+    resolved = (cache_dir / filepath).resolve()
+    if not resolved.is_relative_to(cache_root):
+        raise ValueError(
+            f"Path traversal detected: {filepath!r} resolves outside {cache_root}"
+        )
+    cache_path = resolved
 
     if cache_path.exists():
         return str(cache_path)
