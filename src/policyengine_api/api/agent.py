@@ -182,8 +182,11 @@ async def run_agent(request: RunRequest) -> RunResponse:
         }
         logfire.info("agent_spawned_local", call_id=call_id)
 
-        # Run in background using asyncio
-        loop = asyncio.get_event_loop()
+        # Run in background using the currently-running event loop. The
+        # endpoint is already ``async def`` so a loop is always available;
+        # ``get_event_loop`` is deprecated outside of a running loop and was
+        # emitting DeprecationWarnings on every invocation.
+        loop = asyncio.get_running_loop()
         loop.run_in_executor(
             None,
             _run_local_agent,
