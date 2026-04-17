@@ -7,7 +7,7 @@ The agent runs in a Modal sandbox (production) or locally (development).
 """
 
 import asyncio
-from datetime import datetime
+from datetime import datetime, timezone
 
 import logfire
 from cachetools import TTLCache
@@ -164,7 +164,7 @@ async def run_agent(request: RunRequest) -> RunResponse:
             "call": call,
             "modal_call_id": call.object_id,
             "question": request.question,
-            "started_at": datetime.utcnow().isoformat(),
+            "started_at": datetime.now(timezone.utc).isoformat(),
             "status": "running",
             "result": None,
             "trace_id": traceparent,  # Store for linking
@@ -176,7 +176,7 @@ async def run_agent(request: RunRequest) -> RunResponse:
             "call": None,
             "modal_call_id": None,
             "question": request.question,
-            "started_at": datetime.utcnow().isoformat(),
+            "started_at": datetime.now(timezone.utc).isoformat(),
             "status": "running",
             "result": None,
         }
@@ -213,7 +213,7 @@ async def post_log(
         _logs[call_id] = []
 
     entry = LogEntry(
-        timestamp=datetime.utcnow().isoformat(),
+        timestamp=datetime.now(timezone.utc).isoformat(),
         message=log_input.message,
     )
     _logs[call_id].append(entry)
