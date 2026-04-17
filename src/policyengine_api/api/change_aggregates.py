@@ -5,11 +5,12 @@ Change aggregates compare statistics between baseline and reform simulations
 on Modal.
 """
 
-from typing import List
+from typing import Annotated, List
 from uuid import UUID
 
 import logfire
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
+from pydantic import Field
 from sqlmodel import Session, select
 
 from policyengine_api.models import (
@@ -21,6 +22,11 @@ from policyengine_api.models import (
     TaxBenefitModelVersion,
 )
 from policyengine_api.services.database import get_session
+
+# Upper bound on how many change-aggregates can be created per request. Each
+# entry spawns a Modal function, so a large batch both monopolises the worker
+# pool and racks up cost.
+MAX_BATCH_SIZE = 100
 
 router = APIRouter(prefix="/outputs/change-aggregates", tags=["change-aggregates"])
 
@@ -86,7 +92,7 @@ def _trigger_change_aggregate_computation(
 
 @router.post("", response_model=List[ChangeAggregateRead])
 def create_change_aggregates(
-    outputs: List[ChangeAggregateCreate],
+    outputs: Annotated[List[ChangeAggregateCreate], Field(max_length=MAX_BATCH_SIZE)],
     background_tasks: BackgroundTasks,
     session: Session = Depends(get_session),
 ):
