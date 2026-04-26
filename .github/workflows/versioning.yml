@@ -33,6 +33,8 @@ jobs:
 
       - name: Install uv
         uses: astral-sh/setup-uv@v8.1.0
+        with:
+          save-cache: false
 
       - name: Setup Python
         uses: actions/setup-python@v6
