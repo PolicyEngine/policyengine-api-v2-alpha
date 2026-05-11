@@ -11,6 +11,7 @@ from . import (
     household,
     household_analysis,
     households,
+    metadata,
     outputs,
     parameter_values,
     parameters,
@@ -43,6 +44,7 @@ api_router.include_router(change_aggregates.router)
 api_router.include_router(household.router)
 api_router.include_router(household_analysis.router)
 api_router.include_router(households.router)
+api_router.include_router(metadata.router)
 api_router.include_router(analysis.router)
 api_router.include_router(agent.router)
 api_router.include_router(user_household_associations.router)

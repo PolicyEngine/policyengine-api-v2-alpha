@@ -61,6 +61,20 @@ The API can run in several configurations depending on what you need:
 | **API + Modal deployed** | Everything, Modal functions run on Modal.com | Add `make modal-deploy` |
 | **Full stack** | Everything + agent endpoint | Add `ANTHROPIC_API_KEY` to `.env` |
 
+### Bundle provenance
+
+The API records the installed `policyengine` bundle metadata on new simulation
+records and exposes the process-level bundle at:
+
+```bash
+curl http://localhost:8000/metadata/bundle
+```
+
+Set `POLICYENGINE_BUNDLE_STRICT=true` to fail startup when the installed
+`policyengine` package set does not match its vendored bundle. This is intended
+for reproducible deployments; local development can leave it disabled while the
+bundle rollout is in progress.
+
 To connect Modal:
 
 ```bash

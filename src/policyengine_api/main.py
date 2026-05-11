@@ -12,6 +12,7 @@ from rich.console import Console
 
 from policyengine_api.api import api_router
 from policyengine_api.config.settings import settings
+from policyengine_api.services.bundle_metadata import current_bundle_metadata
 
 console = Console()
 
@@ -49,6 +50,7 @@ async def lifespan(app: FastAPI):
     console.print("[bold green]Initializing cache...[/bold green]")
     FastAPICache.init(InMemoryBackend(), prefix="fastapi-cache")
     console.print("[bold green]Cache initialized[/bold green]")
+    current_bundle_metadata(strict=settings.policyengine_bundle_strict)
 
     # Warn if the agent callback HMAC secret is unset. Without a configured
     # secret, ``policyengine_api.security`` falls back to a per-process

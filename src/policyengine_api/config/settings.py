@@ -37,6 +37,7 @@ class Settings(BaseSettings):
     api_version: str = _get_version()
     api_port: int = 8000
     debug: bool = False
+    policyengine_bundle_strict: bool = False
 
     # Seeding
     limit_seed_parameters: bool = False
