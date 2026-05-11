@@ -69,6 +69,7 @@ class HouseholdSimulationResponse(BaseModel):
     household_id: UUID | None = None
     policy_id: UUID | None = None
     household_result: dict[str, Any] | None = None
+    bundle_metadata: dict[str, Any] | None = None
     error_message: str | None = None
 
 
@@ -117,6 +118,7 @@ class EconomySimulationResponse(BaseModel):
     filter_field: str | None = None
     filter_value: str | None = None
     region: RegionInfo | None = None
+    bundle_metadata: dict[str, Any] | None = None
     error_message: str | None = None
 
 
@@ -196,6 +198,7 @@ def _build_household_response(simulation: Simulation) -> HouseholdSimulationResp
         household_id=simulation.household_id,
         policy_id=simulation.policy_id,
         household_result=simulation.household_result,
+        bundle_metadata=simulation.bundle_metadata,
         error_message=simulation.error_message,
     )
 
@@ -224,6 +227,7 @@ def _build_economy_response(
         filter_field=simulation.filter_field,
         filter_value=simulation.filter_value,
         region=region_info,
+        bundle_metadata=simulation.bundle_metadata,
         error_message=simulation.error_message,
     )
 
