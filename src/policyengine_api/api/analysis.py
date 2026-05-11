@@ -68,6 +68,7 @@ from policyengine_api.runtime_versions import (
     resolve_shared_runtime_model_version_from_db,
 )
 from policyengine_api.security import require_api_key
+from policyengine_api.services.bundle_metadata import current_bundle_metadata
 from policyengine_api.services.database import get_session
 from policyengine_api.services.model_resolver import (
     resolve_country_from_simulation,
@@ -322,6 +323,7 @@ def _get_or_create_simulation(
         filter_strategy=filter_strategy,
         region_id=region_id,
         year=year,
+        bundle_metadata=current_bundle_metadata(),
     )
     from sqlalchemy.exc import IntegrityError
 

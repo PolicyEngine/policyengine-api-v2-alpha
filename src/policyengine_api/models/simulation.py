@@ -81,6 +81,9 @@ class Simulation(SimulationBase, table=True):
     household_result: dict[str, Any] | None = Field(
         default=None, sa_column=Column(JSON)
     )
+    bundle_metadata: dict[str, Any] | None = Field(
+        default=None, sa_column=Column(JSON)
+    )
 
     # Relationships
     dataset: "Dataset" = Relationship(
@@ -153,3 +156,4 @@ class SimulationRead(SimulationBase):
     started_at: datetime | None
     completed_at: datetime | None
     household_result: dict[str, Any] | None = None
+    bundle_metadata: dict[str, Any] | None = None
