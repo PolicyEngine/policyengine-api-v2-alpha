@@ -503,7 +503,7 @@ jobs:
             --image="${IMAGE_URL}:${{ github.sha }}" \
             --tag=canary \
             --no-traffic \
-            --update-env-vars=MODAL_ENVIRONMENT=main,LOGFIRE_ENVIRONMENT=prod
+            --update-env-vars=MODAL_ENVIRONMENT=main,LOGFIRE_ENVIRONMENT=prod,SUPABASE_URL=${{ secrets.SUPABASE_URL }},SUPABASE_KEY=${{ secrets.SUPABASE_KEY }},SUPABASE_SECRET_KEY=${{ secrets.SUPABASE_SECRET_KEY }},SUPABASE_DB_URL=${{ secrets.SUPABASE_DB_URL }}
 
       - name: Smoke test canary
         run: |
