@@ -131,14 +131,14 @@ jobs:
         uses: google-github-actions/setup-gcloud@v3
 
       - name: Configure Docker for Artifact Registry
-        run: gcloud auth configure-docker ${{ vars.GCP_REGION }}-docker.pkg.dev
+        run: gcloud auth configure-docker "${{ vars.GCP_REGION }}-docker.pkg.dev"
 
       - name: Build and push Docker image
         run: |
-          docker build -t $IMAGE_URL:${{ github.sha }} .
-          docker tag $IMAGE_URL:${{ github.sha }} $IMAGE_URL:latest
-          docker push $IMAGE_URL:${{ github.sha }}
-          docker push $IMAGE_URL:latest
+          docker build -t "${IMAGE_URL}:${{ github.sha }}" .
+          docker tag "${IMAGE_URL}:${{ github.sha }}" "${IMAGE_URL}:latest"
+          docker push "${IMAGE_URL}:${{ github.sha }}"
+          docker push "${IMAGE_URL}:latest"
 
   infra:
     name: Apply infrastructure
@@ -305,7 +305,7 @@ jobs:
         run: |
           gcloud run deploy ${{ vars.API_SERVICE_NAME }} \
             --region=${{ vars.GCP_REGION }} \
-            --image=$IMAGE_URL:${{ github.sha }} \
+            --image="${IMAGE_URL}:${{ github.sha }}" \
             --tag=staging \
             --no-traffic \
             --update-env-vars=MODAL_ENVIRONMENT=staging,LOGFIRE_ENVIRONMENT=staging,SUPABASE_URL=${{ secrets.SUPABASE_URL }},SUPABASE_KEY=${{ secrets.SUPABASE_KEY }},SUPABASE_SECRET_KEY=${{ secrets.SUPABASE_SECRET_KEY }},SUPABASE_DB_URL=${{ secrets.SUPABASE_DB_URL }}
@@ -472,7 +472,7 @@ jobs:
         run: |
           gcloud run deploy ${{ vars.API_SERVICE_NAME }} \
             --region=${{ vars.GCP_REGION }} \
-            --image=$IMAGE_URL:${{ github.sha }} \
+            --image="${IMAGE_URL}:${{ github.sha }}" \
             --tag=canary \
             --no-traffic \
             --update-env-vars=MODAL_ENVIRONMENT=main,LOGFIRE_ENVIRONMENT=prod
