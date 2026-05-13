@@ -1,3 +1,10 @@
+0.6.7 (2026-05-13)
+
+# Changed
+
+- Pin the Modal simulation image to the locked policyengine.py version and add a reseed-only database workflow. (update-policyengine-runtime)
+
+
 0.6.6 (2026-04-28)
 
 # Changed
