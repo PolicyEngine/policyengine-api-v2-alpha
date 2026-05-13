@@ -1,3 +1,10 @@
+0.6.9 (2026-05-13)
+
+# Fixed
+
+- Support current PolicyEngine region scoping metadata when reseeding regions. (#364)
+
+
 0.6.8 (2026-05-13)
 
 # Fixed
