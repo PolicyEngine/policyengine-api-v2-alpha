@@ -1,3 +1,10 @@
+0.6.8 (2026-05-13)
+
+# Fixed
+
+- Skip Terraform apply during runtime-only deploys so unchanged infrastructure does not block API releases. (#363)
+
+
 0.6.7 (2026-05-13)
 
 # Changed
