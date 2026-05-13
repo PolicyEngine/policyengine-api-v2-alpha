@@ -151,7 +151,8 @@ modal-deploy:
 		"SUPABASE_KEY=$$SUPABASE_KEY" \
 		"STORAGE_BUCKET=$$STORAGE_BUCKET" \
 		--force
-	@export POLICYENGINE_US_VERSION=$$(grep -A1 'name = "policyengine-us"' uv.lock | grep version | head -1 | sed 's/.*"\(.*\)".*/\1/') && \
+	@export POLICYENGINE_VERSION=$$(grep -A1 'name = "policyengine"' uv.lock | grep version | head -1 | sed 's/.*"\(.*\)".*/\1/') && \
+	export POLICYENGINE_US_VERSION=$$(grep -A1 'name = "policyengine-us"' uv.lock | grep version | head -1 | sed 's/.*"\(.*\)".*/\1/') && \
 	export POLICYENGINE_UK_VERSION=$$(grep -A1 'name = "policyengine-uk"' uv.lock | grep version | head -1 | sed 's/.*"\(.*\)".*/\1/') && \
 	.github/scripts/modal-deploy-versioned.sh main
 

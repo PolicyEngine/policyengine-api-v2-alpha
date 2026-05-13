@@ -262,6 +262,7 @@ jobs:
         env:
           MODAL_TOKEN_ID: ${{ secrets.MODAL_TOKEN_ID }}
           MODAL_TOKEN_SECRET: ${{ secrets.MODAL_TOKEN_SECRET }}
+          POLICYENGINE_VERSION: ${{ steps.versions.outputs.policyengine_version }}
           POLICYENGINE_US_VERSION: ${{ steps.versions.outputs.us_version }}
           POLICYENGINE_UK_VERSION: ${{ steps.versions.outputs.uk_version }}
         run: |
@@ -400,6 +401,7 @@ jobs:
         env:
           MODAL_TOKEN_ID: ${{ secrets.MODAL_TOKEN_ID }}
           MODAL_TOKEN_SECRET: ${{ secrets.MODAL_TOKEN_SECRET }}
+          POLICYENGINE_VERSION: ${{ steps.prod-versions.outputs.policyengine_version }}
           POLICYENGINE_US_VERSION: ${{ steps.prod-versions.outputs.us_version }}
           POLICYENGINE_UK_VERSION: ${{ steps.prod-versions.outputs.uk_version }}
         run: |
@@ -417,6 +419,7 @@ jobs:
         env:
           MODAL_TOKEN_ID: ${{ secrets.MODAL_TOKEN_ID }}
           MODAL_TOKEN_SECRET: ${{ secrets.MODAL_TOKEN_SECRET }}
+          POLICYENGINE_VERSION: ${{ steps.prod-versions.outputs.policyengine_version }}
           POLICYENGINE_US_VERSION: ${{ steps.prod-versions.outputs.us_version }}
           POLICYENGINE_UK_VERSION: ${{ steps.prod-versions.outputs.uk_version }}
         run: |
