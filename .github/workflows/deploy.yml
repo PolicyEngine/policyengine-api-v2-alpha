@@ -131,14 +131,14 @@ jobs:
         uses: google-github-actions/setup-gcloud@v3
 
       - name: Configure Docker for Artifact Registry
-        run: gcloud auth configure-docker ${{ vars.GCP_REGION }}-docker.pkg.dev
+        run: gcloud auth configure-docker "${{ vars.GCP_REGION }}-docker.pkg.dev"
 
       - name: Build and push Docker image
         run: |
-          docker build -t $IMAGE_URL:${{ github.sha }} .
-          docker tag $IMAGE_URL:${{ github.sha }} $IMAGE_URL:latest
-          docker push $IMAGE_URL:${{ github.sha }}
-          docker push $IMAGE_URL:latest
+          docker build -t "${IMAGE_URL}:${{ github.sha }}" .
+          docker tag "${IMAGE_URL}:${{ github.sha }}" "${IMAGE_URL}:latest"
+          docker push "${IMAGE_URL}:${{ github.sha }}"
+          docker push "${IMAGE_URL}:latest"
 
   infra:
     name: Apply infrastructure
@@ -262,6 +262,7 @@ jobs:
         env:
           MODAL_TOKEN_ID: ${{ secrets.MODAL_TOKEN_ID }}
           MODAL_TOKEN_SECRET: ${{ secrets.MODAL_TOKEN_SECRET }}
+          POLICYENGINE_VERSION: ${{ steps.versions.outputs.policyengine_version }}
           POLICYENGINE_US_VERSION: ${{ steps.versions.outputs.us_version }}
           POLICYENGINE_UK_VERSION: ${{ steps.versions.outputs.uk_version }}
         run: |
@@ -304,7 +305,7 @@ jobs:
         run: |
           gcloud run deploy ${{ vars.API_SERVICE_NAME }} \
             --region=${{ vars.GCP_REGION }} \
-            --image=$IMAGE_URL:${{ github.sha }} \
+            --image="${IMAGE_URL}:${{ github.sha }}" \
             --tag=staging \
             --no-traffic \
             --update-env-vars=MODAL_ENVIRONMENT=staging,LOGFIRE_ENVIRONMENT=staging,SUPABASE_URL=${{ secrets.SUPABASE_URL }},SUPABASE_KEY=${{ secrets.SUPABASE_KEY }},SUPABASE_SECRET_KEY=${{ secrets.SUPABASE_SECRET_KEY }},SUPABASE_DB_URL=${{ secrets.SUPABASE_DB_URL }}
@@ -400,6 +401,7 @@ jobs:
         env:
           MODAL_TOKEN_ID: ${{ secrets.MODAL_TOKEN_ID }}
           MODAL_TOKEN_SECRET: ${{ secrets.MODAL_TOKEN_SECRET }}
+          POLICYENGINE_VERSION: ${{ steps.prod-versions.outputs.policyengine_version }}
           POLICYENGINE_US_VERSION: ${{ steps.prod-versions.outputs.us_version }}
           POLICYENGINE_UK_VERSION: ${{ steps.prod-versions.outputs.uk_version }}
         run: |
@@ -417,6 +419,7 @@ jobs:
         env:
           MODAL_TOKEN_ID: ${{ secrets.MODAL_TOKEN_ID }}
           MODAL_TOKEN_SECRET: ${{ secrets.MODAL_TOKEN_SECRET }}
+          POLICYENGINE_VERSION: ${{ steps.prod-versions.outputs.policyengine_version }}
           POLICYENGINE_US_VERSION: ${{ steps.prod-versions.outputs.us_version }}
           POLICYENGINE_UK_VERSION: ${{ steps.prod-versions.outputs.uk_version }}
         run: |
@@ -469,7 +472,7 @@ jobs:
         run: |
           gcloud run deploy ${{ vars.API_SERVICE_NAME }} \
             --region=${{ vars.GCP_REGION }} \
-            --image=$IMAGE_URL:${{ github.sha }} \
+            --image="${IMAGE_URL}:${{ github.sha }}" \
             --tag=canary \
             --no-traffic \
             --update-env-vars=MODAL_ENVIRONMENT=main,LOGFIRE_ENVIRONMENT=prod

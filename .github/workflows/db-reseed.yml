@@ -1,0 +1,102 @@
+name: Reseed database
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: "Target database"
+        required: true
+        type: choice
+        options:
+          - staging
+          - production
+      preset:
+        description: "Seeding preset"
+        required: true
+        default: "full"
+        type: choice
+        options:
+          - full
+          - lite
+          - minimal
+          - uk-lite
+          - uk-minimal
+          - us-lite
+          - us-minimal
+          - testing
+      confirm:
+        description: "Type 'reseed-staging' or 'reseed-prod' to confirm"
+        required: true
+        type: string
+  pull_request:
+    paths:
+      - ".github/workflows/db-reseed.yml"
+
+jobs:
+  validate:
+    name: Validate workflow
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Validate workflow syntax
+        run: |
+          bash <(curl -sSL https://raw.githubusercontent.com/rhysd/actionlint/main/scripts/download-actionlint.bash)
+          ./actionlint -color
+
+  reseed-db:
+    name: Reseed ${{ inputs.target }} database
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch'
+    environment: ${{ inputs.target }}
+
+    steps:
+      - name: Verify confirmation
+        run: |
+          EXPECTED="reseed-staging"
+          if [ "${{ inputs.target }}" = "production" ]; then
+            EXPECTED="reseed-prod"
+          fi
+          if [ "${{ inputs.confirm }}" != "$EXPECTED" ]; then
+            echo "Confirmation failed. You must type '$EXPECTED' to proceed."
+            exit 1
+          fi
+          echo "Confirmation verified for ${{ inputs.target }}"
+
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v8.1.0
+        with:
+          save-cache: false
+
+      - name: Setup Python
+        run: uv python install 3.13
+
+      - name: Sync dependencies
+        run: uv sync
+
+      - name: Reseed database
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+          SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
+          HUGGING_FACE_TOKEN: ${{ secrets.HUGGING_FACE_TOKEN }}
+          STORAGE_BUCKET: ${{ vars.STORAGE_BUCKET }}
+          LOGFIRE_TOKEN: ${{ secrets.LOGFIRE_TOKEN }}
+          LOGFIRE_ENVIRONMENT: ${{ inputs.target }}
+        run: |
+          echo "Reseeding ${{ inputs.target }} database with preset '${{ inputs.preset }}'..."
+          uv run python scripts/seed.py --preset="${{ inputs.preset }}"
+
+      - name: Summary
+        run: |
+          echo "Database reseed complete."
+          echo "Target: ${{ inputs.target }}"
+          echo "Preset: ${{ inputs.preset }}"
+          echo "Triggered by: ${{ github.actor }}"

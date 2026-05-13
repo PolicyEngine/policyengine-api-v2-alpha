@@ -1,7 +1,7 @@
 #!/bin/bash
 # Deploy versioned simulation app to Modal
 # Usage: ./modal-deploy-versioned.sh <modal-environment>
-# Required env vars: POLICYENGINE_US_VERSION, POLICYENGINE_UK_VERSION
+# Required env vars: POLICYENGINE_VERSION, POLICYENGINE_US_VERSION, POLICYENGINE_UK_VERSION
 #
 # Deploys a versioned app named policyengine-us{X}-uk{Y} and updates
 # the Modal Dict version registries so Cloud Run can route to it.
@@ -14,6 +14,7 @@ MODAL_ENV="${1:?Modal environment required (staging or main)}"
 # Validate required env vars
 : "${POLICYENGINE_US_VERSION:?POLICYENGINE_US_VERSION must be set}"
 : "${POLICYENGINE_UK_VERSION:?POLICYENGINE_UK_VERSION must be set}"
+: "${POLICYENGINE_VERSION:?POLICYENGINE_VERSION must be set}"
 
 # Generate versioned app name (dots replaced with dashes)
 US_VERSION_SAFE="${POLICYENGINE_US_VERSION//./-}"
@@ -24,6 +25,7 @@ echo "========================================"
 echo "Deploying versioned Modal simulation app"
 echo "  Environment: $MODAL_ENV"
 echo "  App name:    $APP_NAME"
+echo "  policyengine.py: ${POLICYENGINE_VERSION}"
 echo "  US version:  ${POLICYENGINE_US_VERSION}"
 echo "  UK version:  ${POLICYENGINE_UK_VERSION}"
 echo "========================================"

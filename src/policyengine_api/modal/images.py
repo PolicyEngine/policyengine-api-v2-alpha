@@ -9,16 +9,17 @@ import os
 
 import modal
 
-US_VERSION = os.environ.get("POLICYENGINE_US_VERSION", "1.592.4")
-UK_VERSION = os.environ.get("POLICYENGINE_UK_VERSION", "2.75.1")
+POLICYENGINE_VERSION = os.environ.get("POLICYENGINE_VERSION", "4.4.4")
+US_VERSION = os.environ.get("POLICYENGINE_US_VERSION", "1.691.3")
+UK_VERSION = os.environ.get("POLICYENGINE_UK_VERSION", "2.88.14")
 
 base_image = (
     modal.Image.debian_slim(python_version="3.13")
     .apt_install("libhdf5-dev", "git")
     .pip_install("uv")
     .run_commands(
-        "uv pip install --system --upgrade "
-        "policyengine>=3.2.0 "
+        f"uv pip install --system --upgrade "
+        f"policyengine=={POLICYENGINE_VERSION} "
         "sqlmodel>=0.0.22 "
         "psycopg2-binary>=2.9.10 "
         "supabase>=2.10.0 "
