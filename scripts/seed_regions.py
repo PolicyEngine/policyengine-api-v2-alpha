@@ -21,6 +21,7 @@ Usage:
 
 import argparse
 import time
+from typing import Any
 
 from rich.progress import Progress, SpinnerColumn, TextColumn
 from seed_utils import console, get_session
@@ -34,6 +35,34 @@ from policyengine_api.models import (  # noqa: E402
     TaxBenefitModel,
 )
 from policyengine_api.models.region import RegionType  # noqa: E402
+
+
+def _region_scoping_strategy(pe_region: Any) -> Any | None:
+    return getattr(pe_region, "scoping_strategy", None)
+
+
+def _region_requires_filter(pe_region: Any) -> bool:
+    strategy = _region_scoping_strategy(pe_region)
+    return bool(getattr(pe_region, "requires_filter", strategy is not None))
+
+
+def _region_filter_field(pe_region: Any) -> str | None:
+    if hasattr(pe_region, "filter_field"):
+        return pe_region.filter_field
+    strategy = _region_scoping_strategy(pe_region)
+    return getattr(strategy, "variable_name", None)
+
+
+def _region_filter_value(pe_region: Any) -> str | None:
+    if hasattr(pe_region, "filter_value"):
+        return pe_region.filter_value
+    strategy = _region_scoping_strategy(pe_region)
+    return getattr(strategy, "variable_value", None)
+
+
+def _region_filter_strategy(pe_region: Any) -> str | None:
+    strategy = _region_scoping_strategy(pe_region)
+    return getattr(strategy, "strategy_type", None)
 
 
 def _group_us_datasets(
@@ -197,14 +226,10 @@ def seed_us_regions(
                     code=pe_region.code,
                     label=pe_region.label,
                     region_type=RegionType(pe_region.region_type),
-                    requires_filter=pe_region.requires_filter,
-                    filter_field=pe_region.filter_field,
-                    filter_value=pe_region.filter_value,
-                    filter_strategy=(
-                        pe_region.scoping_strategy.strategy_type
-                        if pe_region.scoping_strategy
-                        else None
-                    ),
+                    requires_filter=_region_requires_filter(pe_region),
+                    filter_field=_region_filter_field(pe_region),
+                    filter_value=_region_filter_value(pe_region),
+                    filter_strategy=_region_filter_strategy(pe_region),
                     parent_code=pe_region.parent_code,
                     state_code=pe_region.state_code,
                     state_name=pe_region.state_name,
@@ -295,14 +320,10 @@ def seed_uk_regions(session: Session) -> tuple[int, int, int]:
                     code=pe_region.code,
                     label=pe_region.label,
                     region_type=RegionType(pe_region.region_type),
-                    requires_filter=pe_region.requires_filter,
-                    filter_field=pe_region.filter_field,
-                    filter_value=pe_region.filter_value,
-                    filter_strategy=(
-                        pe_region.scoping_strategy.strategy_type
-                        if pe_region.scoping_strategy
-                        else None
-                    ),
+                    requires_filter=_region_requires_filter(pe_region),
+                    filter_field=_region_filter_field(pe_region),
+                    filter_value=_region_filter_value(pe_region),
+                    filter_strategy=_region_filter_strategy(pe_region),
                     parent_code=pe_region.parent_code,
                     state_code=None,
                     state_name=None,
