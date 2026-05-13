@@ -1,3 +1,10 @@
+0.6.10 (2026-05-13)
+
+# Fixed
+
+- Update production Cloud Run Supabase environment variables during deploys. (#365)
+
+
 0.6.9 (2026-05-13)
 
 # Fixed
