@@ -1918,7 +1918,7 @@ wheels = [
 
 [[package]]
 name = "policyengine-api-v2"
-version = "0.6.6"
+version = "0.6.10"
 source = { editable = "." }
 dependencies = [
     { name = "alembic" },
@@ -1972,7 +1972,7 @@ requires-dist = [
     { name = "logfire", extras = ["fastapi", "httpx", "sqlalchemy"], specifier = ">=0.60.0" },
     { name = "modal", specifier = ">=0.68.0" },
     { name = "policyengine", specifier = "==4.4.4" },
-    { name = "policyengine-uk", specifier = "==2.88.14" },
+    { name = "policyengine-uk", specifier = "==2.88.38" },
     { name = "policyengine-us", specifier = "==1.691.3" },
     { name = "psycopg2-binary", specifier = ">=2.9.10" },
     { name = "pydantic", specifier = ">=2.9.2" },
@@ -2023,7 +2023,7 @@ wheels = [
 
 [[package]]
 name = "policyengine-uk"
-version = "2.88.14"
+version = "2.88.38"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "microdf-python" },
@@ -2031,9 +2031,9 @@ dependencies = [
     { name = "pydantic" },
     { name = "tables" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/8c/2b/ab82aa30c5d27176fd9d449ff5ed9708d0080b00912f7dc2efa0af0fd87e/policyengine_uk-2.88.14.tar.gz", hash = "sha256:21a4387ae52dcb5430b6d790edcc321816ed47147a3a0e21ffd482a36834d352", size = 1185947, upload-time = "2026-05-09T04:19:25.284Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/0a/c5/8ce28c9e180728f11beb7f0e7db670e4916b2f563503dfcf13a71ea853df/policyengine_uk-2.88.38.tar.gz", hash = "sha256:f4da777f6b6a48c85600e93379973053138d78eebe1e34435a6dee14fd40331a", size = 1198152, upload-time = "2026-06-01T15:16:18.65Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/a3/fc/276fb639a46bda35523329d8968bcc4089fde9e97fab82722c0ec853c6cc/policyengine_uk-2.88.14-py3-none-any.whl", hash = "sha256:ed10005ba7d0c973c0966ebbf7672853fb3caaa0456b8bf485fb13f8c323d975", size = 1913671, upload-time = "2026-05-09T04:19:23.364Z" },
+    { url = "https://files.pythonhosted.org/packages/23/1a/9f55d9354106de118b4b6be0c9d474d5ba826d96943c4cf70daddf4eea3e/policyengine_uk-2.88.38-py3-none-any.whl", hash = "sha256:e14a44c5d3625fd2e6da14b41d4e8c9a417c6c4dcc9a7a5a1b8b3b975436ce51", size = 1933753, upload-time = "2026-06-01T15:16:16.772Z" },
 ]
 
 [[package]]
