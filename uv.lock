@@ -1918,7 +1918,7 @@ wheels = [
 
 [[package]]
 name = "policyengine-api-v2"
-version = "0.6.6"
+version = "0.6.10"
 source = { editable = "." }
 dependencies = [
     { name = "alembic" },
@@ -1973,7 +1973,7 @@ requires-dist = [
     { name = "modal", specifier = ">=0.68.0" },
     { name = "policyengine", specifier = "==4.4.4" },
     { name = "policyengine-uk", specifier = "==2.88.14" },
-    { name = "policyengine-us", specifier = "==1.691.3" },
+    { name = "policyengine-us", specifier = "==1.753.4" },
     { name = "psycopg2-binary", specifier = ">=2.9.10" },
     { name = "pydantic", specifier = ">=2.9.2" },
     { name = "pydantic-settings", specifier = ">=2.6.0" },
@@ -2038,7 +2038,7 @@ wheels = [
 
 [[package]]
 name = "policyengine-us"
-version = "1.691.3"
+version = "1.753.4"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "microdf-python" },
@@ -2048,9 +2048,9 @@ dependencies = [
     { name = "tables" },
     { name = "tqdm" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/0c/04/5e74890db670d7eb736f8fcb6070e6866950ba2e1d79e1d74f0dc5cfc58c/policyengine_us-1.691.3.tar.gz", hash = "sha256:3475c0e71ebe3396cfa2d138c62eeaa22a912c301d941418238109cf51a89e86", size = 9493068, upload-time = "2026-05-12T16:54:08.94Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/7f/7c/77f63707d2b69d785d2af7bffc61943c761835e8f997ff3a1e3ee056c977/policyengine_us-1.753.4.tar.gz", hash = "sha256:10aea5745081e53b0b24b59b9ea787628a1c15fbcd68237460a3c707253d023b", size = 10750259, upload-time = "2026-07-01T20:54:37.968Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/2a/03/e21c872664f90dcc99f1fcf29d1da71409c50cf8a7798ff0596ad10d9400/policyengine_us-1.691.3-py3-none-any.whl", hash = "sha256:c5d37aa4442f23d48bd5d587a02876c89d83c6135809f12988cc39bd3a47e8b2", size = 10008634, upload-time = "2026-05-12T16:54:05.956Z" },
+    { url = "https://files.pythonhosted.org/packages/ce/64/3759c628c2dc0bcb224260a5c97663fa4f9a587abdc72de3316342417aab/policyengine_us-1.753.4-py3-none-any.whl", hash = "sha256:bed11aa4c5e9421401d88e32a2b6e1d3d36d1ed8b661eee5887dbc4071837c55", size = 12638315, upload-time = "2026-07-01T20:54:34.396Z" },
 ]
 
 [[package]]
