@@ -4,9 +4,11 @@ Runbook for retiring the `policyengine-api-v2-alpha` service (the "reduced APIv2
 middle ground" at `v2.api.policyengine.org`) and archiving this repo, now that
 the frontend has been migrated off it.
 
-**Status:** _in progress._ Steps 1–3 executed; Step 4 deliberately skipped;
-Step 5 nearly done (staging DB deleted, production DB backed up + pending its
-final delete); Steps 6–7 not started. Per-step status is marked inline below.
+**Status:** _mostly complete._ Steps 1–3 executed; Step 4 skipped; Step 5 nearly
+done (staging DB deleted, production DB backed up + pending its final delete);
+the AWS/ECS check was skipped (no AWS access); **Step 6 done — repo archived**
+(secret deletion + README note intentionally skipped); Step 7 (GCP SA + TF state
+bucket) still pending. Per-step status is marked inline below.
 
 ### Execution status at a glance
 
@@ -17,8 +19,8 @@ final delete); Steps 6–7 not started. Per-step status is marked inline below.
 | 3 | Delete Cloud Run compute | ✅ done |
 | 4 | Wind down sim Modal apps | ⏭️ **skipped** (owner decision) |
 | 5 | Supabase | 🔄 staging deleted; prod backed up, **pending final delete** |
-| — | AWS/ECS leftovers | ⚠️ **new — needs investigation** |
-| 6 | Retire the repo (secrets + README + archive) | ⏳ pending |
+| — | AWS/ECS leftovers | ⏭️ **skipped** — no AWS access (names recorded for later) |
+| 6 | Retire the repo | 🔻 **archived**; secret deletion + README note intentionally skipped |
 | 7 | Final GCP cleanup (SA + TF state bucket) | ⏳ pending |
 
 ## Context / preconditions
@@ -176,11 +178,28 @@ Run. Relevant repo settings:
 - secret: `AWS_ROLE_ARN`
 
 **Action:** in the AWS account (us-east-1), check for a live ECS cluster/service
-(Fargate tasks = ongoing cost) and the ECR repo; delete if orphaned. Do this
-**before** archiving the repo (Step 6), since the repo settings are the only
-breadcrumb to the AWS resource names. Needs AWS creds/console.
+(Fargate tasks = ongoing cost) and the ECR repo; delete if orphaned. Needs AWS
+creds/console.
 
-## Step 6 — Retire the repo `[repo]` — ⏳ PENDING
+> ⏭️ **Not performed** — owner has no AWS access. The resource names are recorded
+> above so whoever holds the AWS account can check later. They were captured here
+> before archiving because the repo settings were the only breadcrumb to them.
+
+## Step 6 — Retire the repo `[repo]` — 🔻 ARCHIVED
+
+**What was done:** the repo was archived (`gh repo archive`), making it read-only,
+disabling Actions, and preserving history + all branches (including this one).
+
+**Intentionally skipped (owner decision):**
+- **Secret deletion** — left in place. The Supabase secrets are already dead (both
+  projects deleted). The still-live ones (`MODAL_TOKEN_*`, `HUGGING_FACE_TOKEN`,
+  `AWS_ROLE_ARN`, GCP WIF) remain; Actions is disabled by the archive, so they
+  can't be exercised from here. Delete them later if you want full hygiene
+  (requires temporarily un-archiving, since archived repos are read-only).
+- **README deprecation note** — skipped; GitHub's "Public archive" banner already
+  signals deprecation.
+
+The original plan (for reference) was:
 
 ```bash
 gh secret list --repo PolicyEngine/policyengine-api-v2-alpha
